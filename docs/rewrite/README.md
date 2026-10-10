@@ -1,14 +1,14 @@
 # Damadama rewrite tracking
 
-Start with the [rewrite tracker](https://github.com/ShiosOS/Damadama/issues/9). The [Damadama rewrite milestone](https://github.com/ShiosOS/Damadama/milestone/1) groups the proposed work. Documentation and tracking are authorized; application implementation still requires approval.
+Start with the [rewrite tracker](https://github.com/ShiosOS/Damadama/issues/9). The [milestone](https://github.com/ShiosOS/Damadama/milestone/1) groups the proposed work. Coding still needs approval.
 
 ## Documents
 
-- [Requirements](requirements.md) records the user's target behavior and constraints.
-- [System design](design.md) explains the current proposal, verification plan, and open decisions.
-- [Domain glossary](CONTEXT.md) defines terms without implementation decisions.
+- [Requirements](requirements.md) records the target behavior and constraints.
+- [System design](design.md) explains the proposed implementation, test plan, and open decisions.
+- [Domain glossary](CONTEXT.md) defines the terms used in both documents.
 
-The GitHub copies live under docs/rewrite on the dedicated docs/damadama-rewrite-plan review branch. The tracker links to that branch until the documentation PR is merged. The original app is a read-only reference.
+These documents live under `docs/rewrite` on the `docs/damadama-rewrite-plan` review branch. The tracker links to that branch until the documentation PR merges.
 
 ## Proposed work
 
@@ -21,19 +21,21 @@ The GitHub copies live under docs/rewrite on the dedicated docs/damadama-rewrite
 - [Refresh other devices after committed saves](https://github.com/ShiosOS/Damadama/issues/7).
 - [Document reproducible hosting and verify recovery](https://github.com/ShiosOS/Damadama/issues/8).
 
-The first issue settles the scope and product decisions. The remaining seven issues are proposed delivery slices. Their order is a planning proposal, with dependencies recorded in each issue. No dates or effort estimates are committed.
+The first issue settles the scope and product decisions. The other seven are proposed implementation slices. Each issue lists its dependencies. There are no committed dates or effort estimates.
 
-## One-slice workflow
+## Work on one slice
 
-1. Explain the slice's design and resolve its affected product decisions. Record implementation approval in the issue or linked discussion.
-2. Build a small change on its own branch. Update the relevant requirements or design in the same PR when behavior or architecture changes.
-3. Attach the relevant test results, real PostgreSQL evidence, and browser/runtime evidence. State what remains unverified, and stop for review.
-4. Close the issue after acceptance criteria and review are complete. Update the tracker checklist from linked issue states.
+1. Explain the slice's design and resolve the product decisions it depends on. Record approval to implement it in the issue or a linked discussion.
+2. Build a small change on its own branch. Update the requirements or design in the same PR when the change affects them.
+3. Attach the relevant test results, real PostgreSQL evidence, and browser evidence. State what remains unverified and stop for review.
+4. Close the issue after its acceptance criteria and review are complete. Update the tracker checklist to match the linked issue states.
 
-Record proposals as proposals. An open issue or an unchecked acceptance criterion is not permission to implement an unresolved rule. Keep later decisions open until the affected slice is discussed.
+Leave later product decisions open until their slice is discussed. Creating an issue does not approve its implementation.
 
-## Tracking setup
+## Use the tracker
 
-Use the milestone's open/closed issue views and the tracker checklist. Issue bodies record pending decisions and implementation approval. The existing CLI login lacks GitHub Projects scopes, so no Projects board was created. A board can later present these same issues without duplicating the backlog.
+Use the milestone's open and closed issue views and the tracker checklist. Each issue records its decisions and approval status.
 
-Do not deploy, change DNS, provision paid infrastructure, or modify the original app. Deployment instructions and a local restore demonstration do not authorize hosted infrastructure work.
+There is no GitHub Projects board because the CLI login lacks Projects access. A board can later use these same issues.
+
+The original app remains a read-only reference. Do not deploy, change DNS, or provision paid infrastructure without approval. Deployment instructions and local restore tests do not approve hosted infrastructure work.

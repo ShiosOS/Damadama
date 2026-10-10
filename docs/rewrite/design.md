@@ -1,147 +1,145 @@
 # Damadama system design
 
-Status: draft for review. No application code exists. The [user-supplied requirements](requirements.md) define the target behavior; this document proposes how to realize it. Product decisions marked unresolved are implementation gates, not defaults.
-
-This design supersedes the earlier single-user, ID/name-only proposal. The first code slice has not been approved.
+This design is a draft for review. The first code slice still needs approval. [The requirements](requirements.md) describe the target behavior. This document proposes an implementation and lists the decisions to resolve before coding.
 
 ## User experience
 
-A signed-in person creates a habit, defines its Good, Better, and Best tiers, and gives it a recurring schedule. On a scheduled date they select Good, Better, Best, or Rest. Past scheduled dates remain editable. The combined heatmap uses the schedules applicable to those historical dates.
+A signed-in user creates a habit, defines its Good, Better, and Best tiers, and gives it a recurring schedule. On a scheduled date, they select Good, Better, Best, or Rest. They can change past entries. The heatmap uses the schedules that applied to those dates.
 
-An entry change is first persisted on the device and shown as pending. The server confirms its winning value after a database commit. Reconnect and app focus refresh committed data without silently discarding newer pending edits.
+The browser stores each entry change on the device and shows it as pending. The server returns the winning value after its database transaction commits. Reconnect and app focus refresh saved data while preserving newer pending edits.
 
 ## System boundary
 
 ```mermaid
 flowchart LR
-    B["Browser: Vue and IndexedDB"] -->|"HTTPS requests"| A["One ASP.NET Core app: API and built frontend"]
+    B["Vue browser and IndexedDB"] -->|"HTTPS requests"| A["ASP.NET Core API and built frontend"]
     A -->|"Owner-scoped reads and transactions"| P[("Private PostgreSQL with persistent storage")]
-    A -. "SSE invalidation after commit" .-> B
-    I["Authentication provider: undecided"] -. "Identity integration: design pending" .-> A
+    A -. "SSE notification after commit" .-> B
+    I["Authentication provider undecided"] -. "Identity integration to be designed" .-> A
 ```
 
-Vue is built into static assets served by the app in the proposed hosted setup. During local development, Vite can proxy API requests to ASP.NET Core. Database access belongs to the server. Authentication provider and session mechanism remain undecided.
+The ASP.NET Core app serves the built Vue frontend and handles database access. During local development, Vite can proxy API requests to ASP.NET Core. The authentication provider and session mechanism are undecided.
 
-The one backend contains account/ownership handling, habits, schedules, entries, and heatmap calculation. These are areas within one backend project, not independent services. Pure recurrence and heatmap calculations warrant small domain modules because they own real rules. Avoid pass-through service and repository layers that only repeat persistence methods.
+Keep ownership checks, habits, schedules, entries, and heatmap calculations in one backend project. Put pure recurrence and heatmap rules in small modules. Avoid service and repository classes that only forward persistence calls.
 
-EF Core migrations remain a candidate for schema management and ordinary persistence. Entry conflict resolution needs a PostgreSQL operation that implements the atomic comparison; an ORM read followed by a normal update cannot establish that invariant. Persistence library details are proposals, not product requirements.
+EF Core is a candidate for migrations and ordinary reads and writes. Entry conflict resolution needs an atomic PostgreSQL operation. Reading a row and then updating it through an ORM cannot enforce the rule if another writer changes the row between those operations. The persistence library remains a design choice.
 
 ## Proposed data model
 
-| Concept | Data and responsibility | Invariant |
+| Concept | Data | Rule |
 | --- | --- | --- |
-| Account | Internal owner identity and authentication mapping | Provider identity mapping remains to be designed when the provider is selected. |
-| Habit | ID, owner, name, Good/Better/Best definitions | Ownership is established from server authentication, not a trusted owner ID in a request. |
-| Schedule version | Habit and historical recurrence rule with calendar-date applicability | Editing a schedule cannot rewrite which habits were scheduled on past dates. Recurrence fields and version boundaries remain unresolved. |
-| Daily entry | Habit, calendar date, result, loggedAt | At most one row per habit/date. Its value is the winning timestamp/result pair. |
-| Pending entry change | Originating account, habit, calendar date, result, original loggedAt, local mutation identity | Durable device state separate from the server's saved entry. Retry preserves date and timestamp. |
+| Account | Internal owner identity and authentication mapping | Decide the mapping when the authentication provider is selected. |
+| Habit | ID, owner, name, and definitions for Good, Better, and Best | Derive the owner from server authentication. Do not trust an owner ID supplied by the browser. |
+| Schedule version | Habit, recurrence rule, and dates when the rule applies | Later edits must preserve past scheduled dates. Recurrence fields and version boundaries remain undecided. |
+| Daily entry | Habit, calendar date, result, and `loggedAt` | Keep at most one row per habit per date. Store the winning timestamp and result. |
+| Pending entry change | Account, habit, calendar date, result, original `loggedAt`, and local mutation ID | Store it on the device separately from the saved entry. Retries keep the date and timestamp. |
 
-Schedule versions are the recommended representation of history. The schema for effective dates and same-day revisions must wait for the product rule. Entry identity remains habit/date even when schedules change.
+Schedule versions preserve history. Decide effective dates and same-day edit behavior before designing their schema. A habit and calendar date identify an entry even after schedule edits.
 
-Propose PostgreSQL `date` for calendar dates and `timestamptz` for edit instants. A browser submits the selected calendar date explicitly. The server does not derive that date from loggedAt or its own timezone. Timestamp precision and normalization must be fixed across browser, .NET, and PostgreSQL before conflict handling is implemented.
+The proposed schema uses PostgreSQL `date` for calendar dates and `timestamptz` for edit times. The browser submits the selected date. The server never derives that date from `loggedAt` or its own timezone. Agree on timestamp precision and normalization across the browser, .NET, and PostgreSQL before implementing conflict resolution.
 
-Schedule writes and entry eligibility checks must also remain consistent under concurrency. Their transaction and locking strategy depends on the schedule edit rule. Habit lifecycle changes cannot silently remove the historical schedule data needed by the heatmap; archive/delete semantics are still unresolved.
+Schedule writes and entry eligibility checks must agree when they run concurrently. Their transactions and locks depend on the schedule edit policy. Decide archiving and deletion behavior before implementing those operations. They must preserve the historical schedule data the heatmap needs.
 
 ## Entry save and reconciliation
 
-1. Determine the selected habit/date and originating account. Create the entry change's loggedAt once at the user's action.
-2. Persist the mutation in an IndexedDB transaction. Treat transaction completion as local durability and show pending state. A persistence failure cannot be shown as a successful local save.
-3. Send the mutation while authenticated as its originating owner. The backend authenticates, validates input, and checks ownership and historical schedule eligibility.
-4. In PostgreSQL, use the habit/date uniqueness constraint and atomically accept an incoming pair only when it is greater than the stored pair.
-5. Read the authoritative winner within the transaction, including when the incoming change loses or is an identical retry. Commit before acknowledging a server save.
-6. Publish an owner-scoped in-process invalidation after a changed value commits. Notification failure cannot undo or invalidate a committed save.
-7. Reconcile the returned winner with local state. Remove only the acknowledged local mutation. If a later edit has been queued, it remains pending.
+1. At the user's selection, create a change with the account, habit, calendar date, result, and `loggedAt`. Set `loggedAt` once for that action.
+2. Store the change in an IndexedDB transaction. Wait for the transaction to complete before showing it as pending. Report a storage failure as a failed local save.
+3. Send the change while authenticated as its owner. The backend validates the input, checks ownership, and checks whether the habit was scheduled on that date.
+4. Use PostgreSQL's uniqueness constraint to keep one entry per habit per date. Compare the incoming timestamp and result atomically with the stored values. Replace the entry only if the incoming change wins.
+5. Read the winning value in the transaction, including when the incoming change loses or repeats the stored value. Commit before acknowledging the server save.
+6. After a changed entry commits, notify the owner's open connections. A failed notification cannot undo the save.
+7. Reconcile the response with local state. Remove only the acknowledged mutation. Keep any later queued edit pending.
 
-The comparison is lexicographic: compare loggedAt first; if equal, compare Best > Better > Good > Rest. A newer Rest wins over an older Best. Equal timestamp/result pairs leave the stored value unchanged. This is last-edit-wins according to device timestamps, not highest-result-wins or latest-request-arrival-wins.
+Compare `loggedAt` first. For exact timestamp ties, prefer Best > Better > Good > Rest. A newer Rest beats an older Best. Identical timestamp and result pairs leave the entry unchanged. Request arrival order does not choose the winner.
 
-PostgreSQL supports an atomic `INSERT ... ON CONFLICT DO UPDATE` with a conditional comparison. Its `RETURNING` clause yields no row for a conditional no-op, so the operation must explicitly obtain the winner for that path. A same-statement fallback must not assume a concurrently inserted row is visible. [PostgreSQL INSERT documentation](https://www.postgresql.org/docs/18/sql-insert.html).
+Use a conditional `INSERT ... ON CONFLICT DO UPDATE` for the atomic comparison. If the condition rejects an update, `RETURNING` gives no row. Read the winner before committing. Do not assume a concurrent insert is visible to another read in the same SQL statement. See the [PostgreSQL INSERT documentation](https://www.postgresql.org/docs/18/sql-insert.html).
 
-The local mutation identity is proposed bookkeeping for matching responses. It does not replace the specified server conflict comparison. Delayed responses, refreshes, and SSE-triggered reads must not erase later pending edits. Multiple tabs must coordinate through durable account-scoped state and tolerate duplicate sends. Auth expiry pauses delivery; sign-out retention and account-switch presentation require product decisions before those flows are implemented.
+The proposed local mutation ID matches a response to its queued change. It does not affect the server's conflict comparison. Delayed responses, refreshes, and SSE-triggered reads must preserve later pending edits.
 
-IndexedDB persistence protects queued data, but does not by itself cache the app shell or habits/schedules for reopening while offline. That broader offline scope remains unresolved. [IndexedDB transaction specification](https://w3c.github.io/IndexedDB/#transaction-finished).
+Keep the device queue scoped to the account. Multiple tabs must coordinate through that stored state and tolerate duplicate sends. Pause delivery when authentication expires. Decide what happens to pending changes on sign-out and how to display them after an account switch.
+
+The pending queue stores entry changes, but it does not cache the app or its habits and schedules. Offline reopening needs those cached too. Decide whether offline reopening is required before implementing it. See the [IndexedDB transaction specification](https://w3c.github.io/IndexedDB/#transaction-finished).
 
 ## Heatmap calculation
 
 For each date in the requested range:
 
 1. Use historical schedules to find the owner's habits scheduled on that date.
-2. Sum those habits' entry points: Good 1, Better 2, Best 3, Rest 0. An absent entry is not converted into a Rest row.
-3. Compute daily maximum as 3 times scheduled habit count.
-4. For a positive maximum, return points earned divided by daily maximum.
+2. Sum their entry points. Good earns 1, Better 2, Best 3, and Rest 0. Do not create a Rest entry for a missing selection.
+3. Calculate the daily maximum as 3 times the scheduled habit count.
+4. When the maximum is positive, divide earned points by that maximum to get opacity.
 
-For example, two scheduled habits with Best and Rest yield 3 points out of 6, so opacity is 0.5. Rest does not shrink the denominator.
+Two scheduled habits with Best and Rest earn 3 points out of 6, so opacity is 0.5. Rest stays in the denominator.
 
-With no scheduled habits, the maximum is zero and the ordinary ratio is undefined. Represent that condition separately from a scheduled day with zero points. Its appearance is unresolved. The exact meaning of past year, including endpoints and leap years, also remains unresolved. Heatmap calculation stays inside the backend, with no separate service or query cache.
+With no scheduled habits, the maximum is zero and the ratio is undefined. Keep that case separate from a scheduled day with zero points. Its appearance is undecided. The exact past-year range, including endpoints and leap years, also needs a decision.
+
+Calculate the heatmap inside the backend. Do not add a separate service or query cache.
 
 ## Live updates
 
-Use authenticated, owner-scoped SSE connections for best-effort invalidations while there is one app instance. Subscribe and refetch so connection establishment does not leave a missed-update gap. Reconnect and focus refetch authoritative saved state while preserving local pending mutations.
+Use authenticated, owner-scoped server-sent events, or SSE, for best-effort notifications while there is one app instance. The notification tells the browser to refetch. Subscribe and refetch in an order that avoids missing a change during connection setup. Refetch on reconnect and app focus while preserving pending edits.
 
-Bound slow-client notification buffering and coalesce invalidations when needed. A disconnected client refetches; it does not depend on durable notification replay. The database remains the saved record. A restart loses in-process notifications, not committed entries. If replicas are introduced, revisit cross-instance pub/sub before enabling them.
+Limit notification buffering for slow clients and combine notifications when needed. A disconnected client refetches saved data. Notifications need no durable replay. A server restart loses in-process notifications but leaves committed entries intact.
 
-Measure commit-to-visible-update delay against the approximate two-second normal-condition target. There is no agreed numeric API latency target.
+If replicas are introduced, review cross-instance pub/sub before enabling them. Measure the time between commit and a visible update against the approximate two-second target under normal conditions. No numeric API latency target is agreed.
 
 ## Hosting, recovery, and cost
 
-Railway is a proposed deployment target. One app service serves API and built frontend; PostgreSQL is a separate database service with persistent storage and private access. Avoid intentional idle sleeping for both services. HTTPS and server ownership checks remain required.
+Railway is the proposed host. One app service serves the API and built frontend. A separate PostgreSQL service has private access and persistent storage. Keep both services awake. Use HTTPS and server-side ownership checks.
 
-Railway bills resource usage; the $10-15 target includes app, database, storage, backups, and any auth or network costs. It remains an estimate until resources are measured. Spending controls that stop workloads would trade availability for cost containment, so they cannot silently redefine the stated target. [Railway pricing](https://docs.railway.com/pricing/plans), [cost controls](https://docs.railway.com/pricing/cost-control).
+The $10-15 monthly target covers the app, database, storage, backups, and any authentication or network costs. Railway bills resource usage, so measure actual usage before relying on that estimate. A spending control that stops workloads also causes downtime. It must not become an unapproved spending cap. See [Railway pricing](https://docs.railway.com/pricing/plans) and [cost controls](https://docs.railway.com/pricing/cost-control).
 
-Persistent storage, backup scheduling, and restore verification are separate requirements. Railway supports volume backups, but wiping a volume deletes its backups and restores are limited to the same project/environment. Backup frequency, retention, acceptable data loss, and recovery time need a recovery design before production. Verify restoration into an isolated test target and check actual records. [Railway backups](https://docs.railway.com/volumes/backups).
+Persistent storage does not replace backups or restore tests. Railway supports volume backups, but wiping a volume deletes its backups. Restores are limited to the same project and environment. Before production, agree on backup frequency, retention, acceptable data loss, and recovery time. Restore into an isolated test target and check the records. See [Railway backups](https://docs.railway.com/volumes/backups).
 
-Local startup, migrations, example configuration, and later deployment instructions must be reproducible without committed secrets. A deployment runbook does not authorize provisioning, deployment, or DNS changes.
+Document repeatable local startup, migrations, example configuration, and deployment commands. Commit no secrets. Deployment instructions do not approve provisioning, deployment, or DNS changes.
 
 ## Verification plan
 
-| Area | Required evidence before its slice is complete |
+| Area | Evidence required before review |
 | --- | --- |
-| Ownership | Real HTTP/PostgreSQL tests prove a second account cannot read or alter another owner's habits, schedules, entries, heatmap, or receive its notification data. |
-| Habits | Browser create/list and database persistence tests include Good/Better/Best definitions. Exact creation contract waits for schedule attachment decisions. |
-| Schedules | Domain tests cover the agreed recurrence options and interval anchors; integration tests preserve historical scheduled dates across edits, including the agreed same-day policy. |
-| Entries | Domain and concurrent PostgreSQL tests cover one row per habit/date, newest timestamp, all exact-timestamp ties, identical retries, and authoritative losing-write responses. |
-| Heatmap | Domain tests prove the denominator includes Rest and uses historical schedules. Range and zero-schedule display tests follow the product decisions. |
-| Local dates | Browser tests cover timezone travel, date boundaries, and retries retaining the original calendar date and loggedAt. |
-| Offline recovery | Browser tests queue while offline, survive reload, reconnect, and reconcile. Simulate a lost response after commit and a delayed response arriving after a newer local edit. Broader offline reopening waits for scope approval. |
-| Live updates | Two authenticated browser contexts verify update delay, ownership isolation, disconnect/reconnect, focus refresh, and recovery after server restart. |
-| Recovery | Restore a backup into an isolated target and verify saved records. No production restore or paid provisioning is part of current work. |
-| Reproducibility | A clean checkout starts locally with documented commands; domain, PostgreSQL, browser, type-checking, and build checks are repeatable. |
+| Ownership | HTTP tests with real PostgreSQL prove that a second account cannot read or change another owner's habits, schedules, entries, or heatmap, or receive that owner's notification data. |
+| Habits | Browser and database tests cover creation, listing, persistence, and tier definitions. Decide whether creation requires a schedule before writing the contract. |
+| Schedules | Domain tests cover the agreed recurrence rules and interval anchors. Integration tests preserve past scheduled dates across edits, including the agreed same-day policy. |
+| Entries | Domain tests and concurrent PostgreSQL tests cover uniqueness, newest timestamps, every timestamp tie, identical retries, and responses to losing writes. |
+| Heatmap | Domain tests prove that Rest stays in the denominator and calculations use historical schedules. Test the range and zero-schedule display after those decisions. |
+| Local dates | Browser tests cover timezone travel and date boundaries. Retries preserve the calendar date and original `loggedAt`. |
+| Offline recovery | Browser tests queue changes offline, survive reload, reconnect, and reconcile. Test a lost response after commit and an older response arriving after a newer edit. Offline reopening needs a scope decision. |
+| Live updates | Two authenticated browser contexts test update delay, ownership isolation, reconnect, app focus, and recovery after a server restart. |
+| Recovery | Restore a backup into an isolated target and verify saved records. Current work excludes production restores and paid provisioning. |
+| Reproducibility | A clean checkout starts with documented commands. Domain, PostgreSQL, browser, type, and build checks can be repeated. |
 
 ## Proposed delivery sequence
 
-Each code slice needs a design explanation before implementation, tests and runtime evidence afterward, and a review stop. These are outcome groups, not approval to implement them together.
+Explain each slice before coding it. After implementation, show tests and runtime evidence and stop for review. Each slice needs its own approval.
 
-1. Account-owned habit create/list with Good/Better/Best definitions and repeatable local startup. Requires provider/session choice and a decision on whether habit creation must attach a schedule. A local stack prototype remains an alternative only if explicitly chosen.
-2. Create and revise schedules while preserving historical scheduled dates. Requires recurrence and edit-effectiveness decisions.
-3. Record and revise scheduled-date entries with atomic PostgreSQL conflict handling.
-4. Show the combined heatmap based on historical schedules. Requires range and no-scheduled-habits presentation decisions.
-5. Persist and replay pending entry changes with safe reconciliation. Requires offline scope, auth-expiry/sign-out behavior, and permanent-error presentation decisions.
-6. Add owner-scoped live invalidation and reconnect/focus recovery.
-7. Write and verify recovery and deployment procedures. Any paid provisioning or deployment needs separate authorization.
+1. Let signed-in users create and list their own habits with tier definitions. Include repeatable local startup. Decide authentication and whether creation requires a schedule first. A local stack prototype remains an option if the user chooses it.
+2. Create and revise schedules without changing past scheduled dates. Decide recurrence rules and when edits take effect first.
+3. Save and revise entries for scheduled dates with atomic PostgreSQL conflict resolution.
+4. Show the combined heatmap using historical schedules. Decide the date range and appearance of days with no scheduled habits first.
+5. Store and retry pending entry changes. Decide offline scope, expired authentication, sign-out, and permanent-error display first.
+6. Notify the owner's other devices and refresh on reconnect or app focus.
+7. Write and test recovery and deployment procedures. Paid provisioning and deployment need separate approval.
 
-The exact first slice is awaiting the user's selection and implementation approval. The user has authorized documentation and project tracking in `ShiosOS/Damadama`. See [project management](README.md) for the tracker and review workflow. Creating a task does not approve its implementation.
+The first slice still needs a scope decision and implementation approval. The [tracking guide](README.md) links the issues and review workflow.
 
 ## Unresolved decisions
 
-The user's explicit gates:
+Resolve these product questions before implementing the affected behavior:
 
 - Exact recurrence options and representation, including interval anchors.
-- Schedule edit effective dates and precedence for multiple edits on one day.
-- Appearance of a day with no scheduled habits.
-- Authentication provider and resulting session integration.
+- When schedule edits take effect and which edit wins if several happen on one day.
+- How to display a day with no scheduled habits.
+- The authentication provider and session mechanism.
 - Habit editing, archiving, and deletion behavior.
 
-Additional questions surfaced by review, to resolve when their slices are designed:
+Review also raised these questions:
 
-- Must a new habit include a schedule, or may it remain unscheduled?
-- Does editing a tier definition change its interpretation on past entries?
-- What exact date range does past year mean, and does it include Today?
-- Are future scheduled-date selections or clearing an entry supported?
-- Must the app reopen and permit editing while still offline, or is durable pending entry delivery sufficient?
-- What happens to pending account data on sign-out, and how are permanent rejections presented?
+- Must a new habit include a schedule, or can it remain unscheduled?
+- Does editing a tier definition change its meaning for past entries?
+- What dates does "past year" include, and does it include Today?
+- Can users select future scheduled dates or clear an entry?
+- Must the app reopen and allow editing while offline, or is retrying stored entry changes enough?
+- What happens to pending account data on sign-out, and how should permanent rejections appear?
 - What backup retention, acceptable data loss, and recovery time are required?
 
-Numeric API latency, absolute spending caps, offline habit/schedule edits, and replica infrastructure are not agreed requirements.
-
-## Design rationale
-
-Redesign From First Principles replaces the earlier name-only model with ownership, tier definitions, historical schedules, and fixed-date entries as foundational assumptions. Model the Domain gives schedule history, saved entries, and pending changes separate representations. Boundary Discipline locates authentication and validation at requests and the atomic winner comparison at PostgreSQL. Make Operations Idempotent keeps a retry's date/timestamp unchanged and makes duplicate delivery converge. Sequence Work into Verifiable Units keeps the work reviewable one slice at a time.
+Numeric API latency targets, hard spending caps, offline edits to habits or schedules, and replica infrastructure are not agreed requirements.
