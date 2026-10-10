@@ -1,6 +1,6 @@
 # Damadama domain glossary
 
-Damadama is a habit journal. These terms have the same meaning throughout the rewrite's requirements and design.
+Damadama is a habit journal. These terms have the same meaning throughout the project's requirements and design.
 
 | Term | Meaning |
 | --- | --- |
@@ -16,7 +16,7 @@ Damadama is a habit journal. These terms have the same meaning throughout the re
 | Result | The Good, Better, Best, or Rest selection recorded in an entry. |
 | Rest | A recorded Rest result. A missing entry is not a Rest entry. |
 | Missed date | A past scheduled date with no daily entry. |
-| `loggedAt` | The timestamp of an entry change, separate from its calendar date and the time a retry reaches the server. |
+| Edit time | The timestamp of an entry change, separate from its calendar date and the time a retry reaches the server. |
 | Pending entry change | An entry change stored on the device whose server result is still unconfirmed. |
 | Combined heatmap | A year view of points earned across the habits scheduled on each date. |
 | Daily maximum | Three times the number of habits scheduled on a date, including habits with Rest entries. |
