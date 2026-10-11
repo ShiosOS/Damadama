@@ -29,3 +29,8 @@ Feature: Create and read habits with an authenticated JWT
     Then the server returns the saved definitions and device calendar schedule
     When a signed-out browser creates lists or opens that habit
     Then every request is refused with a sign-in error
+
+  Scenario: A schedule is required before a habit can be saved
+    Given an account has a valid signed token
+    When the account attempts to create a habit without a schedule
+    Then the server refuses creation and stores no habit or schedule

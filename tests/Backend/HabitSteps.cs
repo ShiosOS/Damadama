@@ -145,6 +145,19 @@ public sealed class HabitSteps
             Assert.That(problem.GetProperty("title").GetString(), Is.EqualTo("Sign in to continue."));
             Assert.That(problem.GetProperty("traceId").GetString(), Is.Not.Empty);
         }
+        Assert.That(await DatabaseFixture.Count("Habits"), Is.EqualTo(1));
+        Assert.That(await DatabaseFixture.Count("InitialSchedules"), Is.EqualTo(1));
+    }
+
+    [When("the account attempts to create a habit without a schedule")]
+    public async Task MissingSchedule() => response = await client.PostAsJsonAsync("/api/habits", HabitTests.Walking with { Weekdays = null });
+
+    [Then("the server refuses creation and stores no habit or schedule")]
+    public async Task NoHabit()
+    {
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await DatabaseFixture.Count("Habits"), Is.Zero);
+        Assert.That(await DatabaseFixture.Count("InitialSchedules"), Is.Zero);
     }
 
     [AfterScenario]

@@ -13,3 +13,5 @@ playwright-report/
 **/TestResults/
 .aspire/
 **/*.feature.cs
+tests/Browser/fixture.json
+**/aspire.config.json

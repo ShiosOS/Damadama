@@ -1,0 +1,50 @@
+name: Check
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.112
+          cache: true
+          cache-dependency-path: |
+            **/packages.lock.json
+            **/packages.*.lock.json
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - uses: actions/cache@v4
+        id: playwright
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: node node_modules/@playwright/test/cli.js install --with-deps chromium
+      - run: bun run check
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: failure-reports
+          path: |
+            .audit/TestResults
+            test-results
+            playwright-report
+          retention-days: 3

@@ -1,0 +1,9 @@
+node_modules/
+**/node_modules/
+**/bin/
+**/obj/
+**/packages.lock.json
+**/packages.*.lock.json
+tests/Browser/fixture.json
+.audit/
+server/wwwroot/
