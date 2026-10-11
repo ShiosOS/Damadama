@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+**/node_modules/
+server/wwwroot/
+web/dist/
+.env
+.env.local
+**/.env.local
+dev/appsettings.Development.json
+.audit/
+test-results/
+playwright-report/
+**/TestResults/
+.aspire/
