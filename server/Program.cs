@@ -18,9 +18,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
     options.MapInboundClaims = false;
     options.TokenValidationParameters = new TokenValidationParameters
     {
-        ValidateIssuer = true, ValidIssuer = builder.Configuration["Clerk:Issuer"],
-        ValidateAudience = false, ValidateLifetime = true, ValidateIssuerSigningKey = true,
-        RequireSignedTokens = true, ValidAlgorithms = [SecurityAlgorithms.RsaSha256], ClockSkew = TimeSpan.FromSeconds(5)
+        ValidateIssuer = true,
+        ValidIssuer = builder.Configuration["Clerk:Issuer"],
+        ValidateAudience = false,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        RequireSignedTokens = true,
+        ValidAlgorithms = [SecurityAlgorithms.RsaSha256],
+        ClockSkew = TimeSpan.FromSeconds(5)
     };
     options.Events = new JwtBearerEvents
     {
@@ -57,6 +62,9 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapHealthChecks("/health/live", new() { Predicate = _ => false });
 app.MapHealthChecks("/health/ready", new() { Predicate = check => check.Tags.Contains("ready") });
+app.MapGet("/api/config", (IConfiguration configuration) => new { clerkPublishableKey = configuration["Clerk:PublishableKey"] });
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.MapPost("/api/habits", async (CreateHabit input, System.Security.Claims.ClaimsPrincipal user,
     HabitsDb db, TimeProvider clock, ILogger<HabitsDb> logger, CancellationToken cancellationToken) =>
 {
@@ -74,6 +82,8 @@ app.MapGet("/api/habits/{id:guid}", async (Guid id, System.Security.Claims.Claim
         .SingleOrDefaultAsync(h => h.Id == id && h.OwnerId == user.FindFirst("sub")!.Value, cancellationToken);
     return habit is null ? Results.NotFound() : Results.Ok(HabitResponse.From(habit));
 }).RequireAuthorization();
+app.Map("/api/{**path}", () => Results.Problem(statusCode: 404, title: "API route not found."));
+app.MapFallbackToFile("index.html");
 app.Run();
 public partial class Program;
 

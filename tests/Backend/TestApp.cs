@@ -16,17 +16,21 @@ namespace Damadama.Tests;
 public sealed class TestApp(string connectionString) : WebApplicationFactory<Program>
 {
     public const string Issuer = "https://clerk-test.invalid";
-    public const string Origin = "http://localhost:5173";
+    public const string Origin = "http://127.0.0.1:5174";
     private readonly RSA rsa = RSA.Create(2048);
     public static readonly DateTimeOffset CreationInstant = DateTimeOffset.Parse("2026-01-05T00:30:00Z");
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "Damadama.slnx"))) root = root.Parent;
+        builder.UseContentRoot(Path.Combine((root ?? throw new InvalidOperationException("Run tests inside the repository.")).FullName, "server"));
         builder.UseEnvironment("Testing");
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["ConnectionStrings:habits"] = connectionString,
             ["Clerk:Issuer"] = Issuer,
+            ["Clerk:PublishableKey"] = "pk_test_fixture",
             ["Clerk:AuthorizedParties:0"] = Origin
         }));
         builder.ConfigureTestServices(services =>
@@ -51,7 +55,8 @@ public sealed class TestApp(string connectionString) : WebApplicationFactory<Pro
         if (subject is not null) claims.Add(new Claim("sub", subject));
         return new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
         {
-            Issuer = issuer, Subject = new ClaimsIdentity(claims),
+            Issuer = issuer,
+            Subject = new ClaimsIdentity(claims),
             NotBefore = DateTime.UtcNow.AddMinutes(expired ? -10 : future ? 5 : -1),
             Expires = DateTime.UtcNow.AddMinutes(expired ? -5 : 30),
             SigningCredentials = new SigningCredentials(new RsaSecurityKey(rsa), SecurityAlgorithms.RsaSha256)
