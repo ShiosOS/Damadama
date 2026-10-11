@@ -11,7 +11,7 @@ export default defineConfig({
     proxy: {
       "/api": { target: process.env.API_URL ?? "http://localhost:5050" },
     },
-    fs: { deny: ["../tests/**", "**/.env*", "**/.git/**"] },
+    fs: { deny: ["**/tests/**", "**/.env*", "**/.git/**"] },
   },
   build: { outDir: "../server/wwwroot", emptyOutDir: true },
 });
