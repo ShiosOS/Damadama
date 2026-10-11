@@ -17,6 +17,7 @@ public sealed class HabitSteps
     private JsonElement saved;
     private HttpResponseMessage? otherList;
     private HttpResponseMessage? otherRead;
+    private readonly List<HttpResponseMessage> signedOutResponses = [];
 
     [Given("an account has a valid signed token")]
     public async Task SignedIn()
@@ -124,12 +125,35 @@ public sealed class HabitSteps
         });
     }
 
+    [When("a signed-out browser creates lists or opens that habit")]
+    public async Task SignedOutRequests()
+    {
+        using var signedOut = app.CreateClient();
+        signedOutResponses.Add(await signedOut.PostAsJsonAsync("/api/habits", HabitTests.Walking));
+        signedOutResponses.Add(await signedOut.GetAsync("/api/habits"));
+        signedOutResponses.Add(await signedOut.GetAsync($"/api/habits/{saved.GetProperty("id").GetGuid()}"));
+    }
+
+    [Then("every request is refused with a sign-in error")]
+    public async Task RefusedSignIn()
+    {
+        foreach (var refusal in signedOutResponses)
+        {
+            Assert.That(refusal.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+            Assert.That(refusal.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/problem+json"));
+            var problem = await refusal.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.That(problem.GetProperty("title").GetString(), Is.EqualTo("Sign in to continue."));
+            Assert.That(problem.GetProperty("traceId").GetString(), Is.Not.Empty);
+        }
+    }
+
     [AfterScenario]
     public void Dispose()
     {
         response?.Dispose();
         otherList?.Dispose();
         otherRead?.Dispose();
+        signedOutResponses.ForEach(r => r.Dispose());
         client?.Dispose();
         app?.Dispose();
     }
