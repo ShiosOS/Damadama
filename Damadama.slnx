@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/server/">
+    <Project Path="server/Damadama.csproj" />
+  </Folder>
+  <Folder Name="/tests/" />
+  <Folder Name="/tests/Backend/">
+    <Project Path="tests/Backend/Damadama.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -5,6 +5,7 @@ public sealed record CreateHabit(string? Name, string? Good, string? Better, str
 
 public sealed class Habit
 {
+    private Habit() { }
     public Guid Id { get; private set; }
     public string OwnerId { get; private set; } = "";
     public string Name { get; private set; } = "";
@@ -12,7 +13,7 @@ public sealed class Habit
     public string Better { get; private set; } = "";
     public string Best { get; private set; } = "";
     public DateTimeOffset CreatedAt { get; private set; }
-    public InitialSchedule Schedule { get; private set; } = new();
+    public InitialSchedule Schedule { get; private set; } = null!;
 
     public static Habit Create(CreateHabit input, string ownerId, DateTimeOffset now)
     {
@@ -48,7 +49,7 @@ public sealed class Habit
 
 public sealed class InitialSchedule
 {
-    public InitialSchedule() { }
+    private InitialSchedule() { }
     internal InitialSchedule(Guid habitId, int[] weekdays, int repeatEveryWeeks, TimeZoneInfo zone, DateTimeOffset now)
     {
         HabitId = habitId;
