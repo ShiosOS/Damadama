@@ -40,8 +40,13 @@ public sealed class Habit
         var id = Guid.NewGuid();
         return new Habit
         {
-            Id = id, OwnerId = ownerId, Name = input.Name.Trim(), Good = input.Good.Trim(),
-            Better = input.Better.Trim(), Best = input.Best.Trim(), CreatedAt = now.ToUniversalTime(),
+            Id = id,
+            OwnerId = ownerId,
+            Name = input.Name,
+            Good = input.Good,
+            Better = input.Better,
+            Best = input.Best,
+            CreatedAt = now.ToUniversalTime(),
             Schedule = new InitialSchedule(id, input.Weekdays.Distinct().Order().ToArray(), input.RepeatEveryWeeks, zone, now)
         };
     }

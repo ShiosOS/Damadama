@@ -5,6 +5,19 @@ namespace Damadama.Tests;
 
 public class HabitTests
 {
+    [Test]
+    public void Preserves_nonblank_text_exactly_as_entered()
+    {
+        var habit = Habit.Create(Walking with { Name = " Walking ", Good = " 5 minutes ", Better = " 15 minutes ", Best = " 30 minutes " },
+            "owner", DateTimeOffset.UtcNow);
+        Assert.Multiple(() =>
+        {
+            Assert.That(habit.Name, Is.EqualTo(" Walking "));
+            Assert.That(habit.Good, Is.EqualTo(" 5 minutes "));
+            Assert.That(habit.Better, Is.EqualTo(" 15 minutes "));
+            Assert.That(habit.Best, Is.EqualTo(" 30 minutes "));
+        });
+    }
     [TestCase(null)]
     [TestCase("")]
     [TestCase("   ")]
