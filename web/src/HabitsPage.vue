@@ -35,18 +35,18 @@ const form = reactive(blank());
 let generation = 0;
 
 function showError(error: unknown) {
+  let message =
+    "Could not reach the service. Check your connection and try again.";
   if (error instanceof ApiError && error.status === 401) {
     habits.value = [];
     adding.value = false;
+    message = "Sign in to continue.";
+  } else if (error instanceof ApiError) {
+    message = error.message;
   }
   activity.value = {
     kind: "error",
-    message:
-      error instanceof ApiError
-        ? error.status === 401
-          ? "Sign in to continue."
-          : error.message
-        : "Could not reach the service. Check your connection and try again.",
+    message,
   };
 }
 

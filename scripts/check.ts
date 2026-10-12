@@ -14,6 +14,7 @@ const commands = [
   ],
   ["dotnet", "build", "--no-restore", "--artifacts-path", ".audit/check-build"],
   ["dotnet", "format", "--no-restore", "--verify-no-changes"],
+  ["bun", "run", "lint"],
   [
     "bun",
     "x",
@@ -24,8 +25,10 @@ const commands = [
     "tests/Browser",
     "scripts",
     "package.json",
+    "eslint.config.mjs",
     ".github",
     "README.md",
+    "AGENTS.md",
     "dev/Properties/launchSettings.json",
   ],
   ["bun", "run", "--cwd", "web", "build"],

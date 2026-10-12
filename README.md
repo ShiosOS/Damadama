@@ -26,7 +26,7 @@ Clerk's built-in Vue sign-in component follows these instance settings.
 ## Check a change
 
 Run `bun run check`. The first run downloads Chromium, which subsequent runs reuse.
-The command checks locked dependencies, builds, formatting, Vue types, domain rules, Reqnroll API examples, PostgreSQL integration, and browser flows.
+The command checks locked dependencies, builds, formatting, nested conditional lint rules, Vue types, domain rules, Reqnroll API examples, PostgreSQL integration, and browser flows.
 An unavailable Docker engine fails the command. Testcontainers databases are separate from your persistent local database.
 Pull request checks cache dependencies, cancel superseded runs, and retain failed reports for three days.
 
