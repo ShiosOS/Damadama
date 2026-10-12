@@ -5,7 +5,15 @@ import { resolve } from "node:path";
 
 export default defineConfig({
   root: "tests/Browser",
-  plugins: [vue(), ui({ router: false, dts: false })],
+  plugins: [
+    vue(),
+    ui({
+      router: false,
+      dts: false,
+      colorMode: false,
+      ui: { colors: { primary: "rose", neutral: "stone" } },
+    }),
+  ],
   cacheDir: resolve(".audit/vite-browser"),
   server: {
     host: "127.0.0.1",

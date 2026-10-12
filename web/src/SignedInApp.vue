@@ -1,21 +1,24 @@
 <script setup lang="ts">
 import { SignIn, UserButton, useAuth } from "@clerk/vue";
 import HabitsPage from "./HabitsPage.vue";
+import CheckeredD from "./CheckeredD.vue";
 const { isLoaded, isSignedIn, userId, getToken } = useAuth();
 </script>
 
 <template>
-  <main class="max-w-3xl mx-auto p-6 space-y-6">
-    <header class="flex items-center justify-between">
-      <h1 class="text-3xl font-semibold">Damadama</h1>
-      <UserButton v-if="isSignedIn" />
-    </header>
+  <header v-if="!isLoaded || !isSignedIn" class="app-header">
+    <h1 class="brand" aria-label="Damadama">
+      <CheckeredD /> <span>Damadama</span>
+    </h1>
+  </header>
+  <main v-if="!isLoaded || !isSignedIn" class="sign-in-content">
     <p v-if="!isLoaded" role="status">Loading sign-in…</p>
     <SignIn v-else-if="!isSignedIn" routing="hash" :with-sign-up="true" />
-    <HabitsPage
-      v-if="isLoaded"
-      :account-id="isSignedIn ? (userId ?? null) : null"
-      :get-token="() => getToken()"
-    />
   </main>
+  <HabitsPage
+    v-if="isLoaded"
+    :account-id="isSignedIn ? (userId ?? null) : null"
+    :get-token="() => getToken()"
+    ><template #account><UserButton v-if="isSignedIn" /></template
+  ></HabitsPage>
 </template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
 import { z } from "zod";
 import HabitsPage from "../../web/src/HabitsPage.vue";
 
@@ -11,20 +11,38 @@ const account = ref<string | null>(
 );
 const getToken = async () =>
   account.value ? (tokens[account.value] ?? null) : null;
+const otherAccount = () => (account.value = "other");
+const signOut = () => (account.value = null);
+onMounted(() => {
+  window.addEventListener("fixture:other-account", otherAccount);
+  window.addEventListener("fixture:sign-out", signOut);
+});
+onUnmounted(() => {
+  window.removeEventListener("fixture:other-account", otherAccount);
+  window.removeEventListener("fixture:sign-out", signOut);
+});
 </script>
 
 <template>
   <UApp>
-    <main class="max-w-3xl mx-auto p-6 space-y-6">
-      <h1 class="text-3xl">Damadama</h1>
-      <nav class="flex gap-3" aria-label="Test fixture account controls">
-        <button @click="account = null">Fixture sign out</button>
-        <button @click="account = 'other'">Fixture other account</button>
-        <button @click="account = 'owner'">Fixture owning account</button>
-      </nav>
-      <Suspense
-        ><HabitsPage :account-id="account" :get-token="getToken"
-      /></Suspense>
-    </main>
+    <nav class="fixture-controls" aria-label="Test fixture account controls">
+      <button @click="account = null">Fixture sign out</button>
+      <button @click="account = 'other'">Fixture other account</button>
+      <button @click="account = 'owner'">Fixture owning account</button>
+    </nav>
+    <Suspense
+      ><HabitsPage :account-id="account" :get-token="getToken"
+    /></Suspense>
   </UApp>
 </template>
+
+<style scoped>
+.fixture-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--ui-border);
+  font-size: 0.75rem;
+}
+</style>

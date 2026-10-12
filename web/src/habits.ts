@@ -86,11 +86,3 @@ export const weekdays = [
   { value: 6, label: "Saturday" },
   { value: 7, label: "Sunday" },
 ];
-export function scheduleText(schedule: Habit["schedule"]) {
-  return `${weekdays
-    .filter((day) => schedule.weekdays.includes(day.value))
-    .map((day) => day.label)
-    .join(
-      ", ",
-    )} every ${schedule.repeatEveryWeeks} ${schedule.repeatEveryWeeks === 1 ? "week" : "weeks"}`;
-}

@@ -3,7 +3,15 @@ import vue from "@vitejs/plugin-vue";
 import ui from "@nuxt/ui/vite";
 
 export default defineConfig({
-  plugins: [vue(), ui({ router: false, dts: false })],
+  plugins: [
+    vue(),
+    ui({
+      router: false,
+      dts: false,
+      colorMode: false,
+      ui: { colors: { primary: "rose", neutral: "stone" } },
+    }),
+  ],
   cacheDir: "../.audit/vite-web",
   server: {
     port: Number(process.env.PORT ?? 5173),
