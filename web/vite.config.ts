@@ -12,6 +12,7 @@ export default defineConfig({
       ui: { colors: { primary: "rose", neutral: "stone" } },
     }),
   ],
+  optimizeDeps: { include: ["reka-ui"] },
   cacheDir: "../.audit/vite-web",
   server: {
     port: Number(process.env.PORT ?? 5173),

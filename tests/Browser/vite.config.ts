@@ -14,6 +14,7 @@ export default defineConfig({
       ui: { colors: { primary: "rose", neutral: "stone" } },
     }),
   ],
+  optimizeDeps: { include: ["reka-ui"] },
   cacheDir: resolve(".audit/vite-browser"),
   server: {
     host: "127.0.0.1",
