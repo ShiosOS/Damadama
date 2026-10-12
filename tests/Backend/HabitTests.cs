@@ -6,6 +6,21 @@ namespace Damadama.Tests;
 public class HabitTests
 {
     [Test]
+    public void Reports_the_name_before_invalid_definitions()
+    {
+        Assert.That(() => Habit.Create(Walking with { Name = " ", Good = null, Better = null, Best = null },
+            "owner", DateTimeOffset.UtcNow),
+            Throws.InstanceOf<ArgumentException>().With.Property("ParamName").EqualTo("Name"));
+    }
+
+    [Test]
+    public void Stores_distinct_sorted_ISO_weekdays_including_Monday_and_Sunday()
+    {
+        var habit = Habit.Create(Walking with { Weekdays = [7, 1, 7, 3, 1] }, "owner", DateTimeOffset.UtcNow);
+        Assert.That(habit.Schedule.Weekdays, Is.EqualTo(new[] { 1, 3, 7 }));
+    }
+
+    [Test]
     public void Preserves_nonblank_text_exactly_as_entered()
     {
         var habit = Habit.Create(Walking with { Name = " Walking ", Good = " 5 minutes ", Better = " 15 minutes ", Best = " 30 minutes " },
@@ -13,9 +28,9 @@ public class HabitTests
         Assert.Multiple(() =>
         {
             Assert.That(habit.Name, Is.EqualTo(" Walking "));
-            Assert.That(habit.Good, Is.EqualTo(" 5 minutes "));
-            Assert.That(habit.Better, Is.EqualTo(" 15 minutes "));
-            Assert.That(habit.Best, Is.EqualTo(" 30 minutes "));
+            Assert.That(habit.Levels.Good, Is.EqualTo(" 5 minutes "));
+            Assert.That(habit.Levels.Better, Is.EqualTo(" 15 minutes "));
+            Assert.That(habit.Levels.Best, Is.EqualTo(" 30 minutes "));
         });
     }
     [TestCase(null)]
@@ -59,9 +74,9 @@ public class HabitTests
         Assert.Multiple(() =>
         {
             Assert.That(habit.Name, Is.EqualTo("Walking"));
-            Assert.That(habit.Good, Is.EqualTo("5 minutes"));
-            Assert.That(habit.Better, Is.EqualTo("15 minutes"));
-            Assert.That(habit.Best, Is.EqualTo("30 minutes"));
+            Assert.That(habit.Levels.Good, Is.EqualTo("5 minutes"));
+            Assert.That(habit.Levels.Better, Is.EqualTo("15 minutes"));
+            Assert.That(habit.Levels.Best, Is.EqualTo("30 minutes"));
             Assert.That(habit.Schedule.Weekdays, Is.EqualTo(new[] { 1, 3 }));
             Assert.That(habit.Schedule.RepeatEveryWeeks, Is.EqualTo(2));
         });

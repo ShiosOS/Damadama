@@ -15,6 +15,12 @@ public sealed class HabitsDb(DbContextOptions<HabitsDb> options) : DbContext(opt
             habit.ToTable("Habits");
             habit.HasKey(h => h.Id);
             habit.HasIndex(h => new { h.OwnerId, h.CreatedAt });
+            habit.ComplexProperty(h => h.Levels, levels =>
+            {
+                levels.Property(l => l.Good).HasColumnName("Good").IsRequired();
+                levels.Property(l => l.Better).HasColumnName("Better").IsRequired();
+                levels.Property(l => l.Best).HasColumnName("Best").IsRequired();
+            });
             habit.HasOne(h => h.Schedule).WithOne().HasForeignKey<InitialSchedule>(s => s.HabitId).IsRequired();
         });
         model.Entity<InitialSchedule>(schedule =>

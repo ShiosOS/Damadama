@@ -90,6 +90,6 @@ public partial class Program;
 public sealed record HabitResponse(Guid Id, string Name, string Good, string Better, string Best,
     DateTimeOffset CreatedAt, InitialSchedule Schedule)
 {
-    public static HabitResponse From(Habit habit) => new(habit.Id, habit.Name, habit.Good, habit.Better,
-        habit.Best, habit.CreatedAt, habit.Schedule);
+    public static HabitResponse From(Habit habit) => new(habit.Id, habit.Name, habit.Levels.Good, habit.Levels.Better,
+        habit.Levels.Best, habit.CreatedAt, habit.Schedule);
 }

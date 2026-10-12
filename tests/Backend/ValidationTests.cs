@@ -43,6 +43,12 @@ public class ValidationTests
         Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/problem+json"));
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.That(problem.GetProperty("traceId").GetString(), Is.Not.Empty);
+        if (field is "good" or "better" or "best")
+        {
+            var errors = problem.GetProperty("errors");
+            Assert.That(errors.EnumerateObject().Select(error => error.Name), Is.EqualTo(new[] { field }));
+            Assert.That(errors.GetProperty(field)[0].GetString(), Is.Not.Empty);
+        }
         Assert.That(await DatabaseFixture.Count("Habits"), Is.Zero);
         Assert.That(await DatabaseFixture.Count("InitialSchedules"), Is.Zero);
     }

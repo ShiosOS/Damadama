@@ -9,19 +9,16 @@ public sealed class Habit
     public Guid Id { get; private set; }
     public string OwnerId { get; private set; } = "";
     public string Name { get; private set; } = "";
-    public string Good { get; private set; } = "";
-    public string Better { get; private set; } = "";
-    public string Best { get; private set; } = "";
+    public HabitLevels Levels { get; private set; } = null!;
     public DateTimeOffset CreatedAt { get; private set; }
     public InitialSchedule Schedule { get; private set; } = null!;
 
     public static Habit Create(CreateHabit input, string ownerId, DateTimeOffset now)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(input.Name, nameof(input.Name));
-        ArgumentException.ThrowIfNullOrWhiteSpace(input.Good, nameof(input.Good));
-        ArgumentException.ThrowIfNullOrWhiteSpace(input.Better, nameof(input.Better));
-        ArgumentException.ThrowIfNullOrWhiteSpace(input.Best, nameof(input.Best));
-        if (input.Weekdays is not { Length: > 0 } || input.Weekdays.Any(day => day is < 1 or > 7))
+        var levels = HabitLevels.Create(input.Good, input.Better, input.Best);
+        if (input.Weekdays is not { Length: > 0 } ||
+            input.Weekdays.Any(day => day < (int)IsoWeekday.Monday || day > (int)IsoWeekday.Sunday))
             throw new ArgumentException("Select at least one weekday from Monday to Sunday.", nameof(input.Weekdays));
         if (input.RepeatEveryWeeks <= 0)
             throw new ArgumentException("Repeat interval must be a positive number of weeks.", nameof(input.RepeatEveryWeeks));
@@ -43,9 +40,7 @@ public sealed class Habit
             Id = id,
             OwnerId = ownerId,
             Name = input.Name,
-            Good = input.Good,
-            Better = input.Better,
-            Best = input.Best,
+            Levels = levels,
             CreatedAt = now.ToUniversalTime(),
             Schedule = new InitialSchedule(id, input.Weekdays.Distinct().Order().ToArray(), input.RepeatEveryWeeks, zone, now)
         };
@@ -54,6 +49,7 @@ public sealed class Habit
 
 public sealed class InitialSchedule
 {
+    private const int DaysPerWeek = 7;
     private InitialSchedule() { }
     internal InitialSchedule(Guid habitId, int[] weekdays, int repeatEveryWeeks, TimeZoneInfo zone, DateTimeOffset now)
     {
@@ -62,7 +58,8 @@ public sealed class InitialSchedule
         RepeatEveryWeeks = repeatEveryWeeks;
         TimeZone = zone.Id;
         CreationDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, zone).DateTime);
-        FirstWeekMonday = CreationDate.AddDays(-(((int)CreationDate.DayOfWeek + 6) % 7));
+        var daysSinceMonday = ((int)CreationDate.DayOfWeek - (int)DayOfWeek.Monday + DaysPerWeek) % DaysPerWeek;
+        FirstWeekMonday = CreationDate.AddDays(-daysSinceMonday);
     }
     public Guid HabitId { get; private set; }
     public int[] Weekdays { get; private set; } = [];
