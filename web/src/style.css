@@ -169,12 +169,6 @@ body {
   background: color-mix(in oklch, var(--ui-bg-muted) 60%, transparent);
 }
 
-.calendar-detail {
-  margin-top: 4px;
-  color: var(--ui-text-muted);
-  font-size: 0.8125rem;
-}
-
 .habit-form {
   display: flex;
   flex-direction: column;

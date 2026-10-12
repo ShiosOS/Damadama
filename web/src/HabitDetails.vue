@@ -39,13 +39,5 @@ defineProps<{ habit: Habit }>();
         {{ habit.schedule.repeatEveryWeeks === 1 ? "week" : "weeks" }}
       </p>
     </div>
-    <p class="calendar-detail">
-      Created on {{ habit.schedule.creationDate }} ({{
-        habit.schedule.timeZone
-      }})
-    </p>
-    <p class="calendar-detail">
-      First repeat week starts Monday {{ habit.schedule.firstWeekMonday }}
-    </p>
   </div>
 </template>

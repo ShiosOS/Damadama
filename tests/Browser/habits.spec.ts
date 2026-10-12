@@ -131,13 +131,12 @@ async function expectWalking(page: Page) {
     "Better: 15 minutes",
     "Best: 30 minutes",
     "Every 2 weeks",
-    "Created on 2026-01-04",
-    "First repeat week starts Monday 2025-12-29",
-    "America/New_York",
   ])
     await expect(list).toContainText(value);
   await expect(list.getByText("Monday", { exact: true })).toBeVisible();
   await expect(list.getByText("Wednesday", { exact: true })).toBeVisible();
+  await expect(list).not.toContainText("Created on");
+  await expect(list).not.toContainText("First repeat week starts Monday");
 }
 
 test("saved values appear in the list before any reload", async ({ page }) => {
@@ -155,7 +154,7 @@ test("saved values appear in the list before any reload", async ({ page }) => {
   await expect(
     page
       .getByRole("region", { name: "Saved habits" })
-      .getByText("First repeat week starts Monday 2025-12-29"),
+      .getByText("Every 2 weeks"),
   ).toBeInViewport({ ratio: 1 });
   await page.screenshot({
     path: ".audit/habits-immediate.png",
