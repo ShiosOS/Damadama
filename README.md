@@ -1,6 +1,6 @@
 # Damadama
 
-Create, list, and open private habits with Good, Better, and Best definitions and a weekday schedule.
+Create and list private habits with Good, Better, and Best definitions and a weekday schedule.
 Planning and the system design live in [Notion](https://app.notion.com/p/3f69c051011881e1bc4ec68e47231420).
 
 ## Start locally
@@ -33,7 +33,7 @@ Pull request checks cache dependencies, cancel superseded runs, and retain faile
 Acceptance examples use ephemeral RSA-signed tokens through the ordinary JWT middleware configured by the test host.
 Playwright mounts the actual habit page through a separate entry in `tests/Browser`, backed by the actual API and PostgreSQL.
 These tests prove habit behavior and authentication refusal. They do not prove Clerk sign-in or email delivery.
-To verify Clerk, sign in through the running app using an email code, save a habit, inspect the complete saved card before reloading, then reload and open it.
+To verify Clerk, sign in through the running app using an email code, save a habit, inspect the complete saved row before reloading, then reload and check that every value remains visible.
 
 ## Configuration and database changes
 
