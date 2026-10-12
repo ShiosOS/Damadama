@@ -7,7 +7,7 @@ Chromium used America/New_York, a 1440 by 900 desktop viewport, and a 390 by 844
 - [Creation form](create-habit.png) shows the three definitions, selected weekdays, and repeat interval before save.
 - [Desktop saved list](saved-habits-desktop.png) shows the complete committed habit before reload.
 - [Mobile saved list](saved-habits-mobile.png) shows the same values in a fresh signed-in browser. The full-page screenshot is taller than the viewport.
-- [Screen recording](create-list-habits.webm) shows development sign-in, creation, immediate saved values, reload, and mobile display in 15.72 seconds.
+- [Screen recording](create-list-habits.mp4) shows development sign-in, creation, immediate saved values, reload, and mobile display in 15.72 seconds.
 
 The capture asserted HTTP 201, every definition and schedule value before reload, the same values after reload, and zero browser page errors.
 Creation preserved 2026-10-12 in America/New_York and the first repeat week's Monday anchor, 2026-10-12.
