@@ -248,6 +248,7 @@ async function open(id: Habit["id"]) {
                 />
               </UFormField>
               <UButton
+                block
                 type="submit"
                 class="rounded-full"
                 :loading="activity.kind === 'saving'"
