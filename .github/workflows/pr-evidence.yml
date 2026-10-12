@@ -1,0 +1,39 @@
+name: PR evidence
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, edited]
+permissions:
+  contents: read
+  pull-requests: read
+concurrency:
+  group: pr-evidence-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const body = context.payload.pull_request.body ?? "";
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              ...context.repo,
+              pull_number: context.payload.pull_request.number,
+            });
+            const evidence = body.split(/^## Evidence[ \t]*\r?$/m)[1]?.split(/^##[ \t]/m)[0] ?? "";
+            const screenshots = evidence.split(/^### Screenshots[ \t]*\r?$/m)[1]?.split(/^###?[ \t]/m)[0] ?? "";
+            const recording = evidence.split(/^### Screen recording[ \t]*\r?$/m)[1]?.split(/^###?[ \t]/m)[0] ?? "";
+            const hasLink = /https:\/\/[^\s<>()]+/.test(evidence);
+            const hasScreenshot = /!\[[^\]]*\]\(https:\/\/[^\s)]+\)/.test(screenshots);
+            const hasRecording = /https:\/\/[^\s<>()]+/.test(recording);
+            const isVisual = files.some(file => file.filename.startsWith("web/") || file.previous_filename?.startsWith("web/"));
+            const explained = /Visual evidence does not apply because [^\r\n]+/i.test(evidence);
+            if (!evidence.trim() || !hasLink) {
+              core.setFailed("Add an ## Evidence section with an HTTPS link to actual verification output.");
+            } else if (isVisual && (!hasScreenshot || !hasRecording)) {
+              core.setFailed("UI changes require an HTTPS Markdown image under ### Screenshots and an HTTPS recording link under ### Screen recording.");
+            } else if (!isVisual && !(hasScreenshot && hasRecording) && !explained) {
+              core.setFailed("Include screenshots and a recording, or explain 'Visual evidence does not apply because ...' and link actual verification output.");
+            }
