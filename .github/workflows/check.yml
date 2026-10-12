@@ -51,7 +51,7 @@ jobs:
           TZ=UTC ip -ts monitor link address route > .audit/network-events.log 2>&1 &
           bun run check
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: always()
         with:
           name: failure-reports
           path: |
