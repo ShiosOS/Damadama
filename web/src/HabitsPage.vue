@@ -16,7 +16,6 @@ const props = defineProps<{
 }>();
 const api = habitsApi(() => props.getToken());
 const habits = ref<Habit[]>([]);
-const opened = ref<Habit | null>(null);
 type Activity =
   | { kind: "idle" }
   | { kind: "loading" }
@@ -38,7 +37,6 @@ let generation = 0;
 function showError(error: unknown) {
   if (error instanceof ApiError && error.status === 401) {
     habits.value = [];
-    opened.value = null;
     adding.value = false;
   }
   activity.value = {
@@ -57,7 +55,6 @@ watch(
   async (account) => {
     generation++;
     habits.value = [];
-    opened.value = null;
     adding.value = false;
     Object.assign(form, blank());
     activity.value = { kind: "idle" };
@@ -109,19 +106,6 @@ async function save() {
       document
         .getElementById(`habit-${saved.id}`)
         ?.scrollIntoView({ block: "nearest" });
-  } catch (error) {
-    if (current === generation) showError(error);
-  }
-}
-
-async function open(id: Habit["id"]) {
-  const current = generation;
-  activity.value = { kind: "loading" };
-  try {
-    const habit = await api.open(id);
-    if (current !== generation) return;
-    opened.value = habit;
-    activity.value = { kind: "idle" };
   } catch (error) {
     if (current === generation) showError(error);
   }
@@ -283,21 +267,9 @@ async function open(id: Habit["id"]) {
           :key="habit.id"
           class="habit-row"
         >
-          <UButton
-            variant="link"
-            :label="habit.name"
-            class="habit-name"
-            :disabled="
-              activity.kind === 'loading' || activity.kind === 'saving'
-            "
-            @click="open(habit.id)"
-          />
+          <h3 class="habit-name">{{ habit.name }}</h3>
           <HabitDetails :habit="habit" />
         </article>
-      </section>
-      <section v-if="opened" aria-label="Opened habit" class="opened-habit">
-        <h2 class="text-xl font-semibold">{{ opened.name }}</h2>
-        <HabitDetails :habit="opened" />
       </section>
     </main>
   </section>

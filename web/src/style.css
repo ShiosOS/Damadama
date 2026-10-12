@@ -100,10 +100,9 @@ body {
 }
 
 .habit-name {
-  padding: 0;
+  color: var(--ui-primary);
   font-size: 1.2rem;
   font-weight: 700;
-  text-align: left;
   overflow-wrap: anywhere;
 }
 
@@ -180,14 +179,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 20px;
-}
-
-.opened-habit {
-  margin-top: 28px;
-  border: 1px solid var(--ui-border);
-  border-radius: 12px;
-  padding: 24px;
-  background: color-mix(in oklch, var(--ui-bg-elevated) 50%, transparent);
 }
 
 .sign-in-content {

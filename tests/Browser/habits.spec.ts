@@ -124,7 +124,7 @@ async function createWalking(page: Page) {
 async function expectWalking(page: Page) {
   const list = page.getByRole("region", { name: "Saved habits" });
   await expect(
-    list.getByRole("button", { name: "Walking", exact: true }),
+    list.getByRole("heading", { name: "Walking", exact: true }),
   ).toBeVisible();
   for (const value of [
     "Good: 5 minutes",
@@ -150,7 +150,7 @@ test("saved values appear in the list before any reload", async ({ page }) => {
   await expect(
     page
       .getByRole("region", { name: "Saved habits" })
-      .getByRole("button", { name: "Walking", exact: true }),
+      .getByRole("heading", { name: "Walking", exact: true }),
   ).toBeInViewport();
   await expect(
     page
@@ -171,33 +171,27 @@ test("reloading preserves every saved value", async ({ page }) => {
   await expectWalking(page);
 });
 
-test("opening a saved habit reads it from the server", async ({ page }) => {
-  await page.goto("/?account=open");
+test("saved values appear once with a non-interactive habit name", async ({
+  page,
+}) => {
+  await page.goto("/?account=list");
   await createWalking(page);
   await expectWalking(page);
-  let status: number | undefined;
-  page.on("response", (response) => {
-    if (
-      /\/api\/habits\/[^/]+$/.test(new URL(response.url()).pathname) &&
-      response.request().method() === "GET"
-    )
-      status = response.status();
-  });
-  await page
-    .getByRole("region", { name: "Saved habits" })
-    .getByRole("button", { name: "Walking", exact: true })
-    .click();
-  await expect.poll(() => status).toBe(200);
-  await expect(
-    page.getByRole("region", { name: "Opened habit" }),
-  ).toContainText("Walking");
+  const list = page.getByRole("region", { name: "Saved habits" });
+  await expect(list.locator("article")).toHaveCount(1);
+  await expect(list.getByRole("heading", { name: "Walking" })).toHaveCount(1);
+  await expect(list.getByRole("button", { name: "Walking" })).toHaveCount(0);
+  await expect(list.getByText("Good: 5 minutes")).toHaveCount(1);
+  await expect(page.getByRole("region", { name: "Opened habit" })).toHaveCount(
+    0,
+  );
 });
 
 test("expired authentication explains how to continue", async ({ page }) => {
   await page.goto("/?account=expired");
   await expect(page.getByRole("alert")).toContainText("Sign in to continue.");
   await expect(
-    page.getByRole("region", { name: "Saved habits" }).getByRole("button"),
+    page.getByRole("region", { name: "Saved habits" }).locator("article"),
   ).toHaveCount(0);
 });
 
@@ -215,7 +209,7 @@ test("a rejected schedule keeps the form and offers a successful retry", async (
     "Select at least one weekday",
   );
   await expect(
-    page.getByRole("region", { name: "Saved habits" }).getByRole("button"),
+    page.getByRole("region", { name: "Saved habits" }).locator("article"),
   ).toHaveCount(0);
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Walking");
   await expect(
@@ -241,24 +235,14 @@ test("account change and sign out clear visible account data", async ({
   await createWalking(page);
   await expectWalking(page);
   await page
-    .getByRole("region", { name: "Saved habits" })
-    .getByRole("button", { name: "Walking", exact: true })
-    .click();
-  await expect(
-    page.getByRole("region", { name: "Opened habit" }),
-  ).toContainText("Walking");
-  await page
     .getByRole("button", { name: "Fixture other account", exact: true })
     .click();
   await expect(
     page.getByRole("region", { name: "Saved habits" }),
   ).toContainText("No habits saved yet.");
   await expect(
-    page.getByRole("region", { name: "Saved habits" }).getByRole("button"),
+    page.getByRole("region", { name: "Saved habits" }).locator("article"),
   ).toHaveCount(0);
-  await expect(page.getByRole("region", { name: "Opened habit" })).toHaveCount(
-    0,
-  );
   await page.getByRole("button", { name: "Add habit", exact: true }).click();
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue("");
   await page.getByRole("button", { name: "Close", exact: true }).click();
@@ -290,7 +274,7 @@ test("save acknowledgement cannot reveal the previous accounts habit", async ({
   await createWalking(page);
   await committed.promise;
   await expect(
-    page.getByRole("region", { name: "Saved habits" }).getByRole("button"),
+    page.getByRole("region", { name: "Saved habits" }).locator("article"),
   ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Save habit", exact: true }),
@@ -326,6 +310,6 @@ test("save acknowledgement cannot reveal the previous accounts habit", async ({
     page.getByRole("region", { name: "Saved habits" }),
   ).toContainText("No habits saved yet.");
   await expect(
-    page.getByRole("region", { name: "Saved habits" }).getByRole("button"),
+    page.getByRole("region", { name: "Saved habits" }).locator("article"),
   ).toHaveCount(0);
 });

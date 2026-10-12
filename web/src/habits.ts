@@ -67,8 +67,6 @@ export function habitsApi(getToken: () => Promise<string | null>) {
   }
   return {
     list: () => request("/api/habits", z.array(habitSchema)),
-    open: (id: Habit["id"]) =>
-      request(`/api/habits/${encodeURIComponent(id)}`, habitSchema),
     create: (input: NewHabit) =>
       request("/api/habits", habitSchema, {
         method: "POST",

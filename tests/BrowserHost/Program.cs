@@ -11,7 +11,7 @@ await File.WriteAllTextAsync("tests/Browser/fixture.json", JsonSerializer.Serial
     owner = app.Token(),
     other = app.Token("other-account"),
     reload = app.Token("reload-account"),
-    open = app.Token("open-account"),
+    list = app.Token("list-account"),
     expired = app.Token("expired-account", expired: true),
     errors = app.Token("errors-account"),
     cleanup = app.Token("cleanup-account"),
