@@ -38,7 +38,18 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
       - run: node node_modules/@playwright/test/cli.js install --with-deps chromium
-      - run: bun run check
+      - run: |
+          mkdir -p .audit
+          {
+            date -u --iso-8601=ns
+            ip -details link show
+            ip -details address show
+            ip route show table all
+            ip -6 route show table all
+          } > .audit/network-initial.log 2>&1
+          docker events --format '{{json .}}' > .audit/docker-events.jsonl 2> .audit/docker-events-error.log &
+          TZ=UTC ip -ts monitor link address route > .audit/network-events.log 2>&1 &
+          bun run check
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -47,4 +58,8 @@ jobs:
             .audit/TestResults
             test-results
             playwright-report
+            .audit/network-initial.log
+            .audit/docker-events.jsonl
+            .audit/docker-events-error.log
+            .audit/network-events.log
           retention-days: 3
