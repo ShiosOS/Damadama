@@ -29,6 +29,14 @@ const commands = [
     "dev/Properties/launchSettings.json",
   ],
   ["bun", "run", "--cwd", "web", "build"],
+  ["node", "node_modules/@playwright/test/cli.js", "install", "chromium"],
+  [
+    "node",
+    "node_modules/@playwright/test/cli.js",
+    "test",
+    "--config",
+    "tests/Browser/playwright.config.ts",
+  ],
   [
     "dotnet",
     "test",
@@ -40,14 +48,6 @@ const commands = [
     "trx",
     "--results-directory",
     ".audit/TestResults",
-  ],
-  ["node", "node_modules/@playwright/test/cli.js", "install", "chromium"],
-  [
-    "node",
-    "node_modules/@playwright/test/cli.js",
-    "test",
-    "--config",
-    "tests/Browser/playwright.config.ts",
   ],
 ];
 for (const command of commands) {
