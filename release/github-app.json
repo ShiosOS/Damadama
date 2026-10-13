@@ -1,0 +1,8 @@
+{
+  "name": "Damadama staging verifier",
+  "url": "https://github.com/ShiosOS/Damadama",
+  "public": false,
+  "hook_attributes": { "active": false },
+  "default_permissions": { "checks": "write", "metadata": "read" },
+  "default_events": []
+}
