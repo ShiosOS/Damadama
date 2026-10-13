@@ -31,6 +31,8 @@ const sql = (id, query) =>
       "-i",
       id,
       "psql",
+      "-h",
+      "127.0.0.1",
       "-X",
       "-A",
       "-t",
@@ -101,8 +103,15 @@ try {
   for (const id of [source, target])
     await wait(
       () =>
-        spawnSync("docker", ["exec", id, "pg_isready", "-U", "postgres"])
-          .status === 0,
+        spawnSync("docker", [
+          "exec",
+          id,
+          "pg_isready",
+          "-h",
+          "127.0.0.1",
+          "-U",
+          "postgres",
+        ]).status === 0,
       "isolated PostgreSQL",
     );
   let running;
@@ -332,6 +341,8 @@ try {
     "exec",
     target,
     "psql",
+    "-h",
+    "127.0.0.1",
     "-U",
     "postgres",
     "-d",
