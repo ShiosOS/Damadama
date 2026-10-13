@@ -37,7 +37,7 @@ node release/configure-github.mjs inspect bootstrap 31512984
 
 Bootstrap requires `release-controls` from GitHub Actions, strict up-to-date checks, a pull request, resolved conversations,
 and no force pushes, deletions, or bypass actors. The sole maintainer manually reviews source changes before merging.
-Both bootstrap and full enforcement require zero approving reviews and disable last-push approval and extra approval for unattributed changes.
+Both bootstrap and full enforcement require zero approving reviews and disable last-push approval and extra approval for unattributed Copilot pull requests.
 Stale review dismissal remains enabled. Bootstrap does not claim to enforce staging.
 
 The script creates three GitHub approval boundaries, all restricted to the `main` branch with administrator bypass disabled:
