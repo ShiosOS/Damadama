@@ -6,13 +6,13 @@ The required `staging/verified` check belongs to a dedicated GitHub App. Ordinar
 ## Delivery order
 
 1. Review and merge the release-policy foundation under bootstrap CI and one approving review.
-2. Review and merge the deployment and recovery tooling under the same bootstrap policy. Each tooling PR targets `main`.
+2. Update the deployment and recovery tooling branches against that new `main` so they inherit the required `release-controls` workflow. Review and merge them under the same bootstrap policy. Each tooling PR targets `main`.
 3. Approve infrastructure and domain setup separately. Configure the verifier App and environment secrets.
 4. Activate the full gate and read back its enforcement before permitting any application merge.
 5. Update an application PR against the resulting `main`, run CI, and dispatch staging from `main` for that current candidate.
 6. Verify staging and review the PR. After its approved merge, request an approved production promotion of the verified digest.
 
-PR #11 is an application candidate, not a bootstrap exception. Its last observed head is `b07d9b4d2b536ce9a7ca56d8c2831ae367ba6357`.
+PR #11 is an application candidate, not a bootstrap exception. Its last observed head is `8d51f1f8e97c42ba539e91d15c0fd4a50b38de99`.
 Do not merge it during bootstrap. Its branch and checkout are left untouched by release setup.
 The source tuple will change when release tooling lands or the feature updates against `main`; capture it again then.
 
