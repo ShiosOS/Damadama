@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  configure,
   environmentPlan,
   assertConfigured,
   summarizeChecks,
@@ -8,6 +9,30 @@ import {
 import { mainRules } from "./policy.mjs";
 
 const source = { head: "head", merge: "merge" };
+
+test("image publication has its own protected main approval boundary", async () => {
+  const plan = await configure("plan", {
+    bootstrap: false,
+    appId: 9001,
+    reviewerId: 123,
+  });
+  assert.deepEqual(Object.keys(plan.environments), [
+    "staging",
+    "staging-verification",
+    "production",
+    "image-publication",
+  ]);
+  assert.deepEqual(plan.environments["image-publication"], {
+    wait_timer: 0,
+    prevent_self_review: false,
+    can_admins_bypass: false,
+    reviewers: [{ type: "User", id: 123 }],
+    deployment_branch_policy: {
+      protected_branches: false,
+      custom_branch_policies: true,
+    },
+  });
+});
 function successfulCheck(name, head_sha, appId) {
   return {
     name,

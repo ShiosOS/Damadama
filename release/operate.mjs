@@ -1,10 +1,14 @@
+import {
+  requireController,
+  requireFreshCandidate,
+  requireApproval,
+} from "./controller.mjs";
+import { prepareArchive, publishArchive } from "./images.mjs";
 import { readFile, writeFile, appendFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { github, captureSource, requireCI } from "./github.mjs";
 import {
   repository,
-  requireCurrentSource,
   requireVerifiedRecord,
   requirePromotion,
   recordHash,
@@ -26,51 +30,8 @@ const read = async (path) => JSON.parse(await readFile(path, "utf8"));
 const write = async (path, value) =>
   writeFile(path, JSON.stringify(value, null, 2));
 
-async function controller() {
-  if (
-    process.env.GITHUB_REF !== "refs/heads/main" ||
-    process.env.GITHUB_REPOSITORY !== repository
-  )
-    throw new Error("release controls must run on main in Damadama");
-  const main = await github(`repos/${repository}/git/ref/heads/main`);
-  if (main.object.sha !== process.env.GITHUB_SHA)
-    throw new Error(
-      "main advanced while this controller was queued; dispatch again",
-    );
-  return {
-    sha: process.env.GITHUB_SHA,
-    runId: Number(process.env.GITHUB_RUN_ID),
-    attempt: Number(process.env.GITHUB_RUN_ATTEMPT),
-  };
-}
-
-async function fresh(record) {
-  const authority = await controller();
-  if (recordHash(record.authority) !== recordHash(authority))
-    throw new Error("candidate belongs to another controller run");
-  requireCurrentSource(record.source, await captureSource(record.source.pr));
-  await requireCI(record.source);
-}
-
-async function approval(environment) {
-  const reviews = await github(
-    `repos/${repository}/actions/runs/${process.env.GITHUB_RUN_ID}/approvals`,
-  );
-  const accepted = reviews.filter(
-    (review) =>
-      review.state === "approved" &&
-      review.environments.some((env) => env.name === environment),
-  );
-  if (!accepted.length)
-    throw new Error(`explicit ${environment} environment approval is missing`);
-  return accepted.map((review) => ({
-    id: review.user.id,
-    login: review.user.login,
-  }));
-}
-
 async function promotionFacts(record) {
-  await controller();
+  await requireController();
   const pr = await github(`repos/${repository}/pulls/${record.source.pr}`);
   const main = await github(`repos/${repository}/commits/main`);
   const checks = await github(
@@ -93,7 +54,7 @@ async function promotionFacts(record) {
     `repos/${repository}/actions/runs/${record.authority.runId}`,
   );
   return {
-    approved: (await approval("production")).length > 0,
+    approved: (await requireApproval("production")).length > 0,
     mainSha: main.sha,
     mainTree: main.commit.tree.sha,
     merged: pr.merged,
@@ -107,7 +68,7 @@ async function promotionFacts(record) {
 }
 
 if (operation === "snapshot") {
-  const authority = await controller();
+  const authority = await requireController();
   const source = await captureSource(Number(process.env.PR_NUMBER));
   await requireCI(source);
   await write("source.json", source);
@@ -115,53 +76,20 @@ if (operation === "snapshot") {
   await appendFile(process.env.GITHUB_OUTPUT, `merge=${source.merge}\n`);
 } else if (operation === "stage") {
   const record = await read("candidate.json");
-  await fresh(record);
-  await approval("staging");
+  await requireFreshCandidate(record);
+  await requireApproval("staging");
   await requireEnvironment("staging");
   const build = await read("build.json");
-  const archive = createHash("sha256")
-    .update(await readFile("image.tar"))
-    .digest("hex");
-  if (
-    archive !== build.archiveSha256 ||
-    build.version !==
-      `pr-${record.source.pr}-${record.source.head.slice(0, 12)}-${record.source.base.slice(0, 12)}`
-  )
-    throw new Error("image archive or version differs from build record");
-  execFileSync("docker", ["load", "--input", "image.tar"], {
-    stdio: "inherit",
-  });
-  execFileSync(
-    "docker",
-    [
-      "login",
-      "ghcr.io",
-      "--username",
-      process.env.GITHUB_ACTOR,
-      "--password-stdin",
-    ],
-    { input: process.env.GH_TOKEN, stdio: ["pipe", "inherit", "inherit"] },
+  record.image = publishArchive(
+    await prepareArchive(
+      "application",
+      "image.tar",
+      build,
+      record.source,
+      record.authority,
+    ),
   );
-  const tag = `ghcr.io/shiosos/damadama:${build.version}-${record.authority.runId}-${record.authority.attempt}`;
-  execFileSync("docker", ["tag", "damadama-candidate", tag], {
-    stdio: "inherit",
-  });
-  const output = execFileSync("docker", ["push", tag], {
-    encoding: "utf8",
-    timeout: 180_000,
-  });
-  const digest = output.match(/digest: (sha256:[a-f0-9]{64})/)?.[1];
-  if (!digest) throw new Error("registry did not return an immutable digest");
-  record.image = {
-    reference: `ghcr.io/shiosos/damadama@${digest}`,
-    digest,
-    archiveSha256: archive,
-    version: build.version,
-  };
-  execFileSync("docker", ["manifest", "inspect", record.image.reference], {
-    stdio: "ignore",
-  });
-  await fresh(record);
+  await requireFreshCandidate(record);
   record.deployment = {
     ...(await deployImage(record.image.reference)),
     url: process.env.APP_ORIGIN,
@@ -176,7 +104,7 @@ if (operation === "snapshot") {
     observedAt: new Date().toISOString(),
   };
   await observeDeployment(record.deployment);
-  await fresh(record);
+  await requireFreshCandidate(record);
   await write("staged.json", record);
   await write(
     "runtime-evidence/deployment-summary.json",
@@ -188,10 +116,10 @@ if (operation === "snapshot") {
   );
 } else if (operation === "approve") {
   const record = await read("staged.json");
-  await fresh(record);
+  await requireFreshCandidate(record);
   await requireEnvironment("staging");
   await observeDeployment(record.deployment);
-  const reviewers = await approval("staging-verification");
+  const reviewers = await requireApproval("staging-verification");
   record.evidence.operator = {
     approvalRunId: record.authority.runId,
     reviewers,
@@ -204,14 +132,14 @@ if (operation === "snapshot") {
   await write("verified.json", record);
 } else if (operation === "publish-check") {
   const record = requireVerifiedRecord(await read("verified.json"));
-  await fresh(record);
+  await requireFreshCandidate(record);
   await requireEnvironment("staging");
   await observeDeployment(record.deployment);
-  await approval("staging-verification");
+  await requireApproval("staging-verification");
   if (!process.env.STAGING_CHECK_TOKEN)
     throw new Error("dedicated verifier token is required");
   for (const body of verificationChecks(record)) {
-    await fresh(record);
+    await requireFreshCandidate(record);
     await github(`repos/${repository}/check-runs`, {
       method: "POST",
       token: process.env.STAGING_CHECK_TOKEN,
@@ -219,7 +147,7 @@ if (operation === "snapshot") {
     });
   }
 } else if (operation === "promotion-source") {
-  await controller();
+  await requireController();
   const runId = Number(process.env.STAGING_RUN_ID);
   if (!Number.isSafeInteger(runId) || runId < 1)
     throw new Error("a successful staging run ID is required");
