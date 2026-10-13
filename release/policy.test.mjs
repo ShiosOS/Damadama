@@ -122,7 +122,7 @@ test("changed deployment image cannot verify the candidate", () => {
   r.deployment.image = `ghcr.io/shiosos/damadama@sha256:${"c".repeat(64)}`;
   assert.throws(() => requireVerifiedRecord(r), /image/);
 });
-test("full gate has strict App-bound staging, CI, review, and no bypass", () => {
+test("full gate has strict App-bound staging, CI, solo review, and no bypass", () => {
   const rules = mainRules(9001);
   const checks = rules.rules.find(
     (r) => r.type === "required_status_checks",
@@ -134,9 +134,9 @@ test("full gate has strict App-bound staging, CI, review, and no bypass", () => 
   ]);
   assert.deepEqual(rules.bypass_actors, []);
   const reviews = rules.rules.find((r) => r.type === "pull_request").parameters;
-  assert.equal(reviews.required_approving_review_count, 1);
+  assert.equal(reviews.required_approving_review_count, 0);
   assert.equal(reviews.dismiss_stale_reviews_on_push, true);
-  assert.equal(reviews.require_last_push_approval, true);
+  assert.equal(reviews.require_last_push_approval, false);
 });
 
 for (const [change, reason] of [
@@ -299,3 +299,38 @@ test("a PR-owned workflow cannot authenticate a release record", () => {
   p.run = { ...run, event: "pull_request" };
   assert.throws(() => requirePromotion(r, p), /workflow/);
 });
+
+for (const bootstrap of [true, false]) {
+  test(`${bootstrap ? "bootstrap" : "full gate"} permits sole-maintainer review with required PR and machine protections`, () => {
+    const rules = mainRules(bootstrap ? undefined : 9001, bootstrap);
+    assert.equal(rules.enforcement, "active");
+    assert.equal(rules.target, "branch");
+    assert.deepEqual(rules.conditions, {
+      ref_name: { include: ["refs/heads/main"], exclude: [] },
+    });
+    assert.deepEqual(rules.bypass_actors, []);
+    assert.deepEqual(rules.rules.map((rule) => rule.type), [
+      "deletion",
+      "non_fast_forward",
+      "pull_request",
+      "required_status_checks",
+    ]);
+    const reviews = rules.rules.find((rule) => rule.type === "pull_request").parameters;
+    assert.equal(reviews.required_approving_review_count, 0);
+    assert.equal(reviews.require_last_push_approval, false);
+    assert.equal(reviews.require_extra_approval_for_unattributed_changes, false);
+    assert.equal(reviews.require_code_owner_review, false);
+    assert.equal(reviews.dismiss_stale_reviews_on_push, true);
+    assert.equal(reviews.required_review_thread_resolution, true);
+    assert.deepEqual(reviews.allowed_merge_methods, ["merge", "squash"]);
+    const checks = rules.rules.find((rule) => rule.type === "required_status_checks").parameters;
+    assert.equal(checks.strict_required_status_checks_policy, true);
+    assert.equal(checks.do_not_enforce_on_create, false);
+    assert.deepEqual(checks.required_status_checks, bootstrap
+      ? [{ context: "release-controls", integration_id: 15368 }]
+      : [
+          { context: "ci/verified", integration_id: 9001 },
+          { context: "staging/verified", integration_id: 9001 },
+        ]);
+  });
+}

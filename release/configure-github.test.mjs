@@ -141,3 +141,14 @@ test("readback rejects an extra environment approver", () => {
   });
   assert.throws(() => assertConfigured(plan, observed), /reviewer/);
 });
+for (const [field, staleValue] of [
+  ["required_approving_review_count", 1],
+  ["require_last_push_approval", true],
+  ["require_extra_approval_for_unattributed_changes", true],
+]) {
+  test(`readback rejects a stale second-reviewer requirement (${field})`, () => {
+    const { plan, observed } = configured();
+    observed.ruleset.rules.find((rule) => rule.type === "pull_request").parameters[field] = staleValue;
+    assert.throws(() => assertConfigured(plan, observed), new RegExp(field));
+  });
+}
