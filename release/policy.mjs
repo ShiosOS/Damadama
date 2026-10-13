@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 export const repository = "ShiosOS/Damadama";
 export const stagingContext = "staging/verified";
+export const ciContext = "ci/verified";
 export const actionsAppId = 15368;
 const sourceFields = ["repository", "pr", "head", "base", "merge", "tree"];
 const runtimeChecks = [
@@ -55,9 +56,38 @@ export function recordHash(record) {
     .digest("hex");
 }
 
+export function requireCIEvidence(source, runs) {
+  return ["release-controls", "check"].map((name) => {
+    const check = runs?.find(
+      (run) => run.name === name && run.app?.id === actionsAppId,
+    );
+    requireThat(
+      check?.head_sha === source.head &&
+        check.status === "completed" &&
+        check.conclusion === "success" &&
+        Number.isSafeInteger(check.id) &&
+        check.id > 0 &&
+        /^https:\/\/github\.com\/ShiosOS\/Damadama\/actions\/runs\/\d+\/job\/\d+$/.test(
+          check.details_url,
+        ),
+      `CI ${name} must succeed on the current head; skipped, missing, or other-source evidence is insufficient`,
+    );
+    return {
+      name,
+      id: check.id,
+      head_sha: check.head_sha,
+      app: { id: check.app.id },
+      status: check.status,
+      conclusion: check.conclusion,
+      details_url: check.details_url,
+    };
+  });
+}
+
 export function requireVerifiedRecord(record) {
   requireThat(record?.schema === 1, "missing or unsupported release record");
   requireSource(record.source);
+  requireCIEvidence(record.source, record.evidence?.ci);
   requireThat(
     /^[a-f0-9]{40}$/.test(record.authority?.sha),
     "invalid controller SHA",
@@ -151,30 +181,34 @@ export function requirePromotion(record, current) {
       current.appId !== actionsAppId,
     "dedicated verifier App is required",
   );
-  const check = current.check;
-  requireThat(
-    check?.app?.id === current.appId,
-    "staging check came from another App",
-  );
-  requireThat(
-    check.name === stagingContext &&
-      check.status === "completed" &&
-      check.conclusion === "success",
-    "staging check is not successful",
-  );
-  requireThat(
-    check.head_sha === record.source.merge,
-    "staging check is not on the proposed merge",
-  );
-  requireThat(
-    check.external_id === recordHash(record),
-    "staging record hash differs from verified check",
-  );
-  requireThat(
-    check.details_url ===
-      `https://github.com/${repository}/actions/runs/${record.authority.runId}`,
-    "staging check points to another run",
-  );
+  for (const [context, check, label] of [
+    [stagingContext, current.check, "staging"],
+    [ciContext, current.ciCheck, "CI"],
+  ]) {
+    requireThat(
+      check?.app?.id === current.appId,
+      `${label} check came from another App`,
+    );
+    requireThat(
+      check.name === context &&
+        check.status === "completed" &&
+        check.conclusion === "success",
+      `${label} check is not successful`,
+    );
+    requireThat(
+      check.head_sha === record.source.merge,
+      `${label} check is not on the proposed merge`,
+    );
+    requireThat(
+      check.external_id === recordHash(record),
+      `${label} record hash differs from verified check`,
+    );
+    requireThat(
+      check.details_url ===
+        `https://github.com/${repository}/actions/runs/${record.authority.runId}`,
+      `${label} check points to another run`,
+    );
+  }
   const run = current.run;
   requireThat(
     run?.id === record.authority.runId &&
@@ -189,20 +223,48 @@ export function requirePromotion(record, current) {
   return record.image.reference;
 }
 
+export function verificationChecks(record) {
+  requireVerifiedRecord(record);
+  const evidence = record.evidence.ci
+    .map((check) => `[${check.name}](${check.details_url})`)
+    .join(", ");
+  return [
+    {
+      name: ciContext,
+      title: "Current proposed result passed CI",
+      summary: `Successful Actions CI on head ${record.source.head}: ${evidence}. The head contains current main and has the complete proposed tree ${record.source.tree}.`,
+    },
+    {
+      name: stagingContext,
+      title: "Current proposed result verified in staging",
+      summary: `Image ${record.image.reference}. Source tree ${record.source.tree}. Automated runtime and actual Clerk ticket-session checks passed. Protected approval attests to actual email-code delivery, migration review, and rollback compatibility.`,
+    },
+  ].map(({ name, title, summary }) => ({
+    name,
+    head_sha: record.source.merge,
+    status: "completed",
+    conclusion: "success",
+    external_id: recordHash(record),
+    details_url: `https://github.com/${repository}/actions/runs/${record.authority.runId}`,
+    output: {
+      title,
+      summary: `${summary} Verified record SHA-256 ${recordHash(record)}.`,
+    },
+  }));
+}
+
 export function mainRules(appId, bootstrap = false) {
   requireThat(
     bootstrap ||
       (Number.isSafeInteger(appId) && appId > 0 && appId !== actionsAppId),
     "a dedicated verifier App ID is required",
   );
-  const checks = [
-    { context: "release-controls", integration_id: actionsAppId },
-  ];
-  if (!bootstrap)
-    checks.push(
-      { context: "check", integration_id: actionsAppId },
-      { context: stagingContext, integration_id: appId },
-    );
+  const checks = bootstrap
+    ? [{ context: "release-controls", integration_id: actionsAppId }]
+    : [
+        { context: ciContext, integration_id: appId },
+        { context: stagingContext, integration_id: appId },
+      ];
   return {
     name: "Damadama main",
     target: "branch",

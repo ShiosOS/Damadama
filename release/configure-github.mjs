@@ -4,6 +4,7 @@ import {
   repository,
   mainRules,
   stagingContext,
+  ciContext,
   recordHash,
 } from "./policy.mjs";
 
@@ -147,9 +148,9 @@ export function assertConfigured(plan, observed) {
 
 export function summarizeChecks(required, source, headRuns, mergeRuns) {
   return required.map((requirement) => {
-    const staging = requirement.context === stagingContext;
-    const revision = staging ? source.merge : source.head;
-    const runs = staging ? mergeRuns : headRuns;
+    const verifier = [ciContext, stagingContext].includes(requirement.context);
+    const revision = verifier ? source.merge : source.head;
+    const runs = verifier ? mergeRuns : headRuns;
     return {
       ...requirement,
       success: runs.some(

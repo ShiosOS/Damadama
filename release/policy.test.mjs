@@ -7,6 +7,7 @@ import {
   requirePromotion,
   mainRules,
   recordHash,
+  verificationChecks,
 } from "./policy.mjs";
 
 const sha = (c) => c.repeat(40);
@@ -36,6 +37,15 @@ const record = () => ({
     image: `ghcr.io/shiosos/damadama@${digest}`,
   },
   evidence: {
+    ci: ["release-controls", "check"].map((name, i) => ({
+      name,
+      id: 10 + i,
+      head_sha: source.head,
+      app: { id: 15368 },
+      status: "completed",
+      conclusion: "success",
+      details_url: `https://github.com/ShiosOS/Damadama/actions/runs/100/job/${10 + i}`,
+    })),
     automated: {
       readiness: true,
       unauthorized: true,
@@ -119,8 +129,7 @@ test("full gate has strict App-bound staging, CI, review, and no bypass", () => 
   ).parameters;
   assert.equal(checks.strict_required_status_checks_policy, true);
   assert.deepEqual(checks.required_status_checks, [
-    { context: "release-controls", integration_id: 15368 },
-    { context: "check", integration_id: 15368 },
+    { context: "ci/verified", integration_id: 9001 },
     { context: "staging/verified", integration_id: 9001 },
   ]);
   assert.deepEqual(rules.bypass_actors, []);
@@ -128,6 +137,64 @@ test("full gate has strict App-bound staging, CI, review, and no bypass", () => 
   assert.equal(reviews.required_approving_review_count, 1);
   assert.equal(reviews.dismiss_stale_reviews_on_push, true);
   assert.equal(reviews.require_last_push_approval, true);
+});
+
+for (const [change, reason] of [
+  [
+    (r) => {
+      delete r.evidence.ci;
+    },
+    "absent",
+  ],
+  [
+    (r) => {
+      r.evidence.ci.pop();
+    },
+    "missing job",
+  ],
+  [
+    (r) => {
+      r.evidence.ci[0].conclusion = "skipped";
+    },
+    "skipped",
+  ],
+  [
+    (r) => {
+      r.evidence.ci[0].conclusion = "failure";
+    },
+    "failed",
+  ],
+  [
+    (r) => {
+      r.evidence.ci[0].head_sha = source.merge;
+    },
+    "other revision",
+  ],
+  [
+    (r) => {
+      r.evidence.ci[0].app.id = 9001;
+    },
+    "other App",
+  ],
+]) {
+  test(`missing or invalid CI evidence refuses verifier publication (${reason})`, () => {
+    const r = record();
+    change(r);
+    assert.throws(() => verificationChecks(r), /CI/);
+  });
+}
+test("both verifier checks bind the same proposed merge and immutable record", () => {
+  const r = record();
+  const checks = verificationChecks(r);
+  assert.deepEqual(
+    checks.map((c) => c.name),
+    ["ci/verified", "staging/verified"],
+  );
+  for (const check of checks) {
+    assert.equal(check.head_sha, source.merge);
+    assert.equal(check.external_id, recordHash(r));
+    assert.equal(check.conclusion, "success");
+  }
 });
 test("gate cannot activate without a dedicated App", () => {
   assert.throws(() => mainRules(0), /App/);
@@ -150,12 +217,34 @@ const production = (r) => ({
   mergeCommit: sha("6"),
   appId: 9001,
   check: checkFor(r),
+  ciCheck: { ...checkFor(r), name: "ci/verified" },
   run,
 });
 test("a merged matching tree promotes the exact staged digest", () => {
   const r = record();
   assert.equal(requirePromotion(r, production(r)), r.image.reference);
 });
+for (const change of [
+  (p) => {
+    delete p.ciCheck;
+  },
+  (p) => {
+    p.ciCheck.conclusion = "failure";
+  },
+  (p) => {
+    p.ciCheck.head_sha = source.head;
+  },
+  (p) => {
+    p.ciCheck.external_id = "forged";
+  },
+]) {
+  test("production refuses missing, failed, or mismatched CI attestation", () => {
+    const r = record();
+    const p = production(r);
+    change(p);
+    assert.throws(() => requirePromotion(r, p), /CI/);
+  });
+}
 for (const [field, value, reason] of [
   ["approved", false, "approval"],
   ["mainTree", sha("7"), "tree"],

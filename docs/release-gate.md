@@ -1,7 +1,7 @@
 # Staging before merge
 
 `main` is the reviewed source branch. Staging and production are runtime environments, not Git branches.
-The required `staging/verified` check belongs to a dedicated GitHub App. Ordinary PR workflows cannot issue that App's check.
+The required `ci/verified` and `staging/verified` checks belong to a dedicated GitHub App. Ordinary PR workflows cannot issue that App's checks.
 
 ## Delivery order
 
@@ -70,14 +70,18 @@ node release/configure-github.mjs inspect gated 31512984
 node release/configure-github.mjs probe 11
 ```
 
-Full enforcement adds `check` from GitHub Actions and `staging/verified` from the specific verifier App.
+Full enforcement replaces the bootstrap requirement with `ci/verified` and `staging/verified` from the specific verifier App.
+The controller still requires actual successful `check` and `release-controls` jobs from GitHub Actions on the current head.
+The verified record stores their check IDs, revision, producer, success, and run links.
 An App ID of zero or GitHub Actions' ID is rejected.
 Check conclusions must be actual success. Skipped, neutral, missing, or failed runtime work cannot publish verifier success.
 Review the readback, including effective rules from any additional rulesets.
 
 Standard PR Actions checks attach to the head SHA even though checkout uses the proposed merge.
 The coordinator therefore requires head CI and proves that head includes current main and its full tree equals the proposed merge tree.
-The dedicated staging check still attaches only to the proposed merge SHA. No head success substitutes for staging verification.
+The App attests to those CI facts as `ci/verified` on the proposed merge, alongside `staging/verified`.
+GitHub can prefer merge checks once that commit has a status. Keeping both required App checks on that merge avoids mixing required head and merge contexts.
+No head success substitutes for either required verifier check.
 
 ## Candidate identity and trust
 
@@ -89,10 +93,10 @@ deployment identity, automated results, and manual approval evidence.
 
 Before publishing success, the coordinator rechecks the source tuple and active staging deployment.
 A source update produces a different candidate. A main update requires the branch to update and staging to run again.
-The required check is published only on the proposed merge SHA, never as a successful fallback on the head.
+Both required checks are published only on the proposed merge SHA, never as a successful fallback on the head.
 Strict GitHub protection supplies the merge-time freshness check after the final API observation.
 
-Production authenticates the record using the successful verifier check, its App ID and record hash, and the trusted staging run.
+Production authenticates the record using both successful verifier checks, their App ID and record hash, and the trusted staging run.
 It confirms that the PR is merged, its merged result is current main, and main's full tree equals the staged tree.
 Tree equality supports both merge commits and squash merges. Production deploys the same registry digest and never rebuilds.
 

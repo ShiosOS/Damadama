@@ -1,7 +1,7 @@
 # Release control design
 
 The release record is the shared data shape. `release/policy.mjs` owns its identity and promotion predicates.
-`release/github.mjs` captures GitHub facts and requires successful CI on the proposed merge.
+`release/github.mjs` captures GitHub facts and requires successful Actions CI on the current head after proving main ancestry and complete head/proposed-tree equality.
 `release/configure-github.mjs` renders, reconciles, and reads back rules and approval boundaries.
 Trusted deployment tooling owns Docker, registry, Railway, and Clerk operations. Provider data never becomes a shell command.
 

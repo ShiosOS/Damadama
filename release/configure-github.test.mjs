@@ -38,6 +38,16 @@ test("probe refuses head-only staging evidence for the proposed merge", () => {
   assert.equal(checks[0].success, false);
 });
 
+test("probe refuses head-only CI attestation for the proposed merge", () => {
+  const checks = summarizeChecks(
+    [{ context: "ci/verified", integration_id: 9001 }],
+    source,
+    [successfulCheck("ci/verified", "head", 9001)],
+    [],
+  );
+  assert.equal(checks[0].success, false);
+});
+
 function configured() {
   const plan = {
     ruleset: mainRules(9001),

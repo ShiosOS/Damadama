@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { repository, actionsAppId, requireSource } from "./policy.mjs";
+import { repository, requireSource, requireCIEvidence } from "./policy.mjs";
 
 export async function github(
   path,
@@ -82,18 +82,5 @@ export async function requireCI(source) {
   const checks = await github(
     `repos/${repository}/commits/${source.head}/check-runs?per_page=100&filter=latest`,
   );
-  for (const name of ["release-controls", "check"]) {
-    const found = checks.check_runs.find(
-      (check) => check.name === name && check.app.id === actionsAppId,
-    );
-    if (
-      !found ||
-      found.status !== "completed" ||
-      found.conclusion !== "success"
-    ) {
-      throw new Error(
-        `CI ${name} must succeed on the current head whose tree equals the proposed result; skipped or missing is insufficient`,
-      );
-    }
-  }
+  return requireCIEvidence(source, checks.check_runs);
 }
