@@ -48,6 +48,17 @@ export async function captureSource(prNumber) {
   const merge = await github(
     `repos/${repository}/git/commits/${pr.merge_commit_sha}`,
   );
+  const comparison = await github(
+    `repos/${repository}/compare/${pr.base.sha}...${pr.head.sha}`,
+  );
+  const head = await github(`repos/${repository}/git/commits/${pr.head.sha}`);
+  if (
+    !["ahead", "identical"].includes(comparison.status) ||
+    head.tree.sha !== merge.tree.sha
+  )
+    throw new Error(
+      "update the PR branch against current main before staging; CI head tree must equal proposed tree",
+    );
   if (
     merge.parents.length !== 2 ||
     merge.parents[0].sha !== pr.base.sha ||
@@ -69,7 +80,7 @@ export async function captureSource(prNumber) {
 
 export async function requireCI(source) {
   const checks = await github(
-    `repos/${repository}/commits/${source.merge}/check-runs?per_page=100&filter=latest`,
+    `repos/${repository}/commits/${source.head}/check-runs?per_page=100&filter=latest`,
   );
   for (const name of ["release-controls", "check"]) {
     const found = checks.check_runs.find(
@@ -81,7 +92,7 @@ export async function requireCI(source) {
       found.conclusion !== "success"
     ) {
       throw new Error(
-        `CI ${name} must succeed on the exact proposed merge; skipped or missing is insufficient`,
+        `CI ${name} must succeed on the current head whose tree equals the proposed result; skipped or missing is insufficient`,
       );
     }
   }

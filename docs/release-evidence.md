@@ -11,6 +11,7 @@ Verified on 2026-10-12. This evidence covers release controls, not a deployed ap
 - The live branch-policy response includes `type: branch`; the implementation requires it and fails closed if a future response cannot distinguish branch from tag.
 - Bootstrap requires strict `release-controls` and source review with no bypass. The live PR probe shows that required check is missing on PR #11's proposed merge.
 - GitHub reports PR #11's merge state as `BLOCKED`. Its new proposed merge is `3d1e5784c08ec3ee78944af030e3b1e4cef40c72`. This demonstrates missing bootstrap CI enforcement, not the pending staging requirement.
+- Live check APIs show ordinary Actions checks attached to the PR head, with no checks on the synthetic merge. The controller now requires successful head CI plus main ancestry and complete head/proposed-tree equality before staging.
 
 The full App-bound staging requirement is prepared but not activated. The verifier App and hosting credentials do not exist in this setup yet.
 No infrastructure, staging deployment, actual Clerk login, inbox delivery, or production promotion ran.

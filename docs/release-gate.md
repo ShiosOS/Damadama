@@ -75,6 +75,10 @@ An App ID of zero or GitHub Actions' ID is rejected.
 Check conclusions must be actual success. Skipped, neutral, missing, or failed runtime work cannot publish verifier success.
 Review the readback, including effective rules from any additional rulesets.
 
+Standard PR Actions checks attach to the head SHA even though checkout uses the proposed merge.
+The coordinator therefore requires head CI and proves that head includes current main and its full tree equals the proposed merge tree.
+The dedicated staging check still attaches only to the proposed merge SHA. No head success substitutes for staging verification.
+
 ## Candidate identity and trust
 
 The coordinator captures repository, PR number, head SHA, current base SHA, proposed merge SHA, and complete source tree SHA.
