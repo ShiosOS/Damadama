@@ -20,6 +20,7 @@ The feature branch and its original worktree were not changed by release setup.
 - The initial Windows clone used CRLF and failed formatting. Rechecking out that disposable clone with LF fixed the check. The feature checkout was untouched.
 - `node --test release/runtime.test.mjs` passed 28 runtime-policy tests after missing deployment/isolation/recovery refusal cases failed in the red phase.
 - Independent review corrected running-image versus configured-source confusion, invalid retention values, and stopped production being treated as an initial release.
+- GitHub's merge-check precedence prompted paired App attestations: actual successful head CI is recorded and attested on the proposed merge alongside staging. Foundation refusal/publication/promotion tests passed 54 cases. Hosted check publication remains pending.
 - Railway's live public GraphQL schema confirms image-source updates, environment project tokens, deployment metadata, active deployment IDs, no-sleep settings, variables, and readiness settings.
 
 Actionlint v1.7.12 accepts the remaining workflow syntax but rejects the current documented `queue: max` property.

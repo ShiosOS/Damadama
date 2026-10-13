@@ -9,6 +9,8 @@ import {
   requirePromotion,
   recordHash,
   stagingContext,
+  ciContext,
+  verificationChecks,
 } from "./policy.mjs";
 import {
   deployImage,
@@ -81,6 +83,12 @@ async function promotionFacts(record) {
       check.app.id === appId &&
       check.external_id === recordHash(record),
   );
+  const ciCheck = checks.check_runs.find(
+    (check) =>
+      check.name === ciContext &&
+      check.app.id === appId &&
+      check.external_id === recordHash(record),
+  );
   const run = await github(
     `repos/${repository}/actions/runs/${record.authority.runId}`,
   );
@@ -93,6 +101,7 @@ async function promotionFacts(record) {
     mergeCommit: pr.merge_commit_sha,
     appId,
     check,
+    ciCheck,
     run,
   };
 }
@@ -190,6 +199,7 @@ if (operation === "snapshot") {
     migrations: "approved-attestation",
     rollback: "approved-attestation",
   };
+  record.evidence.ci = await requireCI(record.source);
   requireVerifiedRecord(record);
   await write("verified.json", record);
 } else if (operation === "publish-check") {
@@ -200,22 +210,14 @@ if (operation === "snapshot") {
   await approval("staging-verification");
   if (!process.env.STAGING_CHECK_TOKEN)
     throw new Error("dedicated verifier token is required");
-  await github(`repos/${repository}/check-runs`, {
-    method: "POST",
-    token: process.env.STAGING_CHECK_TOKEN,
-    body: {
-      name: stagingContext,
-      head_sha: record.source.merge,
-      status: "completed",
-      conclusion: "success",
-      external_id: recordHash(record),
-      details_url: `https://github.com/${repository}/actions/runs/${record.authority.runId}`,
-      output: {
-        title: "Current proposed result verified in staging",
-        summary: `Image ${record.image.reference}. Source tree ${record.source.tree}. Automated runtime and actual Clerk ticket-session checks passed. A protected approval attests to actual email-code delivery, migration review, and rollback compatibility. Verified record SHA-256 ${recordHash(record)}.`,
-      },
-    },
-  });
+  for (const body of verificationChecks(record)) {
+    await fresh(record);
+    await github(`repos/${repository}/check-runs`, {
+      method: "POST",
+      token: process.env.STAGING_CHECK_TOKEN,
+      body,
+    });
+  }
 } else if (operation === "promotion-source") {
   await controller();
   const runId = Number(process.env.STAGING_RUN_ID);

@@ -89,7 +89,8 @@ No fixture issuer, JWT signing key, Vite fixture entry, or test-host switch ente
 Staging test habits remain sample data; this first feature has no permanent-delete endpoint.
 
 Before App success, the final job rechecks CI, source, environment isolation, and active deployment.
-It uploads an immutable verified record first, then publishes `staging/verified` only on the proposed merge SHA.
+The record includes actual successful head CI check IDs and run links. It uploads that immutable record first, then publishes both `ci/verified` and `staging/verified` on the proposed merge SHA.
+Full GitHub protection requires both checks from the verifier App. Both use the same record hash, and production authenticates both before promotion.
 The record has a source-derived candidate version, archive checksum, registry digest, controller SHA, run/attempt, deployment ID, and distinct evidence categories.
 
 ## Promote after merge
