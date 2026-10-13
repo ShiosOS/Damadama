@@ -1,7 +1,42 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { environmentPlan, assertConfigured } from "./configure-github.mjs";
+import {
+  environmentPlan,
+  assertConfigured,
+  summarizeChecks,
+} from "./configure-github.mjs";
 import { mainRules } from "./policy.mjs";
+
+const source = { head: "head", merge: "merge" };
+function successfulCheck(name, head_sha, appId) {
+  return {
+    name,
+    head_sha,
+    app: { id: appId },
+    status: "completed",
+    conclusion: "success",
+  };
+}
+
+test("probe recognizes ordinary Actions CI attached to the current PR head", () => {
+  const checks = summarizeChecks(
+    [{ context: "release-controls", integration_id: 15368 }],
+    source,
+    [successfulCheck("release-controls", "head", 15368)],
+    [],
+  );
+  assert.equal(checks[0].success, true);
+});
+
+test("probe refuses head-only staging evidence for the proposed merge", () => {
+  const checks = summarizeChecks(
+    [{ context: "staging/verified", integration_id: 9001 }],
+    source,
+    [successfulCheck("staging/verified", "head", 9001)],
+    [],
+  );
+  assert.equal(checks[0].success, false);
+});
 
 function configured() {
   const plan = {

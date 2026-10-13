@@ -145,29 +145,48 @@ export function assertConfigured(plan, observed) {
   }
 }
 
+export function summarizeChecks(required, source, headRuns, mergeRuns) {
+  return required.map((requirement) => {
+    const staging = requirement.context === stagingContext;
+    const revision = staging ? source.merge : source.head;
+    const runs = staging ? mergeRuns : headRuns;
+    return {
+      ...requirement,
+      success: runs.some(
+        (check) =>
+          check.name === requirement.context &&
+          check.app.id === requirement.integration_id &&
+          check.head_sha === revision &&
+          check.status === "completed" &&
+          check.conclusion === "success",
+      ),
+    };
+  });
+}
+
 export async function probe(prNumber) {
   const source = await captureSource(prNumber);
   const rules = await github(`repos/${repository}/rules/branches/main`);
-  const checkRuns = await github(
-    `repos/${repository}/commits/${source.merge}/check-runs?per_page=100&filter=latest`,
-  );
+  const [headRuns, mergeRuns] = await Promise.all([
+    github(
+      `repos/${repository}/commits/${source.head}/check-runs?per_page=100&filter=latest`,
+    ),
+    github(
+      `repos/${repository}/commits/${source.merge}/check-runs?per_page=100&filter=latest`,
+    ),
+  ]);
   const statusRules = rules.filter(
     (rule) => rule.type === "required_status_checks",
   );
   const required = statusRules.flatMap(
     (rule) => rule.parameters.required_status_checks,
   );
-  const checks = required.map((requirement) => ({
-    ...requirement,
-    success: checkRuns.check_runs.some(
-      (check) =>
-        check.name === requirement.context &&
-        check.app.id === requirement.integration_id &&
-        check.head_sha === source.merge &&
-        check.status === "completed" &&
-        check.conclusion === "success",
-    ),
-  }));
+  const checks = summarizeChecks(
+    required,
+    source,
+    headRuns.check_runs,
+    mergeRuns.check_runs,
+  );
   return {
     source,
     strict: statusRules.some(
