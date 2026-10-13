@@ -50,3 +50,8 @@ Only the publishable key is returned as public configuration. Issuer, expiry, si
 Run `dotnet tool restore` before using EF tools. Add a migration with `dotnet ef migrations add Name --project server` and review it.
 The backend applies committed migrations before accepting requests. Creation saves the habit and initial schedule in one transaction and returns success only after commit.
 It derives the calendar date from the server's UTC creation instant in the device's IANA timezone, and stores that date and its Monday anchor separately from the instant.
+
+## Release
+
+Release setup starts with the [staging gate and bootstrap procedure](docs/release-gate.md).
+The [release design](docs/release-design.md) describes source identity and deployment trust.

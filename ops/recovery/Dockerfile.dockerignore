@@ -1,0 +1,4 @@
+**
+!ops/
+!ops/recovery/
+!ops/recovery/*.sh

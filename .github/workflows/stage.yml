@@ -1,0 +1,193 @@
+name: Verify candidate in staging
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Current application PR number, after successful CI
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+  checks: read
+  pull-requests: read
+env:
+  RELEASE_ENVIRONMENTS: ${{ vars.RELEASE_ENVIRONMENTS }}
+concurrency:
+  group: damadama-staging
+  queue: max
+  cancel-in-progress: false
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      merge: ${{ steps.source.outputs.merge }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: controls
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - id: source
+        run: node controls/release/operate.mjs snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: source-${{ github.run_attempt }}
+          path: |
+            source.json
+            candidate.json
+          retention-days: 90
+          if-no-files-found: error
+  build:
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: controls
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.source.outputs.merge }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: source-${{ github.run_attempt }}
+      - run: node controls/release/package.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-image-${{ github.run_attempt }}
+          path: image.tar
+          retention-days: 3
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-metadata-${{ github.run_attempt }}
+          path: |
+            build.json
+            migrations.sql
+          retention-days: 90
+          if-no-files-found: error
+  stage:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: staging
+      url: ${{ vars.APP_ORIGIN }}
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      pull-requests: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: controls
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: controls/release/package-lock.json
+      - run: npm ci --ignore-scripts --prefix controls/release
+      - run: node controls/release/node_modules/@playwright/test/cli.js install --with-deps chromium
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: source-${{ github.run_attempt }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: candidate-image-${{ github.run_attempt }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: candidate-metadata-${{ github.run_attempt }}
+      - run: node controls/release/operate.mjs stage
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_DEPLOYMENT_IMAGE_PATH: ${{ vars.RAILWAY_DEPLOYMENT_IMAGE_PATH }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
+          APP_ORIGIN: ${{ vars.APP_ORIGIN }}
+          CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          CLERK_TEST_USER_A: ${{ vars.CLERK_TEST_USER_A }}
+          CLERK_TEST_USER_B: ${{ vars.CLERK_TEST_USER_B }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: staged-record-${{ github.run_attempt }}
+          path: staged.json
+          retention-days: 90
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: runtime-evidence-${{ github.run_attempt }}
+          path: runtime-evidence
+          retention-days: 3
+  verify:
+    needs: stage
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: staging-verification
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: controls
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: staged-record-${{ github.run_attempt }}
+      - run: node controls/release/operate.mjs approve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_DEPLOYMENT_IMAGE_PATH: ${{ vars.RAILWAY_DEPLOYMENT_IMAGE_PATH }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: verified-record-${{ github.run_attempt }}
+          path: verified.json
+          retention-days: 90
+          if-no-files-found: error
+      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        id: verifier
+        with:
+          app-id: ${{ vars.RELEASE_GATE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_GATE_APP_PRIVATE_KEY }}
+          owner: ShiosOS
+          repositories: Damadama
+          permission-checks: write
+      - run: node controls/release/operate.mjs publish-check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGING_CHECK_TOKEN: ${{ steps.verifier.outputs.token }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_DEPLOYMENT_IMAGE_PATH: ${{ vars.RAILWAY_DEPLOYMENT_IMAGE_PATH }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
