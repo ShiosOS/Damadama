@@ -5,15 +5,16 @@ The required `ci/verified` and `staging/verified` checks belong to a dedicated G
 
 ## Delivery order
 
-1. Review and merge the release-policy foundation under bootstrap CI and one approving review.
-2. Update the deployment and recovery tooling branches against that new `main` so they inherit the required `release-controls` workflow. Review and merge them under the same bootstrap policy. Each tooling PR targets `main`.
+1. Manually review PR #13, the release-policy foundation, and merge it under bootstrap CI.
+2. Use the native stack with `main` as its trunk. Keep the tooling order #13, #12, #14, then #15, with each child based on its immediate predecessor. After each parent lands, update the next PR against the resulting `main`, verify its current checks, and manually review it before merging under bootstrap policy.
 3. Approve infrastructure and domain setup separately. Configure the verifier App and environment secrets.
 4. Activate the full gate and read back its enforcement before permitting any application merge.
 5. Update an application PR against the resulting `main`, run CI, and dispatch staging from `main` for that current candidate.
 6. Verify staging and review the PR. After its approved merge, request an approved production promotion of the verified digest.
 
 PR #11 is an application candidate, not a bootstrap exception. Its last observed head is `8d51f1f8e97c42ba539e91d15c0fd4a50b38de99`.
-Do not merge it during bootstrap. Its branch and checkout are left untouched by release setup.
+Keep PR #11 separate from the tooling stack until full staging enforcement is active. Do not merge it during bootstrap.
+Its branch and checkout are left untouched by release setup.
 The source tuple will change when release tooling lands or the feature updates against `main`; capture it again then.
 
 The initial `main` has only a README. A dispatch workflow must exist on the default branch before GitHub can run it.
@@ -34,9 +35,10 @@ node release/configure-github.mjs apply bootstrap 31512984
 node release/configure-github.mjs inspect bootstrap 31512984
 ```
 
-Bootstrap requires `release-controls`, strict up-to-date checks, one approving review, dismissal of stale approvals,
-approval of the latest push, resolved conversations, and no force pushes, deletions, or bypass actors.
-It does not claim to enforce staging. An eligible reviewer other than the PR author must approve source changes.
+Bootstrap requires `release-controls` from GitHub Actions, strict up-to-date checks, a pull request, resolved conversations,
+and no force pushes, deletions, or bypass actors. The sole maintainer manually reviews source changes before merging.
+Both bootstrap and full enforcement require zero approving reviews and disable last-push approval and extra approval for unattributed changes.
+Stale review dismissal remains enabled. Bootstrap does not claim to enforce staging.
 
 The script creates three GitHub approval boundaries, all restricted to the `main` branch with administrator bypass disabled:
 
@@ -45,7 +47,8 @@ The script creates three GitHub approval boundaries, all restricted to the `main
 - `production` authorizes promotion. Its credentials never enter staging jobs.
 
 There are only two hosting environments. `staging-verification` is an approval boundary, not another hosted app.
-One operator can dispatch and explicitly approve deployments. PR source review remains independent of the PR author.
+One operator can dispatch and explicitly approve deployments. These protected environment approval requirements remain unchanged.
+The sole maintainer performs PR source review manually.
 Repeating setup updates the same ruleset and environments. Unexpected branch policies require reconciliation.
 The script refuses to replace an activated staging gate with bootstrap policy.
 

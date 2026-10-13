@@ -148,7 +148,9 @@ for (const [field, staleValue] of [
 ]) {
   test(`readback rejects a stale second-reviewer requirement (${field})`, () => {
     const { plan, observed } = configured();
-    observed.ruleset.rules.find((rule) => rule.type === "pull_request").parameters[field] = staleValue;
+    observed.ruleset.rules.find(
+      (rule) => rule.type === "pull_request",
+    ).parameters[field] = staleValue;
     assert.throws(() => assertConfigured(plan, observed), new RegExp(field));
   });
 }

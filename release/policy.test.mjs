@@ -309,28 +309,41 @@ for (const bootstrap of [true, false]) {
       ref_name: { include: ["refs/heads/main"], exclude: [] },
     });
     assert.deepEqual(rules.bypass_actors, []);
-    assert.deepEqual(rules.rules.map((rule) => rule.type), [
-      "deletion",
-      "non_fast_forward",
-      "pull_request",
-      "required_status_checks",
-    ]);
-    const reviews = rules.rules.find((rule) => rule.type === "pull_request").parameters;
+    assert.deepEqual(
+      rules.rules.map((rule) => rule.type),
+      [
+        "deletion",
+        "non_fast_forward",
+        "pull_request",
+        "required_status_checks",
+      ],
+    );
+    const reviews = rules.rules.find(
+      (rule) => rule.type === "pull_request",
+    ).parameters;
     assert.equal(reviews.required_approving_review_count, 0);
     assert.equal(reviews.require_last_push_approval, false);
-    assert.equal(reviews.require_extra_approval_for_unattributed_changes, false);
+    assert.equal(
+      reviews.require_extra_approval_for_unattributed_changes,
+      false,
+    );
     assert.equal(reviews.require_code_owner_review, false);
     assert.equal(reviews.dismiss_stale_reviews_on_push, true);
     assert.equal(reviews.required_review_thread_resolution, true);
     assert.deepEqual(reviews.allowed_merge_methods, ["merge", "squash"]);
-    const checks = rules.rules.find((rule) => rule.type === "required_status_checks").parameters;
+    const checks = rules.rules.find(
+      (rule) => rule.type === "required_status_checks",
+    ).parameters;
     assert.equal(checks.strict_required_status_checks_policy, true);
     assert.equal(checks.do_not_enforce_on_create, false);
-    assert.deepEqual(checks.required_status_checks, bootstrap
-      ? [{ context: "release-controls", integration_id: 15368 }]
-      : [
-          { context: "ci/verified", integration_id: 9001 },
-          { context: "staging/verified", integration_id: 9001 },
-        ]);
+    assert.deepEqual(
+      checks.required_status_checks,
+      bootstrap
+        ? [{ context: "release-controls", integration_id: 15368 }]
+        : [
+            { context: "ci/verified", integration_id: 9001 },
+            { context: "staging/verified", integration_id: 9001 },
+          ],
+    );
   });
 }
