@@ -1,0 +1,7 @@
+{
+  "cronSchedule": "0 3 * * *",
+  "restartPolicyType": "NEVER",
+  "numReplicas": 1,
+  "sleepApplication": false,
+  "startCommand": "sh /opt/recovery/backup.sh"
+}
