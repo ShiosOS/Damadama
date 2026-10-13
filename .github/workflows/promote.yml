@@ -1,0 +1,83 @@
+name: Promote verified release
+on:
+  workflow_dispatch:
+    inputs:
+      staging_run_id:
+        description: Successful trusted staging run ID
+        type: string
+        required: true
+      version:
+        description: Production version such as v0.1.0
+        type: string
+        required: true
+      notes:
+        description: Short release notes
+        type: string
+        required: true
+      recovery:
+        description: Recovery evidence JSON from the release runbook
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+env:
+  RELEASE_ENVIRONMENTS: ${{ vars.RELEASE_ENVIRONMENTS }}
+concurrency:
+  group: damadama-production
+  queue: max
+  cancel-in-progress: false
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: ${{ vars.APP_ORIGIN }}
+    permissions:
+      contents: write
+      actions: read
+      checks: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: controls
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: controls/release/package-lock.json
+      - run: npm ci --ignore-scripts --prefix controls/release
+      - id: source
+        run: node controls/release/operate.mjs promotion-source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGING_RUN_ID: ${{ inputs.staging_run_id }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ${{ steps.source.outputs.artifact }}
+          run-id: ${{ inputs.staging_run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ${{ steps.source.outputs.imageArtifact }}
+          run-id: ${{ inputs.staging_run_id }}
+          github-token: ${{ github.token }}
+      - run: node controls/release/operate.mjs promote
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGING_RUN_ID: ${{ inputs.staging_run_id }}
+          RELEASE_GATE_APP_ID: ${{ vars.RELEASE_GATE_APP_ID }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_NOTES: ${{ inputs.notes }}
+          RECOVERY_EVIDENCE: ${{ inputs.recovery }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_DEPLOYMENT_IMAGE_PATH: ${{ vars.RAILWAY_DEPLOYMENT_IMAGE_PATH }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
+          APP_ORIGIN: ${{ vars.APP_ORIGIN }}
+          CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}

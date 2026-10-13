@@ -1,0 +1,8 @@
+{
+  "name": "damadama-release-verification",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@playwright/test": "1.64.0"
+  }
+}
