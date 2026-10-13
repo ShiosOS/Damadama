@@ -1,0 +1,30 @@
+{
+  "staging": {
+    "railwayProjectId": "REPLACE_PROJECT_ID",
+    "railwayEnvironmentId": "REPLACE_STAGING_ENVIRONMENT_ID",
+    "appServiceId": "REPLACE_APP_SERVICE_ID",
+    "databaseServiceId": "REPLACE_DATABASE_SERVICE_ID",
+    "volumeId": "REPLACE_STAGING_VOLUME_ID",
+    "backupBucket": "damadama-staging-backups",
+    "databaseName": "damadama_staging",
+    "databaseUser": "staging_app",
+    "clerkApplicationId": "REPLACE_STAGING_CLERK_APPLICATION_ID",
+    "clerkIssuer": "https://clerk.staging.example.com",
+    "clerkPublishableKey": "pk_live_REPLACE_STAGING_KEY",
+    "origin": "https://staging.example.com"
+  },
+  "production": {
+    "railwayProjectId": "REPLACE_PROJECT_ID",
+    "railwayEnvironmentId": "REPLACE_PRODUCTION_ENVIRONMENT_ID",
+    "appServiceId": "REPLACE_APP_SERVICE_ID",
+    "databaseServiceId": "REPLACE_DATABASE_SERVICE_ID",
+    "volumeId": "REPLACE_PRODUCTION_VOLUME_ID",
+    "backupBucket": "damadama-production-backups",
+    "databaseName": "damadama_production",
+    "databaseUser": "production_app",
+    "clerkApplicationId": "REPLACE_PRODUCTION_CLERK_APPLICATION_ID",
+    "clerkIssuer": "https://clerk.example.com",
+    "clerkPublishableKey": "pk_live_REPLACE_PRODUCTION_KEY",
+    "origin": "https://example.com"
+  }
+}
