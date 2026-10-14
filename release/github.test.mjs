@@ -82,6 +82,10 @@ test("GET refuses after three interrupted connections", async (t) => {
   await assert.rejects(github("approval", { token: "test-only" }), (error) => {
     assert.equal(error.name, "TypeError");
     assert.equal(error.cause?.code, "UND_ERR_SOCKET");
+    assert.equal(
+      error.message,
+      "GitHub GET approval failed after 3 attempts: fetch failed",
+    );
     return true;
   });
   assert.equal(requests.length, 3);
@@ -105,17 +109,19 @@ test("POST refuses an interrupted connection without retrying", async (t) => {
   assert.deepEqual(requests, [{ method: "POST", url: "/approval" }]);
 });
 
-test("GET refuses HTTP 403 without retrying", async (t) => {
-  const requests = await serve(t, (request, response) => {
-    response.writeHead(403);
-    response.end('{"message":"Forbidden"}');
-  });
+for (const status of [403, 404, 500]) {
+  test(`GET refuses HTTP ${status} without retrying`, async (t) => {
+    const requests = await serve(t, (request, response) => {
+      response.writeHead(status);
+      response.end('{"message":"refused"}');
+    });
 
-  await assert.rejects(github("approval", { token: "test-only" }), {
-    message: "GitHub GET approval returned 403",
+    await assert.rejects(github("approval", { token: "test-only" }), {
+      message: `GitHub GET approval returned ${status}`,
+    });
+    assert.equal(requests.length, 1);
   });
-  assert.equal(requests.length, 1);
-});
+}
 
 test("GET refuses malformed JSON without retrying", async (t) => {
   const requests = await serve(t, (request, response) =>
