@@ -1,0 +1,46 @@
+{
+  "run": 1,
+  "readyMs": 733.3537000000001,
+  "saveMs": 594.7177000000001,
+  "reloadMs": 101.48559999999998,
+  "cls": 0.0020248173236846923,
+  "reloadCls": 0.000005383729934692383,
+  "requests": 15,
+  "scripts": ["/assets/index-DqEP__Mu.js"],
+  "errors": [],
+  "failures": [],
+  "browser": {
+    "paint": [
+      {
+        "name": "first-paint",
+        "ms": 32
+      },
+      {
+        "name": "first-contentful-paint",
+        "ms": 60
+      }
+    ],
+    "resources": [
+      {
+        "path": "/assets/index-DqEP__Mu.js",
+        "ms": 2.5
+      },
+      {
+        "path": "/assets/index-DYvY_qM9.css",
+        "ms": 3.399999976158142
+      },
+      {
+        "path": "/fixture.json",
+        "ms": 1.600000023841858
+      },
+      {
+        "path": "/api/habits",
+        "ms": 36.09999996423721
+      },
+      {
+        "path": "/assets/nunito-latin-wght-normal-BzFMHfZw.woff2",
+        "ms": 2
+      }
+    ]
+  }
+}

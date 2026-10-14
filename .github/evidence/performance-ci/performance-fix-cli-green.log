@@ -1,0 +1,13 @@
+✔ accepts a complete small build and reports exact asset counts (115.6737ms)
+✔ rejects JavaScript above the committed gzip budget (113.3647ms)
+✔ rejects a linked font outside the inventoried assets directory (71.2346ms)
+✔ rejects an entrypoint that references a missing asset (65.4667ms)
+✔ rejects an empty build instead of reporting zero-byte success (73.1173ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 523.1799

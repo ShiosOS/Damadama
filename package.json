@@ -8,6 +8,7 @@
     "check": "bun scripts/check.ts",
     "lint": "eslint .",
     "test:web": "vite --config tests/Browser/vite.config.ts",
+    "check:performance": "node --test scripts/performance-budget.test.mjs && node scripts/performance-budget.mjs",
     "format": "prettier --write web tests/Browser scripts package.json eslint.config.mjs .github README.md AGENTS.md"
   },
   "workspaces": [

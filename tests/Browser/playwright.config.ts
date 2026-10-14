@@ -14,7 +14,7 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:5174",
     timezoneId: "America/New_York",
-    trace: "retain-on-failure",
+    trace: "off",
     screenshot: "only-on-failure",
   },
   webServer: [
@@ -27,7 +27,8 @@ export default defineConfig({
       reuseExistingServer: false,
     },
     {
-      command: "bun run test:web",
+      command:
+        "bun x --no-install vite preview --config tests/Browser/vite.config.ts",
       cwd: root,
       url: "http://127.0.0.1:5174",
       timeout: 120_000,

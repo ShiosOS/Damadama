@@ -6,7 +6,7 @@ await using var database = new PostgreSqlBuilder("postgres:17-alpine").Build();
 await database.StartAsync();
 using var app = new TestApp(database.GetConnectionString());
 app.UseKestrel(5055);
-await File.WriteAllTextAsync("tests/Browser/fixture.json", JsonSerializer.Serialize(new
+var fixture = JsonSerializer.Serialize(new
 {
     owner = app.Token(),
     other = app.Token("other-account"),
@@ -15,8 +15,12 @@ await File.WriteAllTextAsync("tests/Browser/fixture.json", JsonSerializer.Serial
     expired = app.Token("expired-account", expired: true),
     errors = app.Token("errors-account"),
     cleanup = app.Token("cleanup-account"),
+    performance = app.Token("performance-account"),
     stale = app.Token("stale-account")
-}));
+});
+await File.WriteAllTextAsync("tests/Browser/fixture.json", fixture);
+if (Directory.Exists(".audit/browser-build"))
+    await File.WriteAllTextAsync(".audit/browser-build/fixture.json", fixture);
 using var client = app.CreateClient();
 Console.WriteLine("Browser fixture ready at http://localhost:5055. This does not test Clerk sign-in.");
 var stopped = new TaskCompletionSource();
