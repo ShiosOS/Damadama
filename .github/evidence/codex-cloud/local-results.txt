@@ -1,0 +1,105 @@
+Local Linux validation only. This is not a Codex Cloud task.
+
+Ubuntu 24.04 x64 container, existing local Docker Desktop daemon through its socket.
+Linux checkouts were fetched from scoped Git bundles, then the cloud scripts were copied into them.
+No provider credentials were supplied. Testcontainers used TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal
+for this local nested-container topology; cloud tasks must detect their own Docker topology.
+
+Main source 465b8165c1b4b0f29c4daed33d6f3a13b09a8e14.
+Commands, all exit 0:
+  bash -n .codex/cloud/setup.sh .codex/cloud/verify.sh
+  bash .codex/cloud/setup.sh
+  bash .codex/cloud/setup.sh
+  bash .codex/cloud/verify.sh
+
+Selected unmodified stdout follows. Package installation chatter and individual passing release cases are omitted.
+
+Node v24.21.0
+Bun 1.3.14
+10.0.112 [/root/.dotnet/sdk]
+Dependency setup completed. Run bash .codex/cloud/verify.sh in the same environment.
+Node v24.21.0
+Bun 1.3.14
+10.0.112 [/root/.dotnet/sdk]
+Dependency setup completed. Run bash .codex/cloud/verify.sh in the same environment.
+Repository git@github.com:ShiosOS/Damadama.git
+Revision 465b8165c1b4b0f29c4daed33d6f3a13b09a8e14
+10.0.112 [/root/.dotnet/sdk]
+28.3.2
+ PostgreSQL 17.7 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+Docker and disposable PostgreSQL verified.
+Chromium launch verified: 156.0.8078.4
+ℹ tests 171
+ℹ pass 171
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+Release tooling checks passed. No application exists on this revision.
+
+Application source 9c8437e1e4a46965513b53f60d7fa569c0fd18ea, feat/create-list-habits.
+Commands, all exit 0 in a fresh disposable checkout:
+  bash .codex/cloud/setup.sh
+  bash .codex/cloud/setup.sh
+  bash .codex/cloud/verify.sh
+
+verify.sh ran the existing bun run check without modifying source, configuration, or tests.
+Selected unmodified stdout follows.
+
+Node v24.21.0
+Bun 1.3.14
+10.0.112 [/root/.dotnet/sdk]
+bun install v1.3.14 (0d9b296a)
+Dependency setup completed. Run bash .codex/cloud/verify.sh in the same environment.
+Node v24.21.0
+Bun 1.3.14
+10.0.112 [/root/.dotnet/sdk]
+bun install v1.3.14 (0d9b296a)
+Dependency setup completed. Run bash .codex/cloud/verify.sh in the same environment.
+Repository git@github.com:ShiosOS/Damadama.git
+Revision 9c8437e1e4a46965513b53f60d7fa569c0fd18ea
+10.0.112 [/root/.dotnet/sdk]
+28.3.2
+ PostgreSQL 17.7 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+Docker and disposable PostgreSQL verified.
+Chromium launch verified: 156.0.8078.4
+Checking docker info --format {{.ServerVersion}}
+28.3.2
+Checking bun install --frozen-lockfile
+bun install v1.3.14 (0d9b296a)
+Checking dotnet tool restore
+Checking dotnet restore --locked-mode
+Checking dotnet restore --locked-mode --artifacts-path .audit/check-build
+Checking dotnet build --no-restore --artifacts-path .audit/check-build
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+Checking dotnet format --no-restore --verify-no-changes
+Checking bun run lint
+Checking bun x --no-install prettier --check web tests/Browser scripts package.json eslint.config.mjs .github README.md AGENTS.md dev/Properties/launchSettings.json
+Checking formatting...
+All matched files use Prettier code style!
+Checking bun run --cwd web build
+Checking node node_modules/@playwright/test/cli.js install chromium
+Checking node node_modules/@playwright/test/cli.js test --config tests/Browser/playwright.config.ts
+  11 passed (34.4s)
+Checking dotnet test tests/Backend --no-build --artifacts-path .audit/check-build --logger trx --results-directory .audit/TestResults
+Passed!  - Failed:     0, Passed:    51, Skipped:     0, Total:    51, Duration: 13 s - Damadama.Tests.dll (net10.0)
+
+Negative checks:
+  Invalid Windows worktree Git metadata in Linux: exit 128 before runtime probes.
+  Intentionally nonexistent local Docker socket on the application checkout: exit 2,
+  Chromium launch passed, full application check reported blocked.
+
+Before tzdata installation, six browser cases failed and the saved page reported:
+  Use a valid IANA timezone from your device. (Parameter 'TimeZone')
+The New York zoneinfo file was absent. After setup installed tzdata, all 11 browser
+and 51 backend tests passed with zero skipped backend cases in a fresh checkout.
+
+A subsequent check in the first checkout linted generated Playwright report assets.
+That application report-path issue is tracked at https://github.com/ShiosOS/Damadama/issues/20.
+No report deletion or lint suppression was added to the setup.
+
+Cloud environment inventory, environment identifier, publication, and fresh cloud task remain
+NOT VERIFIED because the available browser requires ChatGPT sign-in.
+Interactive Aspire startup, Clerk sign-in/email delivery, and provider deployment were not tested.
