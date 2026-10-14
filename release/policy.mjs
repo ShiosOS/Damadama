@@ -38,6 +38,10 @@ export function requireCurrentSource(source, current) {
   }
 }
 
+export function candidateVersion(source) {
+  return `pr-${source.pr}-${source.head.slice(0, 12)}-${source.base.slice(0, 12)}`;
+}
+
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
   if (value !== null && typeof value === "object") {
@@ -115,8 +119,7 @@ export function requireVerifiedRecord(record) {
     "invalid archive hash",
   );
   requireThat(
-    image.version ===
-      `pr-${record.source.pr}-${record.source.head.slice(0, 12)}-${record.source.base.slice(0, 12)}`,
+    image.version === candidateVersion(record.source),
     "invalid candidate version",
   );
   requireThat(

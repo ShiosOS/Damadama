@@ -52,6 +52,7 @@ Configure these GitHub values:
 | `staging`              | `RAILWAY_PROJECT_ID`, `RAILWAY_ENVIRONMENT_ID`, `RAILWAY_SERVICE_ID`, `APP_ORIGIN`, `CLERK_PUBLISHABLE_KEY`, `CLERK_TEST_USER_A`, `CLERK_TEST_USER_B` | Staging `RAILWAY_TOKEN`, staging `CLERK_SECRET_KEY`     |
 | `staging-verification` | The same staging Railway IDs                                                                                                                          | Staging `RAILWAY_TOKEN`, `RELEASE_GATE_APP_PRIVATE_KEY` |
 | `production`           | Its own Railway IDs, `APP_ORIGIN`, `CLERK_PUBLISHABLE_KEY`                                                                                            | Production `RAILWAY_TOKEN`                              |
+| `image-publication`    | None                                                                                                                                                  | None                                                    |
 
 Store backup credentials only in that environment's backup job. Keep age decryption identities with the recovery operator, outside the daily job.
 Use environment-scoped Railway project tokens, not account tokens. The verifier App has only Checks write and Metadata read.
@@ -61,6 +62,27 @@ Set `RAILWAY_DEPLOYMENT_IMAGE_PATH` in the staging, staging-verification, and pr
 The path is not established by unauthenticated schema inspection. Do not guess that `imageDigest` is the registry digest.
 If the provider cannot report the complete immutable reference, this adapter refuses verification and needs a reviewed provenance alternative.
 Service source settings alone never count as running-image evidence. A previously deployed but stopped/crashed production service requires recovery, not an initial-release exception.
+
+## Publish images for first setup
+
+The first setup needs registry images before Railway can report an actual deployment's image metadata.
+Use **Publish deployment images** to publish those images without granting deployment access.
+
+1. Merge the reviewed publication tooling through the bootstrap procedure. Refresh the application PR against current `main` and wait for its current CI.
+2. Inspect the GitHub configuration plan. Apply and inspect the approved current policy to create `image-publication` with a reviewer, a `main` restriction, and no administrator bypass. Keep this boundary free of secrets.
+3. Dispatch **Publish deployment images** from `main` with the application PR number. Review its source and migration artifacts, then approve only `image-publication`.
+4. Download `image-publication-<attempt>` and record both immutable references from `publication.json`. Verify both GHCR packages are private and accessible to the approved environment pull tokens.
+5. Obtain approval for the first setup deployment. Inspect its actual Railway metadata before configuring `RAILWAY_DEPLOYMENT_IMAGE_PATH` and running normal staging verification.
+
+The app build uses the proposed application source. The recovery build uses the trusted controller commit.
+Both builds run without package-write credentials. The fresh publisher executes only pinned controls, with a temporary GitHub token and no Railway, Clerk, or verifier credentials.
+It validates both archives before either push and checks current source and CI before each push and before saving the receipt.
+A failed second push can leave an unreferenced image. A failed run produces no successful publication receipt.
+
+The receipt has `kind: "image-publication"`. It proves no deployment, Clerk sign-in, backup, restore, or runtime verification.
+It cannot issue either verifier check or be promoted as a verified release.
+Do not approve **Verify candidate in staging** merely to publish an image while the provider metadata path is missing.
+Old queued runs and artifacts belong to their original controller commit. After tooling changes, dispatch a fresh run.
 
 ## Stage an application PR
 
