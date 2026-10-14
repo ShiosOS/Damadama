@@ -40,13 +40,14 @@ and no force pushes, deletions, or bypass actors. The sole maintainer manually r
 Both bootstrap and full enforcement require zero approving reviews and disable last-push approval and extra approval for unattributed Copilot pull requests.
 Stale review dismissal remains enabled. Bootstrap does not claim to enforce staging.
 
-The script creates three GitHub approval boundaries, all restricted to the `main` branch with administrator bypass disabled:
+The script creates four GitHub approval boundaries, all restricted to the `main` branch with administrator bypass disabled:
 
 - `staging` authorizes deployment and automated runtime checks.
 - `staging-verification` authorizes the final manual attestations and verifier check. Store the verifier App private key only here.
 - `production` authorizes promotion. Its credentials never enter staging jobs.
+- `image-publication` authorizes registry publication only. It has no environment secrets and cannot deploy or issue verifier checks.
 
-There are only two hosting environments. `staging-verification` is an approval boundary, not another hosted app.
+There are only two hosting environments. `staging-verification` and `image-publication` are approval boundaries, not hosted apps.
 One operator can dispatch and explicitly approve deployments. These protected environment approval requirements remain unchanged.
 The sole maintainer performs PR source review manually.
 Repeating setup updates the same ruleset and environments. Unexpected branch policies require reconciliation.

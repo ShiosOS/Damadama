@@ -27,10 +27,12 @@ export async function configure(operation, { bootstrap, appId, reviewerId }) {
   const plan = {
     ruleset: mainRules(appId, bootstrap),
     environments: Object.fromEntries(
-      ["staging", "staging-verification", "production"].map((name) => [
-        name,
-        environmentPlan(reviewerId),
-      ]),
+      [
+        "staging",
+        "staging-verification",
+        "production",
+        "image-publication",
+      ].map((name) => [name, environmentPlan(reviewerId)]),
     ),
   };
   if (operation === "plan") return plan;

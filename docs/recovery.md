@@ -6,7 +6,7 @@ This tooling can land independently of application code, after the release-polic
 
 ## Configure daily backups after approval
 
-1. Build `ops/recovery/Dockerfile` as a versioned recovery image. It contains PostgreSQL 17 tools, age, and the AWS CLI for S3-compatible storage.
+1. Publish the trusted recovery image through [first image setup](release-operations.md#publish-images-for-first-setup). Record its immutable `ghcr.io/shiosos/damadama-recovery` reference from the publication receipt.
 2. Create a backup service in each Railway environment with that environment's image, credentials, private database address, and backup bucket.
 3. Apply `ops/recovery/railway-cron.example.json`. The job runs at 03:00 UTC daily, exits after completion, and does not restart on failure.
 4. Generate a different age key pair for each environment. Store the private identity with the recovery operator in an approved secret store.
