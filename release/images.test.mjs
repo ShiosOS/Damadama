@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createHash } from "node:crypto";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { prepareArchive, publishArchive } from "./images.mjs";
 
 const sha = (character) => character.repeat(40);
@@ -44,21 +45,28 @@ function recordingDocker({
   loaded = "Loaded image: damadama-candidate:latest\n",
   pushed = `fixture registry digest: ${digest}\n`,
   manifestError,
+  loginError,
+  pushError,
+  onCommand = () => {},
 } = {}) {
   const calls = [];
   const execute = (command, args, options) => {
     assert.equal(command, "docker");
     calls.push({ args, options });
+    onCommand(args, options);
     switch (args[0]) {
       case "load":
         return loaded;
       case "login":
+        if (loginError) throw loginError;
+        return;
       case "tag":
         return;
       case "manifest":
         if (manifestError) throw manifestError;
         return;
       case "push":
+        if (pushError) throw pushError;
         return pushed;
       default:
         throw new Error(`unexpected Docker fixture command ${args[0]}`);
@@ -155,15 +163,75 @@ test("application publication returns the existing immutable image result", asyn
       ],
     ],
   );
-  assert.deepEqual(calls[1].options, {
-    input: "recording-executor-token",
-    stdio: ["pipe", "inherit", "inherit"],
-  });
+  assert.equal(calls[1].options.input, "recording-executor-token");
+  assert.deepEqual(calls[1].options.stdio, ["pipe", "inherit", "inherit"]);
   assert.equal(
     calls.some(({ args }) => args.includes("recording-executor-token")),
     false,
   );
 });
+
+for (const [outcome, failureCommand] of [
+  ["success", undefined],
+  ["login failure", "login"],
+  ["push failure", "push"],
+  ["manifest inspection failure", "manifest"],
+]) {
+  test(`publication removes its private Docker credentials after ${outcome}`, async (t) => {
+    const { path, build } = await archive(t);
+    const prepared = await prepareArchive(
+      "application",
+      path,
+      build,
+      source,
+      authority,
+    );
+    const defaultConfig = process.env.DOCKER_CONFIG;
+    const credential = '{"auths":{"ghcr.io":{"auth":"test-only"}}}';
+    const failure = new Error(`fixture ${outcome}`);
+    let configDirectory;
+    const { calls, execute } = recordingDocker({
+      loginError: failureCommand === "login" ? failure : undefined,
+      pushError: failureCommand === "push" ? failure : undefined,
+      manifestError: failureCommand === "manifest" ? failure : undefined,
+      onCommand(args, options) {
+        assert.equal(process.env.DOCKER_CONFIG, defaultConfig);
+        if (!["login", "push", "manifest"].includes(args[0])) return;
+        const suppliedConfig = options?.env?.DOCKER_CONFIG;
+        if (args[0] === "login") {
+          configDirectory = suppliedConfig;
+          if (configDirectory === undefined) return;
+          assert.notEqual(configDirectory, defaultConfig);
+          assert.equal(isAbsolute(configDirectory), true);
+          assert.equal(statSync(configDirectory).isDirectory(), true);
+          if (process.platform !== "win32")
+            assert.equal(statSync(configDirectory).mode & 0o777, 0o700);
+          t.after(() => rm(configDirectory, { recursive: true, force: true }));
+          writeFileSync(join(configDirectory, "config.json"), credential);
+        } else if (configDirectory !== undefined) {
+          assert.equal(suppliedConfig, configDirectory);
+          assert.equal(
+            readFileSync(join(configDirectory, "config.json"), "utf8"),
+            credential,
+          );
+        }
+      },
+    });
+    if (failureCommand) {
+      assert.throws(() => publishArchive(prepared, execute), failure);
+      assert.equal(calls.at(-1).args[0], failureCommand);
+    } else {
+      assert.equal(publishArchive(prepared, execute).digest, digest);
+    }
+    assert.equal(process.env.DOCKER_CONFIG, defaultConfig);
+    assert.notEqual(
+      configDirectory,
+      undefined,
+      "registry authentication must use an owned private Docker config directory",
+    );
+    assert.equal(existsSync(configDirectory), false);
+  });
+}
 
 test("recovery publication uses only the fixed recovery repository and tag", async (t) => {
   const { path, build } = await archive(t);
