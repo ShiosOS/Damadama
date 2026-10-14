@@ -8,7 +8,7 @@ Running 1 test using 1 worker
   x  1 tests\Browser\performance.spec.ts:19:1 › optimized habit page stays within layout and request budgets (1.9s)
 
 
-  1) tests\Browser\performance.spec.ts:19:1 › optimized habit page stays within layout and request budgets 
+  1) tests\Browser\performance.spec.ts:19:1 › optimized habit page stays within layout and request budgets
 
     Error: expect(received).toBeLessThanOrEqual(expected)
 
@@ -30,4 +30,4 @@ Running 1 test using 1 worker
     Error Context: test-results\performance-optimized-habi-74b1a--layout-and-request-budgets\error-context.md
 
   1 failed
-    tests\Browser\performance.spec.ts:19:1 › optimized habit page stays within layout and request budgets 
+    tests\Browser\performance.spec.ts:19:1 › optimized habit page stays within layout and request budgets
