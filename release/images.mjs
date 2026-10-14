@@ -1,7 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   candidateVersion,
   recordHash,
@@ -88,33 +90,45 @@ export function publishArchive(prepared, execute = execFileSync) {
     throw new Error(
       `archive did not load expected image ${role.localTag}:latest`,
     );
-  execute(
-    "docker",
-    [
-      "login",
-      "ghcr.io",
-      "--username",
-      process.env.GITHUB_ACTOR,
-      "--password-stdin",
-    ],
-    { input: process.env.GH_TOKEN, stdio: ["pipe", "inherit", "inherit"] },
-  );
-  const tag = `${role.repository}:${prepared.version}-${prepared.authority.runId}-${prepared.authority.attempt}`;
-  execute("docker", ["tag", role.localTag, tag], { stdio: "inherit" });
-  const output = execute("docker", ["push", tag], {
-    encoding: "utf8",
-    timeout: 180_000,
-  });
-  const digest = output.match(/digest: (sha256:[a-f0-9]{64})/)?.[1];
-  if (!digest) throw new Error("registry did not return an immutable digest");
-  const image = {
-    reference: `${role.repository}@${digest}`,
-    digest,
-    archiveSha256: prepared.archiveSha256,
-    version: prepared.version,
-  };
-  execute("docker", ["manifest", "inspect", image.reference], {
-    stdio: "ignore",
-  });
-  return image;
+  const configDirectory = mkdtempSync(join(tmpdir(), "damadama-docker-"));
+  try {
+    const env = { ...process.env, DOCKER_CONFIG: configDirectory };
+    execute(
+      "docker",
+      [
+        "login",
+        "ghcr.io",
+        "--username",
+        process.env.GITHUB_ACTOR,
+        "--password-stdin",
+      ],
+      {
+        input: process.env.GH_TOKEN,
+        stdio: ["pipe", "inherit", "inherit"],
+        env,
+      },
+    );
+    const tag = `${role.repository}:${prepared.version}-${prepared.authority.runId}-${prepared.authority.attempt}`;
+    execute("docker", ["tag", role.localTag, tag], { stdio: "inherit" });
+    const output = execute("docker", ["push", tag], {
+      encoding: "utf8",
+      timeout: 180_000,
+      env,
+    });
+    const digest = output.match(/digest: (sha256:[a-f0-9]{64})/)?.[1];
+    if (!digest) throw new Error("registry did not return an immutable digest");
+    const image = {
+      reference: `${role.repository}@${digest}`,
+      digest,
+      archiveSha256: prepared.archiveSha256,
+      version: prepared.version,
+    };
+    execute("docker", ["manifest", "inspect", image.reference], {
+      stdio: "ignore",
+      env,
+    });
+    return image;
+  } finally {
+    rmSync(configDirectory, { recursive: true, force: true });
+  }
 }
