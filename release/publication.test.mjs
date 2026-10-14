@@ -271,6 +271,63 @@ test("main moving after the first push refuses the second push and receipt", asy
   assert.equal(f.commands.filter((args) => args[0] === "push").length, 1);
 });
 
+for (const interruptedReads of [1, 3]) {
+  test(`final freshness read with ${interruptedReads} socket failures never repeats image pushes`, async (t) => {
+    const f = await fixture(t);
+    const fetch = globalThis.fetch;
+    let finalReadAttempts = 0;
+    t.mock.method(globalThis, "fetch", async (url, options) => {
+      if (
+        f.commands.filter((args) => args[0] === "push").length === 2 &&
+        url.endsWith("git/ref/heads/main") &&
+        finalReadAttempts < interruptedReads
+      ) {
+        finalReadAttempts += 1;
+        throw new TypeError("fetch failed", {
+          cause: Object.assign(new Error("other side closed"), {
+            code: "UND_ERR_SOCKET",
+          }),
+        });
+      }
+      return fetch(url, options);
+    });
+
+    const publication = publishImages(f.record, f.archives, f.execute);
+    if (interruptedReads === 1) {
+      const receipt = await publication;
+      assert.deepEqual(
+        [
+          receipt.kind,
+          receipt.application.image.digest,
+          receipt.recovery.image.digest,
+        ],
+        [
+          "image-publication",
+          "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        ],
+      );
+    } else {
+      await assert.rejects(publication, {
+        name: "TypeError",
+        message:
+          "GitHub GET repos/ShiosOS/Damadama/git/ref/heads/main failed after 3 attempts: fetch failed",
+      });
+    }
+    assert.equal(finalReadAttempts, interruptedReads);
+    assert.deepEqual(
+      f.commands.filter((args) => args[0] === "push"),
+      [
+        [
+          "push",
+          "ghcr.io/shiosos/damadama:pr-11-111111111111-222222222222-42-2",
+        ],
+        ["push", "ghcr.io/shiosos/damadama-recovery:main-222222222222-42-2"],
+      ],
+    );
+  });
+}
+
 test("a failed second push emits no publication receipt", async (t) => {
   const f = await fixture(t);
   const execute = (command, args, options) => {

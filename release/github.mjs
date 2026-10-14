@@ -9,22 +9,39 @@ export async function github(
     token ??
     process.env.GH_TOKEN ??
     execFileSync("gh", ["auth", "token"], { encoding: "utf8" }).trim();
-  const response = await fetch(`https://api.github.com/${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${credential}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-      "Content-Type": "application/json",
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (missing && response.status === 404) return null;
-  if (!response.ok)
-    throw new Error(`GitHub ${method} ${path} returned ${response.status}`);
-  if (response.status === 204) return null;
-  return response.json();
+  const attempts = method === "GET" && body === undefined ? 3 : 1;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      const response = await fetch(`https://api.github.com/${path}`, {
+        method,
+        headers: {
+          Authorization: `Bearer ${credential}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "Content-Type": "application/json",
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (missing && response.status === 404) return null;
+      if (!response.ok)
+        throw new Error(`GitHub ${method} ${path} returned ${response.status}`);
+      if (response.status === 204) return null;
+      return await response.json();
+    } catch (error) {
+      if (
+        attempts === 1 ||
+        !(error instanceof TypeError) ||
+        error.cause?.code !== "UND_ERR_SOCKET"
+      )
+        throw error;
+      if (attempt === attempts) {
+        error.message = `GitHub ${method} ${path} failed after ${attempt} attempts: ${error.message}`;
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, attempt * 100));
+    }
+  }
 }
 
 export async function captureSource(prNumber) {
