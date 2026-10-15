@@ -1,0 +1,70 @@
+namespace Damadama.Habits;
+
+public sealed record CreateHabit(string? Name, string? Good, string? Better, string? Best,
+    int[]? Weekdays, int RepeatEveryWeeks, string? TimeZone);
+
+public sealed class Habit
+{
+    private Habit() { }
+    public Guid Id { get; private set; }
+    public string OwnerId { get; private set; } = "";
+    public string Name { get; private set; } = "";
+    public HabitLevels Levels { get; private set; } = null!;
+    public DateTimeOffset CreatedAt { get; private set; }
+    public InitialSchedule Schedule { get; private set; } = null!;
+
+    public static Habit Create(CreateHabit input, string ownerId, DateTimeOffset now)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(input.Name, nameof(input.Name));
+        var levels = HabitLevels.Create(input.Good, input.Better, input.Best);
+        if (input.Weekdays is not { Length: > 0 } ||
+            input.Weekdays.Any(day => day < (int)IsoWeekday.Monday || day > (int)IsoWeekday.Sunday))
+            throw new ArgumentException("Select at least one weekday from Monday to Sunday.", nameof(input.Weekdays));
+        if (input.RepeatEveryWeeks <= 0)
+            throw new ArgumentException("Repeat interval must be a positive number of weeks.", nameof(input.RepeatEveryWeeks));
+        ArgumentException.ThrowIfNullOrWhiteSpace(input.TimeZone, nameof(input.TimeZone));
+        TimeZoneInfo zone;
+        try
+        {
+            zone = TimeZoneInfo.FindSystemTimeZoneById(input.TimeZone);
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            throw new ArgumentException("Use a valid IANA timezone from your device.", nameof(input.TimeZone));
+        }
+        if (!zone.HasIanaId && input.TimeZone != "UTC")
+            throw new ArgumentException("Use an IANA timezone from your device.", nameof(input.TimeZone));
+        var id = Guid.NewGuid();
+        return new Habit
+        {
+            Id = id,
+            OwnerId = ownerId,
+            Name = input.Name,
+            Levels = levels,
+            CreatedAt = now.ToUniversalTime(),
+            Schedule = new InitialSchedule(id, input.Weekdays.Distinct().Order().ToArray(), input.RepeatEveryWeeks, zone, now)
+        };
+    }
+}
+
+public sealed class InitialSchedule
+{
+    private const int DaysPerWeek = 7;
+    private InitialSchedule() { }
+    internal InitialSchedule(Guid habitId, int[] weekdays, int repeatEveryWeeks, TimeZoneInfo zone, DateTimeOffset now)
+    {
+        HabitId = habitId;
+        Weekdays = weekdays;
+        RepeatEveryWeeks = repeatEveryWeeks;
+        TimeZone = zone.Id;
+        CreationDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, zone).DateTime);
+        var daysSinceMonday = ((int)CreationDate.DayOfWeek - (int)DayOfWeek.Monday + DaysPerWeek) % DaysPerWeek;
+        FirstWeekMonday = CreationDate.AddDays(-daysSinceMonday);
+    }
+    public Guid HabitId { get; private set; }
+    public int[] Weekdays { get; private set; } = [];
+    public int RepeatEveryWeeks { get; private set; }
+    public string TimeZone { get; private set; } = "";
+    public DateOnly CreationDate { get; private set; }
+    public DateOnly FirstWeekMonday { get; private set; }
+}

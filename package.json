@@ -1,0 +1,25 @@
+{
+  "name": "damadama",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.14",
+  "scripts": {
+    "start": "bun scripts/start.ts",
+    "check": "bun scripts/check.ts",
+    "lint": "eslint .",
+    "test:web": "vite --config tests/Browser/vite.config.ts",
+    "format": "prettier --write web tests/Browser scripts package.json eslint.config.mjs .github README.md AGENTS.md"
+  },
+  "workspaces": [
+    "web"
+  ],
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "@types/node": "24.10.1",
+    "@typescript-eslint/parser": "8.71.2",
+    "eslint": "10.12.0",
+    "eslint-plugin-vue": "10.11.1",
+    "prettier": "3.9.10",
+    "vue-eslint-parser": "10.4.1"
+  }
+}
