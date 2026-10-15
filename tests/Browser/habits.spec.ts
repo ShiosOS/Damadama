@@ -188,7 +188,9 @@ test("saved values appear once with a non-interactive habit name", async ({
 
 test("expired authentication explains how to continue", async ({ page }) => {
   await page.goto("/?account=expired");
-  await expect(page.getByRole("alert")).toContainText("Sign in to continue.");
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Sign in to continue." }),
+  ).toHaveCount(2);
   await expect(
     page.getByRole("region", { name: "Saved habits" }).locator("article"),
   ).toHaveCount(0);
