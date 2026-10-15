@@ -69,7 +69,7 @@ function retry() {
         type="button"
         :color="entry?.result === result ? 'primary' : 'neutral'"
         :variant="entry?.result === result ? 'solid' : 'outline'"
-        class="min-h-10 rounded-full px-4"
+        class="entry-result min-h-10 rounded-full px-4"
         :aria-pressed="entry?.result === result"
         :disabled="activity.kind === 'saving'"
         @click="choose(result)"
@@ -99,3 +99,9 @@ function retry() {
     </UAlert>
   </fieldset>
 </template>
+
+<style scoped>
+.entry-result[aria-pressed="true"]:hover {
+  background-color: var(--ui-primary);
+}
+</style>
