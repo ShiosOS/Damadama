@@ -5,9 +5,10 @@ The operator read back both settings during setup. This verifies the saved contr
 The former $20 to $35 monthly allowance was a historical planning estimate for two awake environments, not an approved overage.
 
 The intended workload has an app, a private PostgreSQL 17 service, and a daily backup job in each environment.
-The latest setup readback has 0.5 CPU and 500 MB ceilings on all six services, PostgreSQL online, and app and backup services offline.
+The 2026-10-15 setup readback has 0.5 CPU and 500 MB ceilings on all six services, PostgreSQL online, and both applications undeployed.
+The staging and production backup jobs completed. Each pulled its approved private recovery image and wrote an encrypted archive whose checksum was verified.
 Those ceilings constrain available resources. They do not measure average consumption or prove that two awake environments fit within $20.
-Hosted app use, private image pulls, backup completion, and hosted restore remain unverified.
+Hosted app use, private application image pulls, decryption, hosted restore, and the full application's operating cost remain unverified.
 
 ## Understand the billing boundary
 

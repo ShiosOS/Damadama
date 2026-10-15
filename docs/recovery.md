@@ -90,7 +90,7 @@ Preserve the database volumes, completed backups, and the hard limit. A spending
 
 Railway [tries to restart resources at the next billing cycle](https://docs.railway.com/pricing/cost-control#usage-limits-faq).
 Do not assume that a reset, manual redeployment, or unchanged service settings proves a private image pull or a healthy application.
-Record what actually restarted and what remains offline. The current setup has no verified hosted app or backup execution to recover.
+Record what actually restarted and what remains offline. As of 2026-10-15, both hosted backup jobs have completed and their encrypted archive checksums have been verified. Both applications remain undeployed; real sign-in, saved-data reads, decryption, and hosted restore remain unverified.
 
 A missed backup can leave the latest recoverable copy older than 24 hours. A later successful backup does not fill the missing recovery interval.
 If a restore is necessary, state the backup time and lost-write window before requesting restore and cutover approval.
