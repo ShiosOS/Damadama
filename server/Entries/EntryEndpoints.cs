@@ -32,7 +32,7 @@ public static class EntryEndpoints
             if (!retained && !ScheduleEligibility.IsScheduled(habit.Schedule, calendarDate))
                 throw new ArgumentException("This habit was not scheduled on that date.", nameof(date));
             var saved = await DailyEntryStore.Save(db, habit, calendarDate, result, editedAt, cancellationToken);
-            return Results.Ok(EntryResponse.From(saved));
+            return Results.Ok(EntryResponse.From(saved, habit.Name));
         }).RequireAuthorization();
 
         app.MapGet("/api/entries", async (string date, ClaimsPrincipal user, HabitsDb db,
@@ -44,8 +44,8 @@ public static class EntryEndpoints
                                  join habit in db.Habits on entry.HabitId equals habit.Id
                                  where habit.OwnerId == owner && entry.CalendarDate == calendarDate
                                  orderby entry.HabitId
-                                 select entry).ToListAsync(cancellationToken);
-            return entries.Select(EntryResponse.From);
+                                 select new { Entry = entry, HabitName = habit.Name }).ToListAsync(cancellationToken);
+            return entries.Select(row => EntryResponse.From(row.Entry, row.HabitName));
         }).RequireAuthorization();
     }
 
@@ -72,10 +72,10 @@ public static class EntryEndpoints
 
 public sealed record WriteEntry(string? Result, DateTimeOffset? EditedAt, string? DeviceToday, string? TimeZone);
 
-public sealed record EntryResponse(Guid HabitId, DateOnly CalendarDate, string Result, DateTimeOffset EditedAt,
+public sealed record EntryResponse(Guid HabitId, string HabitName, DateOnly CalendarDate, string Result, DateTimeOffset EditedAt,
     string Good, string Better, string Best)
 {
-    public static EntryResponse From(DailyEntry entry) => new(entry.HabitId, entry.CalendarDate,
+    public static EntryResponse From(DailyEntry entry, string habitName) => new(entry.HabitId, habitName, entry.CalendarDate,
         entry.Result.ToString(), entry.EditedAt, entry.OriginalLevels.Good, entry.OriginalLevels.Better,
         entry.OriginalLevels.Best);
 }

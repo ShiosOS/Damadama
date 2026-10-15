@@ -10,6 +10,7 @@ export const entryResultSchema = z.enum([
 
 export const entrySchema = z.object({
   habitId: z.uuid(),
+  habitName: z.string(),
   calendarDate: z.iso.date(),
   result: entryResultSchema,
   editedAt: z.iso.datetime({ offset: true }),

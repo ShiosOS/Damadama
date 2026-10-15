@@ -343,9 +343,9 @@ for (const outcome of ["Success", "Error"]) {
 
 test("travel updates Today both directions in the same page while stored schedule dates stay fixed", async ({
   browser,
-}) => {
+}, testInfo) => {
   const context = await browser.newContext({
-    baseURL: "http://127.0.0.1:5174",
+    baseURL: testInfo.project.use.baseURL,
     timezoneId: "",
     viewport: { width: 1100, height: 900 },
     recordVideo: {
