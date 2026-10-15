@@ -1,0 +1,48 @@
+Staging probe URL verification, 2026-10-15 UTC
+
+Application and review base: 9ee7d4dd393e00e32525b2523da2efff9d019431
+Implementation: 066bd006ad5ea95b4561f3e5db944f0c1feb35a4
+Failed hosted attempt: https://github.com/ShiosOS/Damadama/actions/runs/38691156671
+
+Anonymous HTTPS requests against staging.damadama.app:
+/api/habits       401 application/problem+json
+//api/habits      200 text/html
+/health/ready     200 text/plain
+//health/ready    200 text/html
+
+The actual parent publicChecks function reproduced:
+AssertionError [ERR_ASSERTION]: API refuses missing authentication
+200 !== 401
+
+Focused regression before the implementation change:
+node --test release/smoke.test.mjs
+tests 1, pass 0, fail 1
+API refuses missing authentication
+200 !== 401
+
+After the implementation change:
+node --test release/smoke.test.mjs
+tests 10, pass 10, fail 0, skipped 0
+
+node --test release/*.test.mjs
+tests 172, pass 172, fail 0, skipped 0
+The focused suite also passed outside installed dependency directories.
+
+The corrected publicChecks function against live staging returned:
+{"source":"9ee7d4dd393e00e32525b2523da2efff9d019431","checks":{"readiness":true,"unauthorized":true,"runtimeConfig":true}}
+
+bun run check exited 0.
+18 passed (37.6s)
+Passed! Failed: 0, Passed: 51, Skipped: 0, Total: 51
+The complete command included formatting, lint, types, builds, and performance checks.
+Two earlier local checks stopped at Prettier because Git checked out LF source as CRLF.
+Normalizing working-copy line endings preserved the committed Git blobs and allowed the standard command to pass.
+
+An independent verifier ran the real parent and head publicChecks functions against
+the same hosted application and passed all 172 dependency-free release tests.
+The parent-only harness substituted the installed Playwright import location.
+The publicChecks implementation was unchanged in the parent reproduction.
+
+Hosted browser sign-in, ownership, persistence, and invite-only checks still require
+the automatic main staging run after this fix merges. These local public probes do
+not prove browser sign-in or actual email-code delivery.
