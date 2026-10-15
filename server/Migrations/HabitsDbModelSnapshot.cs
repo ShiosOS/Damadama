@@ -23,6 +23,49 @@ namespace Damadama.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Damadama.Entries.DailyEntry", b =>
+                {
+                    b.Property<Guid>("HabitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("CalendarDate")
+                        .HasColumnType("date");
+
+                    b.Property<long>("EditedAt")
+                        .HasColumnType("bigint")
+                        .HasColumnName("EditedAtTicks");
+
+                    b.Property<int>("Result")
+                        .HasColumnType("integer");
+
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "OriginalLevels", "Damadama.Entries.DailyEntry.OriginalLevels#HabitLevels", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<string>("Best")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("Best");
+
+                            b1.Property<string>("Better")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("Better");
+
+                            b1.Property<string>("Good")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("Good");
+                        });
+
+                    b.HasKey("HabitId", "CalendarDate");
+
+                    b.ToTable("DailyEntries", null, t =>
+                        {
+                            t.HasCheckConstraint("EntryResult", "\"Result\" BETWEEN 0 AND 4");
+                        });
+                });
+
             modelBuilder.Entity("Damadama.Habits.Habit", b =>
                 {
                     b.Property<Guid>("Id")
@@ -97,6 +140,15 @@ namespace Damadama.Migrations
 
                             t.HasCheckConstraint("SelectedWeekdays", "cardinality(\"Weekdays\") > 0 AND \"Weekdays\" <@ ARRAY[1,2,3,4,5,6,7]");
                         });
+                });
+
+            modelBuilder.Entity("Damadama.Entries.DailyEntry", b =>
+                {
+                    b.HasOne("Damadama.Habits.Habit", null)
+                        .WithMany()
+                        .HasForeignKey("HabitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Damadama.Habits.InitialSchedule", b =>
