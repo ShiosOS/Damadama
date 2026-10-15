@@ -1,5 +1,15 @@
 # Production performance gate evidence
 
+## Refreshed dependency boundary
+
+PR22 now includes application PR11 at `859ffa5ec2da426e7024f0dcce67ba02e6165c3d`, which inherits main `5eb0bf5ec0b1eb5d25b04131cf4654e5128ee27c`. The additive integration was reviewed at `b8689dbb1ee64606c700e4b909eb58f957d4e290`. Product source, performance executables and the original evidence below are unchanged from the previous reviewed layer. Release code and workflows equal the new application parent except the owned Check trigger and performance report paths.
+
+The [refresh check](performance-refresh-check.log) exited zero with five performance CLI controls, 12 browser tests and 51 backend tests. Production assets remain 313242 gzip bytes in seven files. Five [focused application-boundary checks](performance-refresh-boundary-check.log) also passed. The real selector identifies this branch as an application, so the new inherited setup-only exception cannot skip its application suite.
+
+Both independent refresh reviews passed. See [correctness and security](performance-refresh-security-review.md) and [maintainability](performance-refresh-quality-review.md) for source identity and integration findings. The security reviewer completed before the backend result; the completed full-check log above supplies that final result. An initial local attempt stopped on Windows CRLF formatting. Running the existing formatter restored LF with zero canonical source diff before the successful check. Publication adds only this note, reports and logs. Current published-head CI is linked in PR22.
+
+## Original baseline and controls
+
 The application baseline is PR11 at `9c8437e1e4a46965513b53f60d7fa569c0fd18ea`. This layer targets `feat/create-list-habits` because main does not contain the application. Merge PR11 first. Application markup, styles, authentication, and release workflows have no diff in this layer.
 
 The unchanged production build totals 313,242 gzip bytes in seven assets. Five fresh-context browser runs used optimized actual habit components, the real API, ordinary JWT middleware, and ephemeral PostgreSQL. Every run saved a habit and verified persistence after reload, with 15 requests and zero recorded errors. Full conditions and fixed limits are in [the performance reference](../../../docs/browser-performance.md).

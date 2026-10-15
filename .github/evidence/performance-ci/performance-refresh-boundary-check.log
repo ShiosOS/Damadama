@@ -1,0 +1,13 @@
+✔ approved controls baseline is nondeployable (365.2137ms)
+✔ unrooted absence refuses setup (1016.4951ms)
+✔ application deletion cannot reopen the baseline setup exception (1645.7247ms)
+✔ PR check shell refuses partial application roots (2028.8178ms)
+✔ PR check shell refuses deleted application roots (1489.8814ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3651.9849
