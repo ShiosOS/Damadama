@@ -210,12 +210,239 @@ try {
     ),
   );
   assert.equal(backup.retentionDays, 7);
+  const invalidDeadline = spawnSync(
+    "docker",
+    [
+      "exec",
+      helper,
+      "env",
+      "BACKUP_MAX_SECONDS=0",
+      "sh",
+      "/opt/recovery/backup.sh",
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(
+    invalidDeadline.status,
+    2,
+    "zero deadline fails before backup starts",
+  );
+  assert.match(
+    invalidDeadline.stderr,
+    /BACKUP_MAX_SECONDS must be a positive whole number/,
+  );
   await mkdir(resolve(directory, "failure-bin"), { recursive: true });
+  const storedObjects = () =>
+    JSON.parse(
+      execute(
+        "aws",
+        "--endpoint-url",
+        "http://object-store:5000",
+        "s3api",
+        "list-objects-v2",
+        "--bucket",
+        "damadama-proof-backups",
+      ),
+    ).Contents;
+  const stalledBackup = (deadline = 3) =>
+    spawnSync(
+      "docker",
+      [
+        "exec",
+        helper,
+        "env",
+        "PATH=/proof/failure-bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        `BACKUP_MAX_SECONDS=${deadline}`,
+        "PGHOST=source-db",
+        "BACKUP_ENVIRONMENT=staging",
+        "S3_BUCKET=damadama-proof-backups",
+        "AWS_ENDPOINT_URL=http://object-store:5000",
+        `AGE_RECIPIENT=${recipient}`,
+        "sh",
+        "/opt/recovery/backup.sh",
+      ],
+      { encoding: "utf8", timeout: deadline === 3 ? 10_000 : 30_000 },
+    );
+  const objectsBeforeStall = storedObjects().length;
+  await writeFile(
+    resolve(directory, "failure-bin/pg_dump"),
+    "#!/bin/sh\ntouch /proof/stalled-dump\nsleep 900\n",
+  );
+  execute("chmod", "+x", "/proof/failure-bin/pg_dump");
+  const stalledDump = stalledBackup();
+  assert.equal(
+    stalledDump.status,
+    124,
+    "stalled dump reaches the backup deadline",
+  );
+  execute("test", "-f", "/proof/stalled-dump");
+  assert.equal(stalledDump.stdout.includes("completedAt"), false);
+  assert.equal(
+    storedObjects().length,
+    objectsBeforeStall,
+    "stalled dump cannot upload a completion manifest",
+  );
+  assert.equal(
+    execute(
+      "sh",
+      "-c",
+      "find /tmp -maxdepth 1 -name 'damadama-backup.*' | wc -l",
+    ),
+    "0",
+    "the deadline removes the temporary dump",
+  );
+  execute("rm", "/proof/failure-bin/pg_dump");
+  await writeFile(
+    resolve(directory, "failure-bin/aws"),
+    '#!/bin/sh\nfor arg; do case "$arg" in *.dump.age) touch /proof/stalled-upload; sleep 900 ;; esac; done\nexec /usr/bin/aws "$@"\n',
+  );
+  execute("chmod", "+x", "/proof/failure-bin/aws");
+  const stalledUpload = stalledBackup();
+  assert.equal(
+    stalledUpload.status,
+    124,
+    "stalled upload reaches the backup deadline",
+  );
+  execute("test", "-f", "/proof/stalled-upload");
+  assert.equal(stalledUpload.stdout.includes("completedAt"), false);
+  assert.equal(
+    storedObjects().length,
+    objectsBeforeStall,
+    "stalled upload cannot upload a completion manifest",
+  );
+  assert.equal(
+    execute(
+      "sh",
+      "-c",
+      "find /tmp -maxdepth 1 -name 'damadama-backup.*' | wc -l",
+    ),
+    "0",
+    "the deadline removes the temporary encrypted archive",
+  );
+  await writeFile(
+    resolve(directory, "failure-bin/aws"),
+    '#!/bin/sh\nfor arg; do case "$arg" in list-objects-v2) touch /proof/stalled-retention; sleep 900 ;; esac; done\nexec /usr/bin/aws "$@"\n',
+  );
+  const stalledRetention = stalledBackup();
+  assert.equal(
+    stalledRetention.status,
+    124,
+    "stalled retention reaches the backup deadline",
+  );
+  execute("test", "-f", "/proof/stalled-retention");
+  assert.equal(stalledRetention.stdout.includes("completedAt"), false);
+  const retentionManifests = storedObjects().filter(
+    (item) =>
+      item.Key.endsWith(".json") && item.Key !== `${backup.backup}.json`,
+  );
+  assert.equal(
+    retentionManifests.length,
+    1,
+    "data is committed before retention",
+  );
+  execute(
+    "aws",
+    "--endpoint-url",
+    "http://object-store:5000",
+    "s3",
+    "cp",
+    `s3://damadama-proof-backups/${retentionManifests[0].Key}`,
+    "/proof/retention-manifest.json",
+  );
+  const retentionManifest = JSON.parse(
+    execute("cat", "/proof/retention-manifest.json"),
+  );
+  assert.deepEqual(
+    storedObjects()
+      .filter((item) => item.Key.startsWith(retentionManifest.backup))
+      .map((item) => item.Key)
+      .sort(),
+    [
+      retentionManifest.backup,
+      `${retentionManifest.backup}.sha256`,
+      `${retentionManifest.backup}.json`,
+    ].sort(),
+    "stalled retention leaves a complete backup in storage",
+  );
+  const retentionName = retentionManifest.backup.split("/").at(-1);
+  for (const suffix of ["", ".sha256"])
+    execute(
+      "aws",
+      "--endpoint-url",
+      "http://object-store:5000",
+      "s3",
+      "cp",
+      `s3://damadama-proof-backups/${retentionManifest.backup}${suffix}`,
+      `/proof/${retentionName}${suffix}`,
+    );
+  execute("sh", "-c", `cd /proof && sha256sum -c ${retentionName}.sha256`);
+  assert.equal(
+    execute(
+      "sh",
+      "-c",
+      "find /tmp -maxdepth 1 -name 'damadama-backup.*' | wc -l",
+    ),
+    "0",
+    "the deadline removes the temporary retention list",
+  );
+  const expiredBackup =
+    "damadama/staging/20200101T000000Z-aaaaaaaaaaaaaaaa.dump.age";
+  const expiredName = expiredBackup.split("/").at(-1);
+  execute(
+    "aws",
+    "--endpoint-url",
+    "http://object-store:5000",
+    "s3",
+    "cp",
+    `s3://damadama-proof-backups/${backup.backup}`,
+    `/proof/${expiredName}`,
+  );
+  execute(
+    "sh",
+    "-c",
+    `cd /proof && sha256sum ${expiredName} > ${expiredName}.sha256`,
+  );
+  await writeFile(
+    resolve(directory, `${expiredName}.json`),
+    JSON.stringify({ ...backup, backup: expiredBackup }),
+  );
+  for (const suffix of ["", ".sha256", ".json"])
+    execute(
+      "aws",
+      "--endpoint-url",
+      "http://object-store:5000",
+      "s3",
+      "cp",
+      `/proof/${expiredName}${suffix}`,
+      `s3://damadama-proof-backups/${expiredBackup}${suffix}`,
+    );
+  await writeFile(
+    resolve(directory, "failure-bin/aws"),
+    '#!/bin/sh\ncase "$*" in *"s3 cp"*".json"*) exit 42 ;; *list-objects-v2*) /usr/bin/aws "$@" | awk \'$1 ~ /20200101T000000Z-aaaaaaaaaaaaaaaa/ {$2="2020-01-01T00:00:00Z"} {print}\'; exit ;; esac\nexec /usr/bin/aws "$@"\n',
+  );
+  const failedManifest = stalledBackup(20);
+  assert.equal(
+    failedManifest.status,
+    42,
+    "manifest upload failure fails the backup job",
+  );
+  assert.equal(failedManifest.stdout.includes("completedAt"), false);
+  assert.deepEqual(
+    storedObjects()
+      .filter((item) => item.Key.startsWith(expiredBackup))
+      .map((item) => item.Key)
+      .sort(),
+    [expiredBackup, `${expiredBackup}.sha256`, `${expiredBackup}.json`].sort(),
+    "failed replacement must preserve the expired completed backup",
+  );
   await writeFile(
     resolve(directory, "failure-bin/aws"),
     '#!/bin/sh\nfor arg; do case "$arg" in *.sha256) exit 42 ;; esac; done\nexec /usr/bin/aws "$@"\n',
   );
   execute("chmod", "+x", "/proof/failure-bin/aws");
+  const manifestsBeforePartial = storedObjects().filter((item) =>
+    item.Key.endsWith(".json"),
+  ).length;
   const partial = spawnSync(
     "docker",
     [
@@ -256,7 +483,7 @@ try {
   ).Contents;
   assert.equal(
     objectsAfterFailure.filter((item) => item.Key.endsWith(".json")).length,
-    1,
+    manifestsBeforePartial,
     "partial upload leaves no completion manifest",
   );
   const retry = JSON.parse(
