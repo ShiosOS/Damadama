@@ -6,6 +6,17 @@ import { entrySchema, entryResultSchema } from "../../web/src/entries";
 
 test.use({ viewport: { width: 1280, height: 800 }, video: "on" });
 
+async function capture(page: Page, path: string) {
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForFunction(() =>
+    document.getAnimations().every((animation) => {
+      if (animation.effect?.getTiming().iterations === Infinity) return true;
+      return animation.playState !== "running";
+    }),
+  );
+  await page.screenshot({ path, fullPage: true });
+}
+
 async function openDailyHabit(page: Page, account: string, name: string) {
   await page.clock.setFixedTime(new Date("2026-01-05T00:30:00Z"));
   const tokens = z
@@ -55,10 +66,7 @@ test("the committed result appears before any reload", async ({ page }) => {
     controls.getByRole("button", { name: "Good", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
   await expect(controls.getByRole("status")).toHaveText("Good is saved.");
-  await page.screenshot({
-    path: ".audit/entries-immediate.png",
-    fullPage: true,
-  });
+  await capture(page, ".audit/entries-immediate.png");
   const scan = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .analyze();
@@ -104,10 +112,7 @@ test("reload persistence is separate from immediate acknowledgment", async ({
   await expect(
     controls.getByRole("button", { name: "Better", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
-  await page.screenshot({
-    path: ".audit/entries-reloaded.png",
-    fullPage: true,
-  });
+  await capture(page, ".audit/entries-reloaded.png");
 });
 
 test("rejected date input cannot leave controls targeting another date", async ({
@@ -180,10 +185,7 @@ test("a committed write stays unconfirmed while its acknowledgment is held", asy
     await expect(
       controls.getByRole("button", { name: "Clear", exact: true }),
     ).toBeDisabled();
-    await page.screenshot({
-      path: ".audit/entries-awaiting-ack.png",
-      fullPage: true,
-    });
+    await capture(page, ".audit/entries-awaiting-ack.png");
   } finally {
     release.resolve();
   }
@@ -335,6 +337,43 @@ test("date changes discard a delayed acknowledgment and refetch its original dat
   await expect(controls.getByRole("status")).toHaveText("Good is saved.");
 });
 
+test("a delayed save error stays hidden after sign-out", async ({ page }) => {
+  await openDailyHabit(page, "entriesSignOut", "Entry delayed error");
+  const controls = controlsFor(page, "Entry delayed error");
+  await expect(controls).toBeVisible();
+  const committed = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  await page.route("**/api/habits/*/entries/*", async (route) => {
+    const response = await route.fetch();
+    expect(response.status()).toBe(200);
+    committed.resolve();
+    await release.promise;
+    await route.fulfill({
+      status: 503,
+      contentType: "application/problem+json",
+      body: JSON.stringify({ title: "The acknowledgment was lost." }),
+    });
+  });
+  await controls.getByRole("button", { name: "Good", exact: true }).click();
+  await committed.promise;
+  const failed = page.waitForResponse(
+    (response) => response.request().method() === "PUT",
+  );
+  try {
+    await page
+      .getByRole("button", { name: "Fixture sign out", exact: true })
+      .click();
+    await expect(controls).toHaveCount(0);
+  } finally {
+    release.resolve();
+  }
+  expect((await failed).status()).toBe(503);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(
+    page.getByText("Could not confirm the save", { exact: true }),
+  ).toHaveCount(0);
+});
+
 test("result controls remain usable on mobile", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 700 });
   await openDailyHabit(page, "entriesMobile", "Entry mobile");
@@ -346,7 +385,7 @@ test("result controls remain usable on mobile", async ({ page }) => {
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
-  await page.screenshot({ path: ".audit/entries-mobile.png", fullPage: true });
+  await capture(page, ".audit/entries-mobile.png");
 });
 
 test("retained unscheduled history stays visible and keeps original definitions", async ({
@@ -401,7 +440,7 @@ test.describe("entry calendar dates during travel", () => {
     await expect(controls.getByRole("status")).toHaveText("Better is saved.");
     const saved = await choose(page, controls, "Rest", 2);
     expect(saved.calendarDate).toBe("2026-01-04");
-    await page.screenshot({ path: ".audit/entries-past.png", fullPage: true });
+    await capture(page, ".audit/entries-past.png");
     await page.reload();
     await expect(page.getByLabel("Calendar date", { exact: true })).toHaveValue(
       "2026-01-05",
