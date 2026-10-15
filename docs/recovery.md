@@ -14,6 +14,8 @@ This tooling can land independently of application code, after the release-polic
 6. Use a dedicated database backup role with read access to all application tables and default read privileges for future tables.
 7. Record the latest successful completion and alert if it is older than 24 hours. Review failed cron logs each day until monitoring is established.
 
+The backup image limits each run to 1,800 seconds by default. Set `BACKUP_MAX_SECONDS` to a positive whole number of seconds to change that limit. The default is an engineering cap to stop a stalled job; it has not been sized against hosted backup volume. An invalid value exits with status 2 before the backup starts. A run that reaches the limit normally exits with status 124. GNU `timeout` sends `TERM`, then `KILL` after five more seconds if the process has not exited. The `KILL` fallback can leave temporary files because the shell cannot run its cleanup trap.
+
 Create these variables separately in each backup service:
 
 ```text
@@ -38,6 +40,7 @@ The job validates its environment name and requires all connection, bucket, and 
 
 The job writes a PostgreSQL custom-format dump, encrypts it with age, and uploads the encrypted archive and SHA-256 checksum.
 It uploads completion JSON only after both objects succeed. Each attempt uses a unique timestamp and nonce; retries cannot overwrite a completed backup.
+Completion JSON marks restorable backup data after the archive and checksum uploads; the retention sweep runs afterward. A retention failure still fails the job and prints no final success JSON, but can leave a valid newly completed backup.
 Restore only objects with completion JSON and a matching checksum. Failed uploads may leave uncommitted objects; they are not successful backups.
 The dump covers the whole application database, including future daily-entry tables when those features land.
 
@@ -100,6 +103,7 @@ checks migration/readiness, restarts it, encrypts and uploads sample data to an 
 restores a separate database, and starts the image against the restored schema.
 It compares independently read owner, definition text, UTC instant, weekdays, timezone, and saved dates.
 It also checks refusal of corrupt archives and nonempty targets.
+It checks that stalled dump and archive upload commands hit a three-second test deadline without publishing a completion marker. A stalled retention sweep hits a fifteen-second test deadline, after the new archive, checksum, and completion marker are present. The same tests check temporary-file cleanup after normal termination, reject a zero deadline, and preserve an expired completed backup when replacement manifest upload fails.
 Every container/network is created for the exercise and removed by its captured identity. Other local services and Aspire volumes are untouched.
 The generated age identity is local test data under `.audit`; it is never committed or uploaded as CI evidence.
 
