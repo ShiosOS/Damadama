@@ -10,10 +10,7 @@ import { prepareArchive, publishArchive } from "./images.mjs";
 const sha = (character) => character.repeat(40);
 const source = {
   repository: "ShiosOS/Damadama",
-  pr: 11,
-  head: sha("1"),
-  base: sha("2"),
-  merge: sha("3"),
+  commit: sha("1"),
   tree: sha("4"),
 };
 const authority = { sha: sha("5"), runId: 42, attempt: 1 };
@@ -33,7 +30,7 @@ async function archive(t) {
       kind: "application",
       source: { ...source },
       authority: { ...authority },
-      version: "pr-11-111111111111-222222222222",
+      version: "main-111111111111",
       archiveSha256: createHash("sha256")
         .update(await readFile(path))
         .digest("hex"),
@@ -93,7 +90,7 @@ test("a fixture registry response without a digest cannot return image evidence"
   );
   assert.deepEqual(calls.at(-1).args, [
     "push",
-    "ghcr.io/shiosos/damadama:pr-11-111111111111-222222222222-42-1",
+    "ghcr.io/shiosos/damadama:main-111111111111-42-1",
   ]);
 });
 
@@ -137,7 +134,7 @@ test("application publication returns the existing immutable image result", asyn
       "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     archiveSha256:
       "c5cf40083c4b553d8ca3513eebf9a03e24a74f8b3c81c76f445266e24fda03a0",
-    version: "pr-11-111111111111-222222222222",
+    version: "main-111111111111",
   });
   assert.deepEqual(
     calls.map(({ args }) => args),
@@ -153,9 +150,9 @@ test("application publication returns the existing immutable image result", asyn
       [
         "tag",
         "damadama-candidate",
-        "ghcr.io/shiosos/damadama:pr-11-111111111111-222222222222-42-1",
+        "ghcr.io/shiosos/damadama:main-111111111111-42-1",
       ],
-      ["push", "ghcr.io/shiosos/damadama:pr-11-111111111111-222222222222-42-1"],
+      ["push", "ghcr.io/shiosos/damadama:main-111111111111-42-1"],
       [
         "manifest",
         "inspect",
@@ -409,11 +406,11 @@ test("preparation keeps the checked version and authority when caller objects ch
       "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     archiveSha256:
       "c5cf40083c4b553d8ca3513eebf9a03e24a74f8b3c81c76f445266e24fda03a0",
-    version: "pr-11-111111111111-222222222222",
+    version: "main-111111111111",
   });
   assert.deepEqual(calls[3].args, [
     "push",
-    "ghcr.io/shiosos/damadama:pr-11-111111111111-222222222222-42-1",
+    "ghcr.io/shiosos/damadama:main-111111111111-42-1",
   ]);
 });
 

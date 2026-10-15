@@ -11,10 +11,10 @@ export async function packageApplication(record, execute = execFileSync) {
       encoding: "utf8",
     }).trim();
   if (
-    git("rev-parse", "HEAD") !== source.merge ||
+    git("rev-parse", "HEAD") !== source.commit ||
     git("rev-parse", "HEAD^{tree}") !== source.tree
   )
-    throw new Error("checkout differs from proposed source");
+    throw new Error("checkout differs from main source");
   const version = candidateVersion(source);
   const metadata = JSON.stringify({ source, version });
   const path = "candidate/.damadama-release.json";

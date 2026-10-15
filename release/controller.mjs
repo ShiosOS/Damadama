@@ -23,8 +23,11 @@ export async function requireFreshCandidate(record) {
   const authority = await requireController();
   if (recordHash(record.authority) !== recordHash(authority))
     throw new Error("candidate belongs to another controller run");
-  requireCurrentSource(record.source, await captureSource(record.source.pr));
-  return requireCI(record.source);
+  requireCurrentSource(
+    record.source,
+    await captureSource(record.source.commit),
+  );
+  return requireCI(record.source, authority);
 }
 
 export async function requireApproval(environment) {
