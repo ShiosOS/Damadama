@@ -82,6 +82,7 @@ app.MapGet("/api/habits/{id:guid}", async (Guid id, System.Security.Claims.Claim
         .SingleOrDefaultAsync(h => h.Id == id && h.OwnerId == user.FindFirst("sub")!.Value, cancellationToken);
     return habit is null ? Results.NotFound() : Results.Ok(HabitResponse.From(habit));
 }).RequireAuthorization();
+app.MapScheduledHabits();
 app.Map("/api/{**path}", () => Results.Problem(statusCode: 404, title: "API route not found."));
 app.MapFallbackToFile("index.html");
 app.Run();
