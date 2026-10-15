@@ -39,7 +39,8 @@ A direct Microsoft root request's HTTP 403 came from upstream after CONNECT 200,
 Logs, hashes, and results remain outside tracked source at `/workspace/work/acceptance/` in the linked task.
 
 Application/Aspire/Clerk acceptance remains separate because this revision has no application manifests.
-The old saved **Damadama** definition remains pending its final removal step; existing chats and running environments are retained by the product's deletion flow.
+After the user's final deletion confirmation, the old saved **Damadama** definition was removed.
+The environment list now contains only the private **Damadama Development** replacement. Existing chats and running environments are retained by the product's deletion flow.
 
 ## Revised scripts on current main
 
