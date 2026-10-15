@@ -1,0 +1,156 @@
+Source revision: 5acb73c57f117502d73e28458a849b1b9c71f8ff
+Parent process exited 0.
+
+$ bun scripts/check.ts
+Checking docker info --format {{.ServerVersion}}
+28.3.2
+Checking bun install --frozen-lockfile
+bun install v1.3.14 (0d9b296a)
+
+Checked 389 installs across 459 packages (no changes) [82.00ms]
+Checking dotnet tool restore
+Tool 'dotnet-ef' (version '10.0.12') was restored. Available commands: dotnet-ef
+
+Restore was successful.
+Checking dotnet restore --locked-mode
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+Checking dotnet restore --locked-mode --artifacts-path .audit/check-build
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+Checking dotnet build --no-restore --artifacts-path .audit/check-build
+  Damadama -> <worktree>\.audit\check-build\bin\Damadama\debug\Damadama.dll
+  Damadama.Tests -> <worktree>\.audit\check-build\bin\Damadama.Tests\debug\Damadama.Tests.dll
+  Damadama.AppHost -> <worktree>\.audit\check-build\bin\Damadama.AppHost\debug\Damadama.AppHost.dll
+  BrowserHost -> <worktree>\.audit\check-build\bin\BrowserHost\debug\BrowserHost.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:02.63
+Checking dotnet format --no-restore --verify-no-changes
+Checking bun run lint
+$ eslint .
+Checking bun x --no-install prettier --check web tests/Browser scripts package.json eslint.config.mjs .github README.md AGENTS.md dev/Properties/launchSettings.json
+Checking formatting...
+All matched files use Prettier code style!
+Checking bun run --cwd web build
+$ vue-tsc --noEmit && vite build
+vite v8.3.4 building client environment for production...
+transforming...
+✓ 863 modules transformed.
+rendering chunks...
+computing gzip size...
+../server/wwwroot/index.html                                               0.39 kB │ gzip:   0.26 kB
+../server/wwwroot/assets/nunito-vietnamese-wght-normal-U01xdrZh.woff2     13.09 kB
+../server/wwwroot/assets/nunito-cyrillic-wght-normal-CY6AOgYE.woff2       20.77 kB
+../server/wwwroot/assets/nunito-cyrillic-ext-wght-normal-D4X5GqEv.woff2   28.92 kB
+../server/wwwroot/assets/nunito-latin-ext-wght-normal-CXYtwYOx.woff2      35.58 kB
+../server/wwwroot/assets/nunito-latin-wght-normal-BzFMHfZw.woff2          39.12 kB
+../server/wwwroot/assets/index-OnnCyZ7-.css                              202.77 kB │ gzip:  26.95 kB
+../server/wwwroot/assets/index-BAs1zPwe.js                               497.41 kB │ gzip: 152.69 kB
+
+✓ built in 1.68s
+Checking bun run check:performance
+$ node --test scripts/performance-budget.test.mjs && node scripts/performance-budget.mjs
+✔ accepts a complete small build and reports exact asset counts (162.8817ms)
+✔ rejects JavaScript above the committed gzip budget (123.596ms)
+✔ rejects a linked font outside the inventoried assets directory (74.2509ms)
+✔ rejects an entrypoint that references a missing asset (71.2866ms)
+✔ rejects an empty build instead of reporting zero-byte success (68.7799ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 603.0214
+Production assets 315811 gzip bytes in 7 files. Report <worktree>\.audit\performance-assets.json
+Checking bun x --no-install vite build --config tests/Browser/vite.config.ts
+vite v8.3.4 building client environment for production...
+transforming...
+✓ 828 modules transformed.
+rendering chunks...
+computing gzip size...
+.audit/browser-build/index.html                                               0.32 kB │ gzip:   0.22 kB
+.audit/browser-build/assets/nunito-vietnamese-wght-normal-U01xdrZh.woff2     13.09 kB
+.audit/browser-build/assets/nunito-cyrillic-wght-normal-CY6AOgYE.woff2       20.77 kB
+.audit/browser-build/assets/nunito-cyrillic-ext-wght-normal-D4X5GqEv.woff2   28.92 kB
+.audit/browser-build/assets/nunito-latin-ext-wght-normal-CXYtwYOx.woff2      35.58 kB
+.audit/browser-build/assets/nunito-latin-wght-normal-BzFMHfZw.woff2          39.12 kB
+.audit/browser-build/assets/index-DOU3Cuof.css                              202.92 kB │ gzip:  27.01 kB
+.audit/browser-build/assets/index-DZyQ53vF.js                               463.73 kB │ gzip: 143.75 kB
+
+✓ built in 1.61s
+Checking node node_modules/@playwright/test/cli.js install chromium
+Checking node node_modules/@playwright/test/cli.js test --config tests/Browser/playwright.config.ts
+[WebServer] (node:37800) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 48 tests using 1 worker
+
+(node:37308) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  1 tests\Browser\accessibility.spec.ts:80:1 › the audit rejects an unnamed button and accepts the repaired page (1.7s)
+  ok  2 tests\Browser\accessibility.spec.ts:105:1 › the production entry explains missing sign-in configuration accessibly (932ms)
+  ok  3 tests\Browser\accessibility.spec.ts:143:1 › signed-out and expired-session messages pass WCAG scans (1.5s)
+  ok  4 tests\Browser\accessibility.spec.ts:172:1 › keyboard creation contains focus, explains API refusal, and persists a save (4.9s)
+  ok  5 tests\Browser\accessibility.spec.ts:353:3 › mobile creation and saved content stay usable (2.4s)
+  ok  6 tests\Browser\accessibility.spec.ts:353:3 › zoom creation and saved content stay usable (2.4s)
+  ok  7 tests\Browser\entries.spec.ts:50:1 › the committed result appears before any reload (1.6s)
+  ok  8 tests\Browser\entries.spec.ts:103:1 › reload persistence is separate from immediate acknowledgment (667ms)
+  ok  9 tests\Browser\entries.spec.ts:118:1 › rejected date input cannot leave controls targeting another date (504ms)
+  ok 10 tests\Browser\entries.spec.ts:133:1 › all five outcomes stay distinct after reload (857ms)
+  ok 11 tests\Browser\entries.spec.ts:154:1 › a committed write stays unconfirmed while its acknowledgment is held (592ms)
+  ok 12 tests\Browser\entries.spec.ts:195:1 › retry after a lost acknowledgment preserves the exact edit (610ms)
+  ok 13 tests\Browser\entries.spec.ts:233:1 › creating another habit preserves an entry awaiting acknowledgment (1.3s)
+  ok 14 tests\Browser\entries.spec.ts:281:1 › the browser displays the server winner when its own edit loses (459ms)
+  ok 15 tests\Browser\entries.spec.ts:313:3 › a delayed entry acknowledgment stays private after other account (545ms)
+  ok 16 tests\Browser\entries.spec.ts:313:3 › a delayed entry acknowledgment stays private after sign out (470ms)
+  ok 17 tests\Browser\entries.spec.ts:355:1 › date changes discard a delayed acknowledgment and refetch its original date (576ms)
+  ok 18 tests\Browser\entries.spec.ts:388:1 › a delayed save error stays hidden after sign-out (483ms)
+  ok 19 tests\Browser\entries.spec.ts:425:1 › result controls remain usable on mobile (643ms)
+  ok 20 tests\Browser\entries.spec.ts:439:1 › retained unscheduled history stays visible and keeps original definitions (565ms)
+  ok 21 tests\Browser\entries.spec.ts:462:3 › entry calendar dates during travel › Today follows the device while the recorded date remains fixed (982ms)
+(node:24032) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 22 tests\Browser\habits.spec.ts:3:1 › Add habit opens a labelled creation panel (637ms)
+  ok 23 tests\Browser\habits.spec.ts:23:1 › cancelling creation returns focus without saving (1.3s)
+  ok 24 tests\Browser\habits.spec.ts:43:1 › account changes and sign out close and clear an unsaved panel (651ms)
+  ok 25 tests\Browser\habits.spec.ts:64:1 › the creation panel remains usable on mobile and at double zoom (1.4s)
+  ok 26 tests\Browser\habits.spec.ts:142:1 › saved values appear in the list before any reload (1.1s)
+  ok 27 tests\Browser\habits.spec.ts:165:1 › reloading preserves every saved value (1.2s)
+  ok 28 tests\Browser\habits.spec.ts:173:1 › saved values appear once with a non-interactive habit name (1.1s)
+  ok 29 tests\Browser\habits.spec.ts:189:1 › expired authentication explains how to continue (319ms)
+  ok 30 tests\Browser\habits.spec.ts:199:1 › a rejected schedule keeps the form and offers a successful retry (1.8s)
+  ok 31 tests\Browser\habits.spec.ts:232:1 › account change and sign out clear visible account data (1.7s)
+  ok 32 tests\Browser\habits.spec.ts:261:1 › save acknowledgement cannot reveal the previous accounts habit (979ms)
+  ok 33 tests\Browser\performance.spec.ts:19:1 › optimized habit page stays within layout and request budgets (1.2s)
+  ok 34 tests\Browser\today.spec.ts:91:1 › Today shows a scheduled habit and its stored definitions (479ms)
+  ok 35 tests\Browser\today.spec.ts:130:1 › Today loading waits for a real scheduled read without showing an empty result (357ms)
+  ok 36 tests\Browser\today.spec.ts:164:1 › a Today service error stays distinct from empty and Retry reads the server (383ms)
+  ok 37 tests\Browser\today.spec.ts:190:1 › eligible and ineligible creations refresh Today before reload (1.7s)
+  ok 38 tests\Browser\today.spec.ts:219:1 › reload preserves a saved scheduled habit in Today (1.1s)
+  ok 39 tests\Browser\today.spec.ts:233:1 › owner Today success precedes foreign empty and sign-out clears the view with direct API refusal (461ms)
+  ok 40 tests\Browser\today.spec.ts:259:3 › delayed old-account success cannot replace the new account's Today (413ms)
+  ok 41 tests\Browser\today.spec.ts:303:3 › delayed old-date success detects a date change before accepting the response (354ms)
+  ok 42 tests\Browser\today.spec.ts:259:3 › delayed old-account error cannot replace the new account's Today (419ms)
+  ok 43 tests\Browser\today.spec.ts:303:3 › delayed old-date error detects a date change before accepting the response (328ms)
+  ok 44 tests\Browser\today.spec.ts:344:1 › travel updates Today both directions in the same page while stored schedule dates stay fixed (2.3s)
+  ok 45 tests\Browser\today.spec.ts:425:1 › local midnight refreshes Today automatically without focus or reload (365ms)
+  ok 46 tests\Browser\today.spec.ts:444:1 › a device local date can remain in the prior year without showing a pre-creation habit (320ms)
+  ok 47 tests\Browser\today.spec.ts:462:1 › a visible-return event checks the current device date (339ms)
+  ok 48 tests\Browser\today.spec.ts:480:1 › a read finishing after sign-out cannot restore Today or start midnight reads (362ms)
+
+  48 passed (1.0m)
+Checking dotnet test tests/Backend --no-build --artifacts-path .audit/check-build --logger trx --results-directory .audit/TestResults
+Test run for <worktree>\.audit\check-build\bin\Damadama.Tests\debug\Damadama.Tests.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.2 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+Results File: <worktree>\.audit\TestResults\emofo_SHIOS_2026-10-15_04_01_00.trx
+
+Passed!  - Failed:     0, Passed:   171, Skipped:     0, Total:   171, Duration: 23 s - Damadama.Tests.dll (net10.0)
