@@ -7,13 +7,10 @@ import { join } from "node:path";
 import { packageApplication } from "./package.mjs";
 
 const record = {
-  schema: 1,
+  schema: 2,
   source: {
     repository: "ShiosOS/Damadama",
-    pr: 11,
-    head: "1111111111111111111111111111111111111111",
-    base: "2222222222222222222222222222222222222222",
-    merge: "3333333333333333333333333333333333333333",
+    commit: "1111111111111111111111111111111111111111",
     tree: "4444444444444444444444444444444444444444",
   },
   authority: {
@@ -36,7 +33,7 @@ async function fixture(t) {
   function execute(command, args) {
     commands.push([command, ...args]);
     if (command === "git")
-      return args.at(-1) === "HEAD" ? record.source.merge : record.source.tree;
+      return args.at(-1) === "HEAD" ? record.source.commit : record.source.tree;
     if (args[0] === "save") writeFileSync("image.tar", "abc");
     if (args[0] === "create") return "test-only-container";
     return "";
@@ -51,7 +48,7 @@ test("application archive metadata binds its source and controller attempt", asy
     kind: "application",
     source: record.source,
     authority: record.authority,
-    version: "pr-11-111111111111-222222222222",
+    version: "main-111111111111",
     archiveSha256:
       "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
   });
@@ -59,7 +56,7 @@ test("application archive metadata binds its source and controller attempt", asy
     JSON.parse(await readFile("candidate/.damadama-release.json", "utf8")),
     {
       source: record.source,
-      version: "pr-11-111111111111-222222222222",
+      version: "main-111111111111",
     },
   );
   assert.deepEqual(

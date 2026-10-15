@@ -1,0 +1,70 @@
+name: Check
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - id: application
+        run: |
+          state=$(node release/application.mjs $(git rev-parse HEAD))
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+      - if: steps.application.outputs.state == 'setup'
+        run: echo "Nondeployable setup. No application has existed since the approved controls baseline." >> "$GITHUB_STEP_SUMMARY"
+      - if: steps.application.outputs.state == 'application'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.112
+          cache: true
+          cache-dependency-path: |
+            **/packages.lock.json
+            **/packages.*.lock.json
+      - if: steps.application.outputs.state == 'application'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - if: steps.application.outputs.state == 'application'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - if: steps.application.outputs.state == 'application'
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - if: steps.application.outputs.state == 'application'
+        run: bun install --frozen-lockfile
+      - if: steps.application.outputs.state == 'application'
+        uses: actions/cache@v4
+        id: playwright
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - if: steps.application.outputs.state == 'application'
+        run: node node_modules/@playwright/test/cli.js install --with-deps chromium
+      - if: steps.application.outputs.state == 'application'
+        run: bun run check
+      - if: failure() && steps.application.outputs.state == 'application'
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-reports-${{ github.run_attempt }}
+          path: |
+            .audit/TestResults
+            test-results
+            playwright-report
+          retention-days: 3

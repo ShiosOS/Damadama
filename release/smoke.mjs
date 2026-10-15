@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
-import { chromium } from "@playwright/test";
+import { chromium, expect } from "@playwright/test";
 
 export async function publicChecks(record) {
   const origin = new URL(record.deployment.url);
@@ -41,7 +41,7 @@ export async function publicChecks(record) {
   assert.deepEqual(
     runtime.source,
     record.source,
-    "running image contains the proposed source identity",
+    "running image contains the main source identity",
   );
   assert.equal(
     runtime.version,
@@ -135,6 +135,21 @@ export async function stagingBrowserChecks(record) {
     await page.getByLabel("Repeat every (weeks)", { exact: true }).fill("2");
     await page.getByRole("button", { name: "Save habit", exact: true }).click();
     await page.getByRole("heading", { name, exact: true }).waitFor();
+    const card = page
+      .locator("article")
+      .filter({ has: page.getByRole("heading", { name, exact: true }) });
+    const visibleValues = async () => {
+      for (const text of [
+        "Good: five minutes",
+        "Better: fifteen minutes",
+        "Best: thirty minutes",
+        "Monday",
+        "Sunday",
+        "Every 2 weeks",
+      ])
+        await expect(card).toContainText(text);
+    };
+    await visibleValues();
     const saved = await authenticatedGet(page, "/api/habits");
     assert.equal(saved.status, 200);
     const habit = saved.body.find((habit) => habit.name === name);
@@ -147,7 +162,13 @@ export async function stagingBrowserChecks(record) {
     assert.equal(habit.schedule.timeZone, "America/New_York");
     await page.reload();
     await page.getByRole("heading", { name, exact: true }).waitFor();
+    await visibleValues();
     const reloaded = await authenticatedGet(page, `/api/habits/${habit.id}`);
+    assert.equal(
+      reloaded.status,
+      200,
+      "owner detail read succeeds before other-account refusal",
+    );
     assert.deepEqual(
       reloaded.body,
       habit,
@@ -175,9 +196,33 @@ export async function stagingBrowserChecks(record) {
     await page
       .getByRole("heading", { name, exact: true })
       .waitFor({ state: "detached" });
+    const outsiderContext = await browser.newContext();
+    contexts.push(outsiderContext);
+    const outsider = await outsiderContext.newPage();
+    await outsider.goto(record.deployment.url);
+    await outsider.waitForFunction(() => window.Clerk?.loaded);
+    await outsider.evaluate(() => {
+      const root = document.createElement("div");
+      document.body.replaceChildren(root);
+      window.Clerk.mountSignUp(root);
+    });
+    await expect(
+      outsider.getByText("Access restricted", { exact: true }),
+    ).toBeVisible();
+    assert.equal(
+      await outsider.evaluate(() => window.Clerk.session === null),
+      true,
+      "outsider receives no ordinary session",
+    );
+    const anonymous = await outsider.request.get(
+      `${record.deployment.url}/api/habits`,
+    );
+    assert.equal(anonymous.status(), 401, "outsider remains unauthorized");
     const evidence = {
       clerk: true,
-      habits: true,
+      habitsBeforeReload: true,
+      habitsAfterReload: true,
+      inviteOnly: true,
       ownership: true,
       signOut: true,
     };

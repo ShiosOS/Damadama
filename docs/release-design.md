@@ -1,29 +1,15 @@
-# Release control design
+# Main staging and manual production
 
-The release record is the shared data shape. `release/policy.mjs` owns its identity and promotion predicates.
-`release/github.mjs` captures GitHub facts and requires successful Actions CI on the current head after proving main ancestry and complete head/proposed-tree equality.
-`release/configure-github.mjs` renders, reconciles, and reads back rules and approval boundaries.
-Trusted deployment tooling owns Docker, registry, Railway, and Clerk operations. Provider data never becomes a shell command.
+The release source is the actual main commit and Git tree. A schema 2 record separates that source from the controller SHA, workflow run, and attempt. There is one source format.
 
-Callers select a PR for staging or a successful staging run for promotion. They cannot supply an arbitrary image or check SHA.
-The workflows run from a pinned `main` controller revision. Candidate source runs only inside the secretless Docker build.
-Fresh privileged jobs execute trusted controls and inspect the artifact without running candidate scripts on their runner.
-The verifier key is confined to the final approval boundary. Production receives separate credentials and no verifier key.
+One main-push workflow runs real control and application checks, builds without secrets, and stages from a fresh privileged runner. Ordinary PR checks remain merge requirements. Automatic staging has no human gate.
 
-Two independent design sketches compared manual dispatch with an event-driven release ledger and reconciler.
-The manual design won on bootstrap and operating cost. Both required the complete source tuple and a dedicated App.
-The synthesis kept immutable hash-bound records and fresh observations from the ledger design.
-Current GitHub `queue: max` avoids a separate queue database while preserving active deploy-and-verify runs.
-The workflow holds one staging queue slot through automated checks, manual approval, and publication.
+Production selects a successful staging run. A secretless preflight freezes a reviewable plan before protected approval. The protected job authenticates the exact run, attempt jobs, immutable artifacts, record hash, and plan again. It deploys the same image digest and preserves backup, restore, isolation, and schema compatibility predicates.
 
-The design accepts manual staging dispatch and manual email/migration/rollback attestations.
-It accepts artifact and registry retention requirements. Missing historical evidence fails closed.
-It preserves startup EF migrations, which makes previous-binary compatibility a release prerequisite.
-The first release has no previous production image; record that explicitly rather than claiming an image rollback test.
+Historical staged evidence is sufficient. Production independently proves its own actual running image and does not need staging credentials. Missing Railway immutable-image metadata remains a refusal.
 
-The implementation replaces separate stage/verify dispatches with one workflow and a second approval job.
-This binds the human review to one run and prevents another candidate from replacing staging mid-review.
-Operator attestations remain human evidence. Automated Clerk ticket sessions do not verify inbox delivery.
+Main freshness is checked around publication and provider effects. GitHub and Railway cannot commit atomically. A race after mutation reports applied-but-unverified with the actual deployment identity, leaves the release draft, and makes no rollback claim.
 
-Paid resources, domain setup, actual deployment, and production promotion remain separate approval decisions.
-The full gate requires reviewed tooling on main and the verifier App's credentials before activation.
+The approved controls baseline can advance before the first application merge. The setup exception requires absent app roots and immutable history proving they were never installed after that baseline. It emits no promotable receipt. Deleting an application cannot reopen the exception.
+
+The obsolete PR source tuple, premerge publication workflow, paired App checks, and staging approval were removed together. Recovery packaging, private Docker credential lifetime, API read retries, and provider observation remain shared capabilities.

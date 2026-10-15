@@ -1,16 +1,16 @@
 import { createHash } from "node:crypto";
 
 export const repository = "ShiosOS/Damadama";
-export const stagingContext = "staging/verified";
-export const ciContext = "ci/verified";
 export const actionsAppId = 15368;
-const sourceFields = ["repository", "pr", "head", "base", "merge", "tree"];
+const sourceFields = ["repository", "commit", "tree"];
 const runtimeChecks = [
   "readiness",
   "unauthorized",
   "runtimeConfig",
   "clerk",
-  "habits",
+  "habitsBeforeReload",
+  "habitsAfterReload",
+  "inviteOnly",
   "ownership",
   "signOut",
 ];
@@ -21,8 +21,11 @@ function requireThat(condition, message) {
 
 export function requireSource(source) {
   requireThat(source?.repository === repository, "wrong repository");
-  requireThat(Number.isSafeInteger(source.pr) && source.pr > 0, "invalid pr");
-  for (const field of ["head", "base", "merge", "tree"]) {
+  requireThat(
+    Object.keys(source).sort().join(",") === [...sourceFields].sort().join(","),
+    "invalid main source fields",
+  );
+  for (const field of ["commit", "tree"]) {
     requireThat(/^[a-f0-9]{40}$/.test(source[field]), `invalid ${field} SHA`);
   }
   return source;
@@ -33,13 +36,13 @@ export function requireCurrentSource(source, current) {
   for (const field of sourceFields) {
     requireThat(
       source[field] === current?.[field],
-      `stale ${field}; stage the current proposed result again`,
+      `stale ${field}; stage current main again`,
     );
   }
 }
 
 export function candidateVersion(source) {
-  return `pr-${source.pr}-${source.head.slice(0, 12)}-${source.base.slice(0, 12)}`;
+  return `main-${source.commit.slice(0, 12)}`;
 }
 
 function canonical(value) {
@@ -60,38 +63,56 @@ export function recordHash(record) {
     .digest("hex");
 }
 
-export function requireCIEvidence(source, runs) {
-  return ["release-controls", "check"].map((name) => {
-    const check = runs?.find(
-      (run) => run.name === name && run.app?.id === actionsAppId,
-    );
+export function requireCIEvidence(
+  source,
+  jobs,
+  authority,
+  names = ["release-controls", "check"],
+) {
+  requireSource(source);
+  return names.map((name) => {
+    const matches = jobs?.filter((job) => job.name === name) ?? [];
+    const job = matches[0];
     requireThat(
-      check?.head_sha === source.head &&
-        check.status === "completed" &&
-        check.conclusion === "success" &&
-        Number.isSafeInteger(check.id) &&
-        check.id > 0 &&
-        /^https:\/\/github\.com\/ShiosOS\/Damadama\/actions\/runs\/\d+\/job\/\d+$/.test(
-          check.details_url,
-        ),
-      `CI ${name} must succeed on the current head; skipped, missing, or other-source evidence is insufficient`,
+      matches.length === 1 &&
+        job.head_sha === source.commit &&
+        job.run_id === authority?.runId &&
+        job.run_attempt === authority?.attempt &&
+        job.status === "completed" &&
+        job.conclusion === "success" &&
+        Number.isSafeInteger(job.id) &&
+        job.id > 0 &&
+        job.html_url ===
+          `https://github.com/${repository}/actions/runs/${authority.runId}/job/${job.id}`,
+      `CI ${name} must succeed in the exact main workflow attempt`,
     );
-    return {
-      name,
-      id: check.id,
-      head_sha: check.head_sha,
-      app: { id: check.app.id },
-      status: check.status,
-      conclusion: check.conclusion,
-      details_url: check.details_url,
-    };
+    return job;
   });
 }
 
+export function requireStageRun(run, authority, completed = true) {
+  requireThat(
+    run?.id === authority.runId &&
+      run.run_attempt === authority.attempt &&
+      run.event === "push" &&
+      run.path === ".github/workflows/stage.yml" &&
+      run.head_branch === "main" &&
+      run.head_sha === authority.sha &&
+      run.repository?.full_name === repository &&
+      (!completed ||
+        (run.status === "completed" && run.conclusion === "success")),
+    "record is not from a successful trusted main staging workflow",
+  );
+}
+
 export function requireVerifiedRecord(record) {
-  requireThat(record?.schema === 1, "missing or unsupported release record");
+  requireThat(record?.schema === 2, "missing or unsupported release record");
   requireSource(record.source);
-  requireCIEvidence(record.source, record.evidence?.ci);
+  requireCIEvidence(record.source, record.evidence?.ci, record.authority);
+  requireThat(
+    record.source.commit === record.authority?.sha,
+    "source differs from main controller",
+  );
   requireThat(
     /^[a-f0-9]{40}$/.test(record.authority?.sha),
     "invalid controller SHA",
@@ -146,128 +167,40 @@ export function requireVerifiedRecord(record) {
       `missing ${check} runtime evidence`,
     );
   }
-  for (const check of ["email", "migrations", "rollback"]) {
-    requireThat(
-      record.evidence?.operator?.[check] === "approved-attestation",
-      `missing operator ${check} attestation`,
-    );
-  }
-  requireThat(
-    record.evidence.operator.approvalRunId === record.authority.runId,
-    "operator approved another run",
-  );
   return record;
 }
 
 export function requirePromotion(record, current) {
   requireVerifiedRecord(record);
+  requireStageRun(current.run, record.authority);
+  requireCIEvidence(record.source, current.jobs, record.authority, [
+    "release-controls",
+    "check",
+    "build",
+    "stage",
+  ]);
   requireThat(
-    current.approved === true,
-    "explicit production approval is required",
+    current.mainSha === record.source.commit &&
+      current.mainTree === record.source.tree,
+    "current main differs from staged source",
   );
-  requireThat(current.merged === true, "PR is not merged");
+  const approval = current.approval;
   requireThat(
-    current.mergedHead === record.source.head,
-    "merged head differs from staged head",
-  );
-  requireThat(
-    current.mergeCommit === current.mainSha,
-    "merged result is not current main",
-  );
-  requireThat(
-    current.mainTree === record.source.tree,
-    "current main tree differs from staged tree",
-  );
-  requireThat(
-    Number.isSafeInteger(current.appId) &&
-      current.appId > 0 &&
-      current.appId !== actionsAppId,
-    "dedicated verifier App is required",
-  );
-  for (const [context, check, label] of [
-    [stagingContext, current.check, "staging"],
-    [ciContext, current.ciCheck, "CI"],
-  ]) {
-    requireThat(
-      check?.app?.id === current.appId,
-      `${label} check came from another App`,
-    );
-    requireThat(
-      check.name === context &&
-        check.status === "completed" &&
-        check.conclusion === "success",
-      `${label} check is not successful`,
-    );
-    requireThat(
-      check.head_sha === record.source.merge,
-      `${label} check is not on the proposed merge`,
-    );
-    requireThat(
-      check.external_id === recordHash(record),
-      `${label} record hash differs from verified check`,
-    );
-    requireThat(
-      check.details_url ===
-        `https://github.com/${repository}/actions/runs/${record.authority.runId}`,
-      `${label} check points to another run`,
-    );
-  }
-  const run = current.run;
-  requireThat(
-    run?.id === record.authority.runId &&
-      run.run_attempt === record.authority.attempt &&
-      run.event === "workflow_dispatch" &&
-      run.path === ".github/workflows/stage.yml" &&
-      run.head_branch === "main" &&
-      run.head_sha === record.authority.sha &&
-      run.conclusion === "success",
-    "record is not from a successful trusted staging workflow",
+    approval?.runId === current.promotionAuthority?.runId &&
+      approval?.attempt === 1 &&
+      current.promotionAuthority?.attempt === 1 &&
+      approval?.recordHash === recordHash(record) &&
+      approval?.reviewers?.length > 0,
+    "explicit production approval must bind this run and frozen record",
   );
   return record.image.reference;
 }
 
-export function verificationChecks(record) {
-  requireVerifiedRecord(record);
-  const evidence = record.evidence.ci
-    .map((check) => `[${check.name}](${check.details_url})`)
-    .join(", ");
-  return [
-    {
-      name: ciContext,
-      title: "Current proposed result passed CI",
-      summary: `Successful Actions CI on head ${record.source.head}: ${evidence}. The head contains current main and has the complete proposed tree ${record.source.tree}.`,
-    },
-    {
-      name: stagingContext,
-      title: "Current proposed result verified in staging",
-      summary: `Image ${record.image.reference}. Source tree ${record.source.tree}. Automated runtime and actual Clerk ticket-session checks passed. Protected approval attests to actual email-code delivery, migration review, and rollback compatibility.`,
-    },
-  ].map(({ name, title, summary }) => ({
-    name,
-    head_sha: record.source.merge,
-    status: "completed",
-    conclusion: "success",
-    external_id: recordHash(record),
-    details_url: `https://github.com/${repository}/actions/runs/${record.authority.runId}`,
-    output: {
-      title,
-      summary: `${summary} Verified record SHA-256 ${recordHash(record)}.`,
-    },
-  }));
-}
-
-export function mainRules(appId, bootstrap = false) {
-  requireThat(
-    bootstrap ||
-      (Number.isSafeInteger(appId) && appId > 0 && appId !== actionsAppId),
-    "a dedicated verifier App ID is required",
-  );
-  const checks = bootstrap
-    ? [{ context: "release-controls", integration_id: actionsAppId }]
-    : [
-        { context: ciContext, integration_id: appId },
-        { context: stagingContext, integration_id: appId },
-      ];
+export function mainRules() {
+  const checks = [
+    { context: "release-controls", integration_id: actionsAppId },
+    { context: "check", integration_id: actionsAppId },
+  ];
   return {
     name: "Damadama main",
     target: "branch",
