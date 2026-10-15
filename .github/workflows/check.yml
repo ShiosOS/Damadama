@@ -67,6 +67,8 @@ jobs:
             .audit/performance-assets.json
             .audit/performance-browser.json
             .audit/performance-saved.png
+            .audit/accessibility-*.json
+            .audit/accessibility-*.png
             test-results
             playwright-report
           retention-days: 3

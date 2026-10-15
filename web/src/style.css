@@ -10,6 +10,8 @@
 :root {
   color-scheme: light;
   --ui-primary: #a33450;
+  --ui-warning: #92400e;
+  --ui-error: #b91c1c;
   --ui-text: oklch(0.25 0.02 40);
   --ui-text-highlighted: var(--ui-text);
   --ui-text-muted: oklch(0.46 0.02 45);

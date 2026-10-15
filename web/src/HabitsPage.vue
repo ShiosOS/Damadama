@@ -107,7 +107,11 @@ async function save() {
         .getElementById(`habit-${saved.id}`)
         ?.scrollIntoView({ block: "nearest" });
   } catch (error) {
-    if (current === generation) showError(error);
+    if (current !== generation) return;
+    showError(error);
+    await nextTick();
+    if (current === generation && adding.value)
+      document.getElementById("habit-creation-error")?.focus();
   }
 }
 </script>
@@ -167,6 +171,8 @@ async function save() {
           <template #body>
             <UAlert
               v-if="activity.kind === 'error'"
+              id="habit-creation-error"
+              tabindex="-1"
               role="alert"
               color="error"
               title="Request failed"

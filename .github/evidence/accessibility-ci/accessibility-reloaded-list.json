@@ -1,0 +1,8 @@
+{
+  "state": "reloaded-list",
+  "sourceRevision": "22a5a89a2e4293665eed6334a668da441e58c623",
+  "tags": ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"],
+  "violations": [],
+  "incomplete": [],
+  "passedRules": 20
+}

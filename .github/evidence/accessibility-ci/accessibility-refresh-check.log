@@ -1,0 +1,123 @@
+$ bun scripts/check.ts
+Checking docker info --format {{.ServerVersion}}
+28.3.2
+Checking bun install --frozen-lockfile
+bun install v1.3.14 (0d9b296a)
+
+Checked 389 installs across 459 packages (no changes) [211.00ms]
+Checking dotnet tool restore
+Tool 'dotnet-ef' (version '10.0.12') was restored. Available commands: dotnet-ef
+
+Restore was successful.
+Checking dotnet restore --locked-mode
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+Checking dotnet restore --locked-mode --artifacts-path .audit/check-build
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+Checking dotnet build --no-restore --artifacts-path .audit/check-build
+  Damadama -> C:\Users\emofo\.codex\worktrees\ci-browser-quality\Damadama Rewrite\.audit\check-build\bin\Damadama\debug\Damadama.dll
+  Damadama.AppHost -> C:\Users\emofo\.codex\worktrees\ci-browser-quality\Damadama Rewrite\.audit\check-build\bin\Damadama.AppHost\debug\Damadama.AppHost.dll
+  Damadama.Tests -> C:\Users\emofo\.codex\worktrees\ci-browser-quality\Damadama Rewrite\.audit\check-build\bin\Damadama.Tests\debug\Damadama.Tests.dll
+  BrowserHost -> C:\Users\emofo\.codex\worktrees\ci-browser-quality\Damadama Rewrite\.audit\check-build\bin\BrowserHost\debug\BrowserHost.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:04.02
+Checking dotnet format --no-restore --verify-no-changes
+Checking bun run lint
+$ eslint .
+Checking bun x --no-install prettier --check web tests/Browser scripts package.json eslint.config.mjs .github README.md AGENTS.md dev/Properties/launchSettings.json
+Checking formatting...
+All matched files use Prettier code style!
+Checking bun run --cwd web build
+$ vue-tsc --noEmit && vite build
+vite v8.3.4 building client environment for production...
+transforming...
+✓ 853 modules transformed.
+rendering chunks...
+computing gzip size...
+../server/wwwroot/index.html                                               0.39 kB │ gzip:   0.26 kB
+../server/wwwroot/assets/nunito-vietnamese-wght-normal-U01xdrZh.woff2     13.09 kB
+../server/wwwroot/assets/nunito-cyrillic-wght-normal-CY6AOgYE.woff2       20.77 kB
+../server/wwwroot/assets/nunito-cyrillic-ext-wght-normal-D4X5GqEv.woff2   28.92 kB
+../server/wwwroot/assets/nunito-latin-ext-wght-normal-CXYtwYOx.woff2      35.58 kB
+../server/wwwroot/assets/nunito-latin-wght-normal-BzFMHfZw.woff2          39.12 kB
+../server/wwwroot/assets/index-BNxn1o3S.css                              202.33 kB │ gzip:  26.83 kB
+../server/wwwroot/assets/index-BNsifTON.js                               489.68 kB │ gzip: 150.29 kB
+
+✓ built in 2.90s
+Checking bun run check:performance
+$ node --test scripts/performance-budget.test.mjs && node scripts/performance-budget.mjs
+✔ accepts a complete small build and reports exact asset counts (220.1672ms)
+✔ rejects JavaScript above the committed gzip budget (213.1448ms)
+✔ rejects a linked font outside the inventoried assets directory (123.2265ms)
+✔ rejects an entrypoint that references a missing asset (131.6699ms)
+✔ rejects an empty build instead of reporting zero-byte success (168.4564ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1003.9842
+Production assets 313307 gzip bytes in 7 files. Report C:\Users\emofo\.codex\worktrees\ci-browser-quality\Damadama Rewrite\.audit\performance-assets.json
+Checking bun x --no-install vite build --config tests/Browser/vite.config.ts
+vite v8.3.4 building client environment for production...
+transforming...
+✓ 819 modules transformed.
+rendering chunks...
+computing gzip size...
+.audit/browser-build/index.html                                               0.32 kB │ gzip:   0.22 kB
+.audit/browser-build/assets/nunito-vietnamese-wght-normal-U01xdrZh.woff2     13.09 kB
+.audit/browser-build/assets/nunito-cyrillic-wght-normal-CY6AOgYE.woff2       20.77 kB
+.audit/browser-build/assets/nunito-cyrillic-ext-wght-normal-D4X5GqEv.woff2   28.92 kB
+.audit/browser-build/assets/nunito-latin-ext-wght-normal-CXYtwYOx.woff2      35.58 kB
+.audit/browser-build/assets/nunito-latin-wght-normal-BzFMHfZw.woff2          39.12 kB
+.audit/browser-build/assets/index-DEeCZpmF.css                              202.41 kB │ gzip:  26.86 kB
+.audit/browser-build/assets/index-BE4bMq7s.js                               456.05 kB │ gzip: 141.49 kB
+
+✓ built in 2.73s
+Checking node node_modules/@playwright/test/cli.js install chromium
+Checking node node_modules/@playwright/test/cli.js test --config tests/Browser/playwright.config.ts
+[WebServer] (node:32200) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 18 tests using 1 worker
+
+(node:19144) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  1 tests\Browser\accessibility.spec.ts:80:1 › the audit rejects an unnamed button and accepts the repaired page (2.5s)
+  ok  2 tests\Browser\accessibility.spec.ts:105:1 › the production entry explains missing sign-in configuration accessibly (1.0s)
+  ok  3 tests\Browser\accessibility.spec.ts:142:1 › signed-out and expired-session messages pass WCAG scans (1.6s)
+  ok  4 tests\Browser\accessibility.spec.ts:169:1 › keyboard creation contains focus, explains API refusal, and persists a save (6.0s)
+  ok  5 tests\Browser\accessibility.spec.ts:350:3 › mobile creation and saved content stay usable (2.6s)
+  ok  6 tests\Browser\accessibility.spec.ts:350:3 › zoom creation and saved content stay usable (3.1s)
+(node:26796) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  7 tests\Browser\habits.spec.ts:3:1 › Add habit opens a labelled creation panel (1.3s)
+  ok  8 tests\Browser\habits.spec.ts:23:1 › cancelling creation returns focus without saving (1.5s)
+  ok  9 tests\Browser\habits.spec.ts:43:1 › account changes and sign out close and clear an unsaved panel (1.1s)
+  ok 10 tests\Browser\habits.spec.ts:64:1 › the creation panel remains usable on mobile and at double zoom (2.1s)
+  ok 11 tests\Browser\habits.spec.ts:142:1 › saved values appear in the list before any reload (1.2s)
+  ok 12 tests\Browser\habits.spec.ts:165:1 › reloading preserves every saved value (1.3s)
+  ok 13 tests\Browser\habits.spec.ts:173:1 › saved values appear once with a non-interactive habit name (1.1s)
+  ok 14 tests\Browser\habits.spec.ts:189:1 › expired authentication explains how to continue (290ms)
+  ok 15 tests\Browser\habits.spec.ts:197:1 › a rejected schedule keeps the form and offers a successful retry (1.8s)
+  ok 16 tests\Browser\habits.spec.ts:230:1 › account change and sign out clear visible account data (2.1s)
+  ok 17 tests\Browser\habits.spec.ts:259:1 › save acknowledgement cannot reveal the previous accounts habit (1.3s)
+  ok 18 tests\Browser\performance.spec.ts:19:1 › optimized habit page stays within layout and request budgets (1.7s)
+
+  18 passed (51.6s)
+Checking dotnet test tests/Backend --no-build --artifacts-path .audit/check-build --logger trx --results-directory .audit/TestResults
+Test run for C:\Users\emofo\.codex\worktrees\ci-browser-quality\Damadama Rewrite\.audit\check-build\bin\Damadama.Tests\debug\Damadama.Tests.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.2 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+Results File: C:\Users\emofo\.codex\worktrees\ci-browser-quality\Damadama Rewrite\.audit\TestResults\emofo_SHIOS_2026-10-15_01_09_53.trx
+
+Passed!  - Failed:     0, Passed:    51, Skipped:     0, Total:    51, Duration: 10 s - Damadama.Tests.dll (net10.0)

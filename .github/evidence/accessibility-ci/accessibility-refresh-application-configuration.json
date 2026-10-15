@@ -1,0 +1,8 @@
+{
+  "state": "application-configuration",
+  "sourceRevision": "48881246c132be4988d89b26ed91dffa3d000a79",
+  "tags": ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"],
+  "violations": [],
+  "incomplete": [],
+  "passedRules": 16
+}

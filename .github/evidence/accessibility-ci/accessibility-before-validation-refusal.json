@@ -1,0 +1,29 @@
+{
+  "state": "validation-refusal",
+  "sourceRevision": "22a5a89a2e4293665eed6334a668da441e58c623",
+  "tags": ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"],
+  "violations": [
+    {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": [
+        {
+          "target": [".text-sm.font-medium[data-slot=\"title\"]"],
+          "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.8 (foreground color: #ffffff, background color: #fb2c36, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1"
+        },
+        {
+          "target": [".opacity-90"],
+          "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.3 (foreground color: #ffeaeb, background color: #fb2c36, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1"
+        }
+      ]
+    }
+  ],
+  "incomplete": [
+    {
+      "id": "aria-hidden-focus",
+      "nodes": 1
+    }
+  ],
+  "passedRules": 22
+}

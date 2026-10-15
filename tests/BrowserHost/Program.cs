@@ -16,6 +16,11 @@ var fixture = JsonSerializer.Serialize(new
     errors = app.Token("errors-account"),
     cleanup = app.Token("cleanup-account"),
     performance = app.Token("performance-account"),
+    accessibility = app.Token("accessibility-account"),
+    accessibilityControl = app.Token("accessibility-control-account"),
+    accessibilityMobile = app.Token("accessibility-mobile-account"),
+    accessibilityZoom = app.Token("accessibility-zoom-account"),
+    accessibilityExpired = app.Token("accessibility-expired-account", expired: true),
     stale = app.Token("stale-account")
 });
 await File.WriteAllTextAsync("tests/Browser/fixture.json", fixture);
