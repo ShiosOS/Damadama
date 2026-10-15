@@ -3,6 +3,8 @@
 Create and list private habits with Good, Better, and Best definitions and a weekday schedule.
 Planning and the system design live in [Notion](https://app.notion.com/p/3f69c051011881e1bc4ec68e47231420).
 
+Use the [Codex Cloud setup guide](docs/codex-cloud.md) for cloud development.
+
 ## Start locally
 
 Install .NET SDK 10.0.112, Bun 1.3.14, Node.js 24 LTS, and Docker with a running Linux container engine.

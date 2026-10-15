@@ -1,4 +1,15 @@
 set -eu
+backup_max_seconds=${BACKUP_MAX_SECONDS-1800}
+case "$backup_max_seconds" in
+  ''|*[!0-9]*) echo 'BACKUP_MAX_SECONDS must be a positive whole number of seconds' >&2; exit 2 ;;
+  *[1-9]*) ;;
+  *) echo 'BACKUP_MAX_SECONDS must be a positive whole number of seconds' >&2; exit 2 ;;
+esac
+if [ "${BACKUP_DEADLINE_ACTIVE-}" != 1 ]; then
+  BACKUP_DEADLINE_ACTIVE=1
+  export BACKUP_DEADLINE_ACTIVE
+  exec timeout --signal=TERM --kill-after=5s "$backup_max_seconds" sh "$0" "$@"
+fi
 umask 077
 case "${BACKUP_ENVIRONMENT:?}" in staging|production) ;; *) exit 2 ;; esac
 : "${PGHOST:?}" "${PGDATABASE:?}" "${PGUSER:?}" "${PGPASSWORD:?}"

@@ -8,6 +8,7 @@ web/dist/
 **/.env.local
 dev/appsettings.Development.json
 .audit/
+/.audit/codex-cloud-runtime/
 test-results/
 playwright-report/
 **/TestResults/
