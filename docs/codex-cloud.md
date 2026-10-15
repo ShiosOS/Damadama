@@ -110,7 +110,7 @@ Record interactive Clerk verification separately when the cloud product can supp
 
 ## Current verification record
 
-The setup branch is refreshed onto `main` at `a8a51bd`.
+The setup branch is refreshed onto `main` at `5eb0bf5`.
 The revised scripts passed setup twice, Docker/PostgreSQL, Chromium launch, and all 162 current release tests locally with a read-only home.
 The unchanged application check also passed all 11 browser and 51 backend tests with the new default cache path.
 These are local Ubuntu results. The initial baseline at `465b816` completed dependency setup twice, launched Chromium, queried PostgreSQL 17,
@@ -133,6 +133,11 @@ The [second fresh task](https://chatgpt.com/local/01a13de0-85b9-7534-9141-5caa97
 It verified Node 24.21.0, Bun 1.3.14, .NET 10.0.112, Docker/PostgreSQL, and all 162 release tests in actual Debian cloud execution.
 Both setup runs and verification exited 1 because pinned Chromium remained blocked at the same redirected host.
 The [cloud results](../.github/evidence/codex-cloud/cloud-results.md) distinguish measured capabilities from remaining checks.
-The setup conversation's browser panel reports **Couldn't confirm publishing status** and disables **Save draft** and **Publish**.
-It instructs the user to reopen setup where it started. Publication of the corrected development setup remains unverified.
+The old phone-created setup could not confirm publication from the browser. At the user's request, a new private **Damadama Development** environment was created and published.
+Its saved configuration uses the reviewed helpers, writable paths, Package managers, and the three observed browser hosts.
+A [fresh task after publication](https://chatgpt.com/local/01a13df3-e195-7668-9046-80ae6bf8f0f1) verified persisted runtime pins and matching helper hashes at source `5eb0bf5`.
+Setup twice and verification all exited 0, including pinned Chromium launch, PostgreSQL 17.11, and all 162 release tests with zero skips.
+The browser cache was populated during that fresh task. The saved Start skill runs setup when it is missing in another task.
+The startup policy contained the three saved hosts and actual downloads passed, while runtime enforcement reporting remained `unknown`.
+See the cloud results for that distinction and the separate application/Aspire/Clerk limitation.
 Planning and the decision record are in the private [Notion setup page](https://app.notion.com/p/3f99c0510118811a9c60fbb6107a8e54).

@@ -1,5 +1,46 @@
 # Actual Codex Cloud acceptance
 
+## Published replacement and successful fresh task
+
+At the user's request, a new private **Damadama Development** environment replaced the phone-created setup workflow.
+Its [setup conversation](https://chatgpt.com/local/01a13dea-7feb-748e-b1a0-db3b6a5bb0e8) retained the exact reviewed helpers from `5ee2e42f4509a719cb031bd1dea6eb7cd4810ded`.
+The browser confirmed **Only me**, no secrets or direct variables, Package managers, and exactly the three additional browser hosts.
+It saved the configuration and displayed **Environment published** on 2026-10-15.
+
+The [fresh task after publication](https://chatgpt.com/local/01a13df3-e195-7668-9046-80ae6bf8f0f1) verified the actual snapshot and succeeded:
+
+```text
+setup1_exit=0
+setup2_exit=0
+verify_exit=0
+Chromium launch verified: 156.0.8078.4
+Docker and disposable PostgreSQL verified.
+tests 162
+pass 162
+fail 0
+skipped 0
+```
+
+Source was `https://github.com/ShiosOS/Damadama.git`, branch `work`, HEAD `5eb0bf5ec0b1eb5d25b04131cf4654e5128ee27c`.
+The supplied runtime identifier was `ccarenv_b64_Y2NhcmVudl9mNDBkNGNmM2Y2Nzg4MTkxOTBlYzI2YWJkZDU2MTA5Yg`.
+All three retained helper Git blob hashes matched the reviewed commit and remained unchanged.
+Node 24.21.0, Bun 1.3.14, .NET SDK 10.0.112, and Playwright 1.64.0 were already present in the published filesystem.
+Chromium 1248, its headless shell, and FFmpeg downloaded during this fresh task. The retained real-page title assertion passed.
+Those new browser cache files were not republished. The saved Start skill runs setup if the pinned browser is missing.
+
+Docker 28.4.0 ran PostgreSQL 17.11 and the actual SQL probe. The generated-password container had no network or published ports.
+The task confirmed cleanup of the container and its anonymous volume. Tracked source remained clean.
+Debian 13.6 x64 retained its nonwritable `/home/agent`; it was not replaced.
+
+Desired and observed startup policy were revision 2, with Package managers and exactly `cdn.playwright.dev`,
+`playwright.download.prss.microsoft.com`, and `storage.googleapis.com`. Actual pinned downloads succeeded with supported command-scoped network permission.
+Runtime status still labelled enforcement `unknown`; this run establishes download/browser capability, not an independent network-enforcement audit.
+A direct Microsoft root request's HTTP 403 came from upstream after CONNECT 200, rather than a proxy policy denial.
+Logs, hashes, and results remain outside tracked source at `/workspace/work/acceptance/` in the linked task.
+
+Application/Aspire/Clerk acceptance remains separate because this revision has no application manifests.
+The old saved **Damadama** definition remains pending its final removal step; existing chats and running environments are retained by the product's deletion flow.
+
 ## Revised scripts on current main
 
 The [second fresh cloud task](https://chatgpt.com/local/01a13de0-85b9-7534-9141-5caa97ad30ff) executed the exact checked-in scripts
