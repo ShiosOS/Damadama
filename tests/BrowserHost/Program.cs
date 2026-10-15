@@ -67,7 +67,8 @@ var fixture = JsonSerializer.Serialize(new
     entriesDate = app.Token("entries-date-account"),
     entriesMobile = app.Token("entries-mobile-account"),
     entriesTravel = app.Token("entries-travel-account"),
-    entriesRetained = app.Token("entries-retained-account")
+    entriesRetained = app.Token("entries-retained-account"),
+    entriesCreation = app.Token("entries-creation-account")
 });
 await File.WriteAllTextAsync("tests/Browser/fixture.json", fixture);
 if (Directory.Exists(".audit/browser-build"))

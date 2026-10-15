@@ -121,23 +121,31 @@ function onVisible() {
   if (document.visibilityState === "visible") checkDate();
 }
 
-async function refresh() {
+async function refresh(mode: "all" | "schedule" = "all") {
   const current = ++generation;
   const date = requestedDate();
+  const keepEntries =
+    mode === "schedule" &&
+    state.value.kind === "ready" &&
+    state.value.date === date;
   deviceToday.value = localCalendarDate();
-  state.value = { kind: "loading", date };
+  if (!keepEntries) state.value = { kind: "loading", date };
   armMidnight();
   if (!props.accountId) return;
   try {
-    const [habits, entries] = await Promise.all([
+    const [habits, loadedEntries] = await Promise.all([
       api.scheduled(date),
-      api.entries(date),
+      keepEntries ? Promise.resolve([]) : api.entries(date),
     ]);
     if (disposed || current !== generation) return;
     if (date !== requestedDate()) {
       void refresh();
       return;
     }
+    const entries =
+      keepEntries && state.value.kind === "ready"
+        ? state.value.entries
+        : loadedEntries;
     state.value = { kind: "ready", date, habits, entries };
   } catch (error) {
     if (disposed || current !== generation) return;
@@ -157,8 +165,19 @@ async function refresh() {
 }
 
 watch(
-  () => [props.accountId, props.savedRevision, selectedDate.value],
-  refresh,
+  () => ({
+    account: props.accountId,
+    revision: props.savedRevision,
+    date: selectedDate.value,
+  }),
+  (next, previous) => {
+    const created =
+      previous !== undefined &&
+      next.account === previous.account &&
+      next.date === previous.date &&
+      next.revision !== previous.revision;
+    void refresh(created ? "schedule" : "all");
+  },
   {
     immediate: true,
     flush: "sync",
@@ -214,7 +233,7 @@ onUnmounted(() => {
         "
         :description="state.message"
       />
-      <UButton variant="outline" class="rounded-full" @click="refresh"
+      <UButton variant="outline" class="rounded-full" @click="refresh()"
         >Retry</UButton
       >
     </div>
