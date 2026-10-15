@@ -390,6 +390,7 @@ test("travel updates Today both directions in the same page while stored schedul
       "2026-01-12",
     );
     await expect(walking(page)).toBeVisible();
+    await page.waitForTimeout(800);
     await cdp.send("Emulation.setTimezoneOverride", {
       timezoneId: "America/Los_Angeles",
     });
@@ -405,6 +406,7 @@ test("travel updates Today both directions in the same page while stored schedul
     );
     await expect(today(page)).toContainText("Nothing scheduled for today.");
     await expect(walking(page)).toHaveCount(0);
+    await page.waitForTimeout(800);
     const response = await page.request.get("/api/habits", {
       headers: {
         Authorization: `Bearer ${await tokenFor(page, "todayTravel")}`,

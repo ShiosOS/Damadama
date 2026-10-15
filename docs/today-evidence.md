@@ -131,7 +131,7 @@ bun x --no-install prettier --write dev/Properties/launchSettings.json
 ```
 
 The production-asset build, focused lint, Vue typecheck, and formatting commands succeeded.
-The full repository `bun run check` remains the parent reviewer's handoff gate.
+The full repository `bun run check` passed after the final authentication-message correction described below.
 Sanitized local browser evidence is `.audit/today-populated.png`, `.audit/today-mobile.png`, `.audit/today-empty.png`, and `.audit/today-flow.webm`.
 The recording uses a dedicated context only for the travel example and closes it explicitly before saving the WebM.
 Successful reads and creates use the real backend. Interception holds real responses or returns explicit error responses, never handcrafted successful habit payloads.
@@ -149,3 +149,40 @@ The visible-return example therefore dispatches `visibilitychange` on the actual
 It verifies the component's visible-event handling. It does not claim native tab-background lifecycle coverage.
 Playwright's clock is installed before page navigation and component timer creation.
 These fixtures use ephemeral test JWTs through the ordinary server authentication middleware. They do not prove hosted Clerk sign-in or genuine email delivery.
+
+## Full repository check and final review
+
+The local full check passed on 2026-10-15 with Node `24.19.0`, Bun `1.3.14`, .NET SDK `10.0.113`, and PostgreSQL `17-alpine` Testcontainers.
+The SDK follows the repository's `latestPatch` policy for `10.0.112`.
+The passing run includes the final Today HTTP 401 guidance and the recording dwells.
+
+```powershell
+$env:PATH = 'C:/Users/emofo/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin;' + $env:PATH
+bun run check
+```
+
+The command exited `0`. It passed locked restores, builds, C# formatting, ESLint, Prettier, Vue types, production asset budgets, all 33 browser tests, and all 103 backend tests with no failures or skips.
+The five performance-budget mechanism tests also passed. These are fixed-budget checks, not a speedup claim.
+[The complete local check output](evidence/today/check-output.txt) preserves the actual output with the absolute worktree path replaced by `<worktree>`.
+
+The first full check passed 31 browser tests and failed the two existing expired-session examples.
+They expected two `Sign in to continue.` alerts, but Today displayed the server's `A valid account session is required.` detail while the saved-habit page normalized HTTP 401.
+Today now uses the same sign-in guidance. The failing run remains local at `.audit/today-full-check-before-auth-message.txt`; the corrected complete run is `.audit/today-full-check.txt`.
+
+Independent standards and spec reviews found no actionable findings. A fresh final-delta review checked the HTTP 401 correction and recording dwells and found no actionable findings.
+The comment review found no introduced comments or suppressions. The independent trail review identified missing decision rows; the timezone-driver pivot, visibility limit, later mutation, recording adjustment, and failed-check repair are now recorded in `.audit/today.tsv`.
+The trail review used GPT-6 Astra; review model diversity remained within the GPT family.
+No migration, model snapshot, or database model files changed.
+
+## Durable browser evidence
+
+[Desktop](evidence/today/desktop.png), [390-pixel mobile](evidence/today/mobile.png), and [empty Today](evidence/today/empty.png) show sanitized test-account data.
+[The travel recording](evidence/today/travel.webm) shows the same page changing from Los Angeles Sunday to Tokyo Monday and back, including the scheduled result.
+It holds asserted states for 800 milliseconds and plays at half speed for readability. It does not measure response time.
+The recording is VP9 WebM at `1100x900`, lasts `5.64` seconds, and has SHA-256 `c1c12d4cbcb4dee00bd60cd07849b5c39d1e9f53983f5f104040c804667ae191`.
+
+```powershell
+ffmpeg -y -v error -i .audit/today-flow.webm -vf 'setpts=2*PTS' -an -c:v libvpx-vp9 -crf 35 -b:v 0 docs/evidence/today/travel.webm
+```
+
+The screenshots and recording were visually inspected. The evidence uses the actual built Today component, ASP.NET Core API, PostgreSQL, and ordinary JWT middleware with ephemeral fixture accounts.
