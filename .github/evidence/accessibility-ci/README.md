@@ -1,5 +1,15 @@
 # Browser accessibility gate evidence
 
+## Refreshed dependency boundary
+
+PR23 now includes performance PR22 at `763c23bc89e4b102e85e894d2945f6ab6ed58cbc`, which includes application PR11 at `859ffa5ec2da426e7024f0dcce67ba02e6165c3d` and main `5eb0bf5ec0b1eb5d25b04131cf4654e5128ee27c`. The additive integration was reviewed at `48881246c132be4988d89b26ed91dffa3d000a79`. Accessibility implementation, tests and the original reports and visual evidence below remain unchanged from the previous head `07c792789d7029d21063192ae40d73f5a9633a18`.
+
+The [refresh check](accessibility-refresh-check.log) exited zero with five performance CLI controls, 18 browser tests and 51 backend tests. Production assets remain 313307 gzip bytes in seven files. Fresh [configuration](accessibility-refresh-application-configuration.json), [refusal](accessibility-refresh-validation-refusal.json) and [persistence](accessibility-refresh-reloaded-list.json) scans pin this integration source and retain their incomplete-rule results. No violation waiver was added.
+
+Both independent refresh reviews passed. See [correctness and security](accessibility-refresh-security-review.md) and [maintainability](accessibility-refresh-quality-review.md) for source identities. The security review finished before the backend result; the full-check log above supplies that final result. The inherited application selector identifies this branch as an application. Release code and other workflows equal the performance parent; Check adds only the two accessibility report paths. Publication adds only this note and sanitized receipts. Current published-head CI is linked in PR23.
+
+## Original baseline and controls
+
 This layer builds on performance PR22 at `22a5a89a2e4293665eed6334a668da441e58c623`. The application dependency remains PR11 at `9c8437e1e4a46965513b53f60d7fa569c0fd18ea`. Review and land those layers in that order before this one.
 
 The [complete local check](accessibility-full-check.log) passed five performance CLI controls, 18 browser tests, and 51 backend tests with exit code zero. It includes lint, formatting, locked restores, type checking, both optimized frontend builds, and the inherited performance gates. The resulting production assets total 313307 gzip bytes in seven files, within the existing budgets. No speed improvement is claimed.
