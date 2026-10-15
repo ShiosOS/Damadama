@@ -120,6 +120,25 @@ public class DailyEntryApiTests
         Assert.That(await DatabaseFixture.Count("DailyEntries"), Is.EqualTo(1));
     }
 
+    [Test]
+    public async Task Readiness_requires_the_entry_schema()
+    {
+        using var ready = await client.GetAsync("/health/ready");
+        Assert.That(ready.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        await DatabaseFixture.Execute("ALTER TABLE \"DailyEntries\" RENAME TO \"MissingDailyEntries\"");
+        try
+        {
+            using var unavailable = await client.GetAsync("/health/ready");
+            Assert.That(unavailable.StatusCode, Is.EqualTo(HttpStatusCode.ServiceUnavailable));
+            using var live = await client.GetAsync("/health/live");
+            Assert.That(live.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        }
+        finally
+        {
+            await DatabaseFixture.Execute("ALTER TABLE \"MissingDailyEntries\" RENAME TO \"DailyEntries\"");
+        }
+    }
+
     [TearDown]
     public void Stop()
     {
