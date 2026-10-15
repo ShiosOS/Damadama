@@ -1,55 +1,50 @@
-# Cost of two awake environments
+# Operate within the Railway spending limit
 
-Estimate checked on 2026-10-12. This is a forecast, not measured Damadama usage or a spending cap.
-Approve the hosting plan and domains separately before provisioning.
+The approved workspace settings are a **$20 Compute hard limit** and a **$15 custom email alert**.
+The operator read back both settings during setup. This verifies the saved controls, not Damadama's operating cost or email delivery.
+The former $20 to $35 monthly allowance was a historical planning estimate for two awake environments, not an approved overage.
 
-The proposed host is Railway. Each environment runs one awake ASP.NET app and one private PostgreSQL 17 service with a separate volume.
-Each also has its own short daily backup job and backup bucket. Clerk uses two separate applications with isolated production instances.
+The intended workload has an app, a private PostgreSQL 17 service, and a daily backup job in each environment.
+The latest setup readback has 0.5 CPU and 500 MB ceilings on all six services, PostgreSQL online, and app and backup services offline.
+Those ceilings constrain available resources. They do not measure average consumption or prove that two awake environments fit within $20.
+Hosted app use, private image pulls, backup completion, and hosted restore remain unverified.
 
-| Monthly assumption for both environments                                       | Estimated charge |
-| ------------------------------------------------------------------------------ | ---------------- |
-| Total average RAM of 1 to 2 GB across four awake services, at $10 per GB-month | $10 to $20       |
-| Average CPU of 0.1 to 0.3 vCPU total, at $20 per vCPU-month                    | $2 to $6         |
-| Two 2 GB database volumes, at $0.15 per GB-month                               | $0.60            |
-| Up to 2 GB of encrypted logical backups, at $0.015 per GB-month                | $0.03            |
-| 10 GB of service egress, including backup uploads, at $0.05 per GB             | $0.50            |
-| Brief daily backup jobs, estimated allowance                                   | $0.50            |
-| Estimated resource usage                                                       | $13.63 to $27.63 |
+## Understand the billing boundary
 
-Railway Pro has a $20 monthly minimum with $20 of included usage. Private container registry credentials require Pro.
-The estimated combined bill is therefore about **$20 to $28 per month**, with **$20 to $35** as a planning allowance for early variance.
-Do not add the $20 subscription again to the usage estimate; included usage offsets it.
-Database size, real memory, CPU, egress, retained backups, taxes, and any domain registration can raise the total.
+Railway's [Compute limit](https://docs.railway.com/pricing/cost-control) covers service CPU, memory, storage, and network egress across the workspace.
+At the hard limit, Railway takes workspace workloads offline, including both environments and their backup jobs.
+Railway Agent has an independent limit. Do not use it as part of this operating plan.
 
-Railway Hobby has a $5 minimum with included usage, but requires a public image for this deployment approach.
-With public GHCR images, the same forecast is about **$14 to $28 per month**. That option publishes every staged application artifact.
-The repository is public, but choose image visibility explicitly. The default proposed setup uses private images and Pro.
+The [Pro plan](https://docs.railway.com/pricing/plans) has a $20 monthly subscription with $20 of included resource usage.
+Included usage offsets resource charges and resets each billing cycle. It is not an extra $20 to add to usage below that allowance.
+The Compute hard limit is a shutdown threshold, not a $20 all-in invoice guarantee.
+Retained volumes still have [billable used storage](https://docs.railway.com/volumes/reference).
+[Bucket access is suspended at the hard limit](https://docs.railway.com/storage-buckets/billing), but existing stored bucket data remains billed.
+Do not delete volumes or backups to reduce an invoice.
 
-Clerk's Hobby plan currently includes unlimited applications, 50,000 monthly retained users per application, and a fixed seven-day session lifetime.
-At small staging/production usage, the proposed separate Clerk applications cost $0. Paid features or threshold growth require reassessment.
-Production Clerk instances need approved domain configuration; provider-generated app domains alone do not complete that setup.
+GitHub Actions artifacts and caches, Clerk usage or paid features, and domain registration and renewal are outside the Railway Compute limit.
+Check their current account allowances and billing separately. This runbook does not guarantee that any of them remains free.
+Taxes, separate Railway Agent usage, and optional paid services can also affect the total.
 
-GitHub currently charges $0 for Container Registry image storage and bandwidth. Recheck that policy before provisioning or changing retention.
-Standard GitHub-hosted runners for this public repository are free. Artifact storage follows the account's Actions storage allowance and billing policy.
-Only the large transfer archive lasts three days; release metadata lasts 90 days. At a 0.3 GB archive and one candidate per day, steady transfer storage is about 0.9 GB.
-At GitHub's $0.25 per GB-month artifact rate before included allowances, that is about $0.23 per month. At three candidates per day, it is about $0.68.
-The $20 to $35 planning allowance includes this small artifact charge. Confirm actual artifact size, run count, storage allowance, and cache usage during setup.
+## Respond to the $15 alert
 
-Railway native daily snapshots retain six days. They do not satisfy the agreed seven-day daily-backup retention alone.
-Use the encrypted logical-backup job as the required seven-day source. Optional native snapshots add billed retained volume storage.
-No optional snapshots are included in the estimate. Bucket egress is free, but the service uploading a backup incurs service egress.
+The workspace billing operator reads the custom $15 email and Railway's hard-limit notices at 75%, 90%, and 100%.
+For a $20 limit, those notices correspond to $15, $18, and $20. The $15 alert leaves services running.
+Confirm the recipient in workspace settings. A configured alert is not evidence that an email arrived.
 
-The former $10 to $15 target is optimistic once two environments remain awake. Review actual usage after the first day, week, and billing month.
-Set budget alerts during approved setup. Keep the app and database awake; do not use a hard spending shutdown as an unreviewed substitute for availability.
-Start with 512 MB app/database memory limits if runtime measurements permit them. Adjust after observing pressure and PostgreSQL cache needs.
+1. Open the correct workspace's Usage page. Record the billing-cycle end, current Compute usage, forecast, and saved $20 and $15 settings separately.
+2. Inspect usage by project and service, including other workspace projects, retained storage, backup uploads, and overlapping deployments.
+3. Check CPU, memory, egress, service status, and the latest completed backup in each environment. Record failed or still-running backup jobs.
+4. Defer optional deployments and restore rehearsals that would consume the remaining allowance. Preserve the data volumes and seven-day backup retention.
+5. Tell the operator whether the forecast reaches $20 before reset and whether a backup gap or outage is likely. Record the decision and its evidence.
 
-## Primary pricing sources
+Do not raise or remove the hard limit, add a paid service, or incur new recovery spend without explicit operator approval.
+If the operator keeps the no-overage policy, preserve the limit and accept a possible outage until the next billing-cycle reset.
+Follow [recovery after a spending hard stop](recovery.md#recover-after-a-spending-hard-stop) if workloads stop.
 
-- [Railway pricing](https://railway.com/pricing)
-- [Railway usage rates and included credits](https://docs.railway.com/pricing/plans)
-- [Railway private registry plan requirement](https://docs.railway.com/builds/private-registries)
-- [Railway backup retention](https://docs.railway.com/volumes/backups)
-- [Railway bucket billing](https://docs.railway.com/storage-buckets/billing)
-- [Clerk pricing](https://clerk.com/pricing)
-- [GitHub Container Registry billing](https://docs.github.com/en/billing/concepts/product-billing/github-packages)
-- [GitHub Actions artifact billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
+## Verify the operating cost
+
+Record representative hosted usage after the first day, week, and full billing cycle.
+Include successful authenticated app work, daily backup execution, storage, service egress, and deployment overlap in the forecast.
+An idle database, local container test, or another project's current-cycle charge cannot establish Damadama's full operating cost.
+Keep availability and budget claims unverified until the hosted workload and billing evidence support them.

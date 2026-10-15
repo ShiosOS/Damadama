@@ -73,6 +73,30 @@ It restores without ownership/ACL commands, `--clean`, or EF downgrade and uses 
 An existing target is never cleared automatically. PostgreSQL startup applies only the committed forward migrations.
 The first one-hour rehearsal is a local sample; measure the hosted exercise with realistic backup sizes after setup.
 
+## Recover after a spending hard stop
+
+The [approved $20 Compute limit](hosting-cost.md) can stop every workload in the Railway workspace, including both environments and their daily backup jobs.
+At the limit, Railway also suspends bucket reads and uploads. Existing bucket data remains billed.
+Preserve the database volumes, completed backups, and the hard limit. A spending outage does not authorize data deletion or a restore over the existing database.
+
+1. Record the outage time, current-cycle usage, billing-cycle reset date, service status, and saved $20 limit and $15 alert in the correct workspace.
+2. Record each environment's last-known backup completion from available logs or prior records. Mark it unknown if no record is available. Record missed jobs and any gap beyond the agreed 24-hour loss window; verify stored objects after bucket access returns.
+3. If the operator keeps the no-overage policy, wait for the next billing-cycle reset. Do not raise or remove the limit to restart services.
+4. If earlier recovery needs more spend, obtain explicit operator approval stating the new spending boundary and recovery action before changing anything.
+5. After reset, confirm that the $20 limit and $15 alert remain saved and that the new cycle has enough headroom. Inspect every service rather than assuming recovery succeeded.
+6. Verify PostgreSQL readiness and the retained volume first. For previously approved app deployments, check the retained image digest, app readiness, real sign-in, and saved-data reads.
+7. If automatic recovery fails, redeploy only the previously approved service image after checking remaining headroom. Never deploy an unapproved production app as a recovery shortcut.
+8. After bucket access returns, identify the latest completed candidate from the bucket's completion records, even if step 2 recorded unknown. Verify its environment, archive, and checksum before treating it as recoverable. If no valid candidate exists, record that no recoverable backup is verified. Check job state and the next schedule. When budget headroom permits, run the approved backup job and verify its checksum and completion record before declaring backups current.
+
+Railway [tries to restart resources at the next billing cycle](https://docs.railway.com/pricing/cost-control#usage-limits-faq).
+Do not assume that a reset, manual redeployment, or unchanged service settings proves a private image pull or a healthy application.
+Record what actually restarted and what remains offline. The current setup has no verified hosted app or backup execution to recover.
+
+A missed backup can leave the latest recoverable copy older than 24 hours. A later successful backup does not fill the missing recovery interval.
+If a restore is necessary, state the backup time and lost-write window before requesting restore and cutover approval.
+The one-hour restore target depends on accessible backups, a usable approved image, a healthy target, and sufficient budget headroom.
+Waiting for billing reset can exceed that target. Do not claim a one-hour recovery guarantee under the hard limit or trigger a live hard stop to test this procedure.
+
 ## Roll back a release
 
 1. Read the production release's source, digest, previous image, backup, and compatibility evidence.
