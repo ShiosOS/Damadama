@@ -147,11 +147,9 @@ globalThis.fetch = async (url, options = {}) => {
       : jobs();
     value = { total_count: list.length, jobs: list };
   } else if (path.endsWith("/artifacts")) {
-    const list = path.includes("/runs/43/")
-      ? [planArtifact]
-      : production
-        ? [receipt, metadata]
-        : [];
+    let list = [];
+    if (path.includes("/runs/43/")) list = [planArtifact];
+    else if (production) list = [receipt, metadata];
     value = { total_count: list.length, artifacts: list };
   } else if (path.endsWith("/releases/tags/v1.2.3"))
     return new Response("", { status: 404 });
