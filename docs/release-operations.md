@@ -1,13 +1,11 @@
-# Deploy and promote a verified candidate
+# Stage main and promote the tested image
 
-This tooling depends on the release-policy foundation in PR #13. Both PRs target `main` and require review before merge.
-Land the foundation, then this tooling and the recovery tooling, then activate the full gate before any application merge.
-The runtime-check workflow composes the pinned foundation revision for secretless CI while that dependency is unmerged.
-Update this branch against `main` after the foundation lands. Deployment workflows require their definitions on the default branch.
+Merge reviewed PRs after their real `release-controls` and `check` jobs pass. A main push runs the same checks, builds one image without deployment credentials, and stages it automatically.
+Production uses `https://prod.damadama.app`. Preserve the existing apex site at `https://damadama.app`.
 
 ## Prepare the two hosting environments
 
-Infrastructure, domains, and deployment each require explicit operator approval. This guide does not grant that approval.
+Apply infrastructure changes only within the operator-approved scope.
 Review [the cost estimate](hosting-cost.md) first. No setup script provisions paid resources.
 
 1. Create one Railway project with separate staging and production environments. Do not duplicate database data or environment secrets.
@@ -16,9 +14,9 @@ Review [the cost estimate](hosting-cost.md) first. No setup script provisions pa
 4. Create separate backup buckets, bucket access keys, and age encryption recipients. Configure the daily logical-backup job from the recovery tooling.
 5. Set the app instance to one replica, no sleeping, `/health/ready`, and a 300-second healthcheck timeout. `release/railway-service.example.json` describes those settings.
 6. Use a Docker image source, with GitHub autodeploy and image auto-update disabled. Create a distinct private GHCR pull token for each environment, scoped only to `read:packages`, on Railway Pro.
-7. After domain approval, connect the separate app origins with TLS and route the app service to port 8080. Use a same-origin UI and API.
+7. Connect `staging.damadama.app` and `prod.damadama.app` with TLS on port 8080. Preserve the existing `damadama.app` site.
 8. Create a separate Clerk application for staging. Activate its production instance for the approved staging domain. Production uses a different Clerk application's production instance.
-9. Enable email-code signup and signin in both Clerk instances. Disable passwords, email links, and social providers. Keep seven-day sessions.
+9. Enable email-code signin. Set staging access mode to Invite-only. Admit only approved people and the two ordinary CI accounts. Disable passwords, email links, and social providers. Keep seven-day sessions.
 10. Create two sample accounts only in staging. Record their Clerk IDs for automated runtime checks. Verify fresh code delivery in a designated real inbox separately.
 
 Railway environment networking isolates private services. Environment project tokens are scoped to one environment.
@@ -46,84 +44,55 @@ Inspect each database service and volume during setup; the app check does not in
 
 Configure these GitHub values:
 
-| Boundary               | Variables                                                                                                                                             | Secrets                                                 |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Repository             | `RELEASE_ENVIRONMENTS`, `RELEASE_GATE_APP_ID`                                                                                                         | None                                                    |
-| `staging`              | `RAILWAY_PROJECT_ID`, `RAILWAY_ENVIRONMENT_ID`, `RAILWAY_SERVICE_ID`, `APP_ORIGIN`, `CLERK_PUBLISHABLE_KEY`, `CLERK_TEST_USER_A`, `CLERK_TEST_USER_B` | Staging `RAILWAY_TOKEN`, staging `CLERK_SECRET_KEY`     |
-| `staging-verification` | The same staging Railway IDs                                                                                                                          | Staging `RAILWAY_TOKEN`, `RELEASE_GATE_APP_PRIVATE_KEY` |
-| `production`           | Its own Railway IDs, `APP_ORIGIN`, `CLERK_PUBLISHABLE_KEY`                                                                                            | Production `RAILWAY_TOKEN`                              |
-| `image-publication`    | None                                                                                                                                                  | None                                                    |
+| Boundary     | Variables                                                                                                                                             | Secrets                                             |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Repository   | `RELEASE_ENVIRONMENTS`                                                                                                                                | None                                                |
+| `staging`    | `RAILWAY_PROJECT_ID`, `RAILWAY_ENVIRONMENT_ID`, `RAILWAY_SERVICE_ID`, `APP_ORIGIN`, `CLERK_PUBLISHABLE_KEY`, `CLERK_TEST_USER_A`, `CLERK_TEST_USER_B` | Staging `RAILWAY_TOKEN`, staging `CLERK_SECRET_KEY` |
+| `production` | Its own Railway IDs, `APP_ORIGIN`, `CLERK_PUBLISHABLE_KEY`                                                                                            | Production `RAILWAY_TOKEN`                          |
 
 Store backup credentials only in that environment's backup job. Keep age decryption identities with the recovery operator, outside the daily job.
-Use environment-scoped Railway project tokens, not account tokens. The verifier App has only Checks write and Metadata read.
+Use environment-scoped Railway project tokens.
 
 During approved setup, inspect an actual Railway deployment's `meta` and confirm which property contains its full immutable GHCR image reference.
-Set `RAILWAY_DEPLOYMENT_IMAGE_PATH` in the staging, staging-verification, and production GitHub boundaries to that observed property path.
+Set `RAILWAY_DEPLOYMENT_IMAGE_PATH` in the staging and production GitHub boundaries to that observed property path.
 The path is not established by unauthenticated schema inspection. Do not guess that `imageDigest` is the registry digest.
 If the provider cannot report the complete immutable reference, this adapter refuses verification and needs a reviewed provenance alternative.
 Service source settings alone never count as running-image evidence. A previously deployed but stopped/crashed production service requires recovery, not an initial-release exception.
 
-## Publish images for first setup
+## Observe automatic staging
 
-The first setup needs registry images before Railway can report an actual deployment's image metadata.
-Use **Publish deployment images** to publish those images without granting deployment access.
+1. Open **Main staging** for the merged main commit.
+2. Wait for its control tests, application checks, isolated build, and staging job.
+3. Inspect `verified-record-<attempt>` and the runtime evidence. A successful setup-only run has no verified record and cannot promote.
 
-1. Merge the reviewed publication tooling through the bootstrap procedure. Refresh the application PR against current `main` and wait for its current CI.
-2. Inspect the GitHub configuration plan. Apply and inspect the approved current policy to create `image-publication` with a reviewer, a `main` restriction, and no administrator bypass. Keep this boundary free of secrets.
-3. Dispatch **Publish deployment images** from `main` with the application PR number. Review its source and migration artifacts, then approve only `image-publication`.
-4. Download `image-publication-<attempt>` and record both immutable references from `publication.json`. Verify both GHCR packages are private and accessible to the approved environment pull tokens.
-5. Obtain approval for the first setup deployment. Inspect its actual Railway metadata before configuring `RAILWAY_DEPLOYMENT_IMAGE_PATH` and running normal staging verification.
+Staging has no human approval. The job verifies readiness, embedded commit and tree, ordinary Clerk sessions, saved values before reload, separate reload values, an owner's successful detail read before another account's refusal, sign-out, and invite-only signup refusal.
+The outsider browser opens Clerk's ordinary signup component without an invitation and must observe **Access restricted** with no session. Public sign-in pages can remain visible. Application data still requires a valid ordinary Clerk JWT on every origin.
 
-The app build uses the proposed application source. The recovery build uses the trusted controller commit.
-Both builds run without package-write credentials. The fresh publisher executes only pinned controls, with a temporary GitHub token and no Railway, Clerk, or verifier credentials.
-It validates both archives before either push and checks current source and CI before each push and before saving the receipt.
-A failed second push can leave an unreferenced image. A failed run produces no successful publication receipt.
+The two CI accounts use short-lived Clerk tickets to obtain ordinary sessions. This tests neither inbox delivery nor email-code login. Production approval includes that separate human attestation. No fixture authentication enters the image.
+Test habits remain sample data because the current application has no permanent-delete endpoint.
 
-The receipt has `kind: "image-publication"`. It proves no deployment, Clerk sign-in, backup, restore, or runtime verification.
-It cannot issue either verifier check or be promoted as a verified release.
-Do not approve **Verify candidate in staging** merely to publish an image while the provider metadata path is missing.
-Old queued runs and artifacts belong to their original controller commit. After tooling changes, dispatch a fresh run.
+`source` contains `{repository, commit, tree}`. `authority` contains `{sha, runId, attempt}`. Schema 1 PR records and old image-publication receipts cannot promote.
+The controller checks current main before publication, before each provider mutation, and after runtime observation. The staging queue serializes deployments through final observation and never cancels an active deployment.
 
-## Stage an application PR
+The build job has contents-read permission, no environment, and no provider or registry credentials. A fresh staging runner validates the archive and executes pinned main controls. Only that runner publishes the fixed repository image and calls Railway.
+The first provider metadata observation remains a separate approved setup task. The adapter cannot claim success from configured service source alone. Keep already published recovery image digests as historical setup artifacts. `package-recovery.mjs` and the recovery role of `images.mjs` retain the trusted recovery packaging and publication primitives.
 
-1. Update the PR against current `main`. Require `check` and `release-controls` to succeed on its current head. The controller verifies that head contains current main and that its complete tree equals the proposed merge tree.
-2. Dispatch **Verify candidate in staging** on `main` with the PR number. Draft application PRs may be staged.
-3. Review the candidate source tuple and `migrations.sql` in its build artifact before approving the `staging` deployment.
-4. Confirm the staging backup and forward-schema compatibility decision. Then approve deployment explicitly.
-5. Wait for actual runtime checks. They verify readiness, unauthorized API refusal, runtime configuration, source identity, actual Clerk sessions, habit creation/reload, ownership refusal, and sign-out clearing.
-6. Open the exact staging deployment while the workflow holds the queue. Complete an ordinary fresh email-code sign-in in a real inbox.
-7. Inspect the screenshots/recording, complete saved values, migration result, backup/restore evidence, and rollback compatibility decision.
-8. Approve `staging-verification` only after that checklist passes. This approval is a human attestation to email delivery and operational review for this run.
+## Approve production
 
-The entire workflow uses `queue: max` and never cancels an active staging verification. Up to 100 runs can wait.
-Approval waits allocate no job runner. Cancel a failed or abandoned review explicitly to free the queue.
-Any head/base/source change or replacement deployment causes verification to fail. Dispatch the new candidate again.
-Dashboard deployment changes cannot inherit this run's success. Treat an interrupted deployment as unknown until provider readback resolves it.
+1. Select a successful **Main staging** run for current main. Retain its image and artifacts for at least 90 days and for every supported rollback version.
+2. Complete an ordinary email-code login with a real inbox. Review the saved values, migrations, and rollback compatibility.
+3. Take a production backup and verify the measured isolated restore and seven-day retention.
+4. Dispatch **Promote verified release** with the staging run ID, semantic version, short notes, and recovery evidence.
+5. Read the preflight summary and `promotion-plan-1`. Compare the source, image digest, staging attempt, record hash, plan hash, migrations, and recovery evidence.
+6. Approve the protected `production` environment for that plan.
+7. Inspect the deployment receipt, then complete production email login and save/reload checks.
 
-The build job receives contents-read only and no environments, secrets, OIDC, or shared privileged build cache.
-Only the trusted Dockerfile executes candidate build code, inside its build containers. Fresh privileged jobs execute pinned main controls.
-The image contains one ASP.NET host and fresh Vue assets. It excludes fixture hosts, Aspire, and credentials.
-Node 24 runs Vue tooling. Bun handles dependencies. The exact SDK 10.0.112 archive uses Microsoft's published SHA-512 because its Docker tag is unavailable.
+The secretless preflight authenticates the successful main-push workflow, exact attempt jobs, artifact run membership, immutable IDs, and ZIP transport digests. It freezes the plan before the approval gate.
+The protected job rereads the plan and staging artifacts after approval. It compares the canonical plan and record hashes and deploys the same registry digest without rebuilding.
+GitHub artifacts have no native attempt field. Attempt names, actual producer jobs, and their creation intervals establish attempt membership. A ZIP digest is not the canonical record hash.
+Environment approval authorizes a run and environment. The workflow binds that approval to the frozen plan through the dependency graph and postapproval readback. Rerun promotion attempts refuse because the approval API does not identify attempts. Dispatch a new promotion instead.
 
-Clerk automation creates short-lived signin tickets for the two actual staging accounts and obtains ordinary Clerk sessions in the production UI.
-It does not exercise the email-code delivery path. The protected final approval records that path as operator-attested, never as automated mail proof.
-No fixture issuer, JWT signing key, Vite fixture entry, or test-host switch enters the hosted image.
-Staging test habits remain sample data; this first feature has no permanent-delete endpoint.
-
-Before App success, the final job rechecks CI, source, environment isolation, and active deployment.
-The record includes actual successful head CI check IDs and run links. It uploads that immutable record first, then publishes both `ci/verified` and `staging/verified` on the proposed merge SHA.
-Full GitHub protection requires both checks from the verifier App. Both use the same record hash, and production authenticates both before promotion.
-The record has a source-derived candidate version, archive checksum, registry digest, controller SHA, run/attempt, deployment ID, and distinct evidence categories.
-
-## Promote after merge
-
-1. Obtain an approved PR merge separately. Confirm its resulting tree is current `main`.
-2. Identify the successful staging run and its retained verified record. Keep the immutable registry image and artifacts for at least 90 days and all supported rollback versions.
-3. Take a completed production backup. Confirm the seven-day retention policy and the measured isolated restore exercise.
-4. Check the currently deployed production digest and test its binary against the candidate's forward schema in an isolated restore target.
-5. Dispatch **Promote verified release** on `main`, supplying the staging run ID, semantic version, short notes, and recovery evidence JSON.
-6. Review the exact digest, main source, recovery evidence, and migration compatibility. Approve the `production` environment explicitly.
-7. Inspect readiness and unauthorized/configuration checks. Complete a production email-code sign-in and save/reload check manually after promotion.
+Historical staging evidence proves the selected image passed at the recorded time. It does not claim that staging still runs the image. Production needs no staging credentials and independently observes its own deployment.
 
 The first release uses `previousImage: null` and `compatibilityEvidence: "initial-release"`. Later releases supply the current immutable production image and a compatibility evidence URL.
 The recovery input has this shape; every example value must be replaced with observed evidence:
@@ -141,10 +110,10 @@ The recovery input has this shape; every example value must be replaced with obs
 ```
 
 This is operator-supplied recovery evidence, validated for freshness and shape after protected approval. It is not a provider backup discovery API.
-Promotion refuses a backup older than 24 hours, a restore over one hour, mismatched prior image, missing App record, unmerged source, or a different main tree.
-It deploys the verified digest without rebuilding and verifies source and readiness again afterward.
-GitHub and Railway do not offer one atomic transaction; a concurrent main advance fails the operation and leaves its GitHub release draft for investigation.
-Successful promotion records source, image, version, notes, deployment, recovery, and staging record in GitHub Release assets.
+Promotion refuses a backup older than 24 hours, a restore over one hour, a mismatched prior image, or a stale main commit.
+A previously deployed unhealthy service cannot use the initial-release exception.
+
+If main advances after a provider write, the run fails with an **applied-but-unverified** outcome and the actual deployment ID when available. The GitHub release stays draft. No automatic rollback is claimed.
 
 ## Diagnose and recover
 
@@ -152,7 +121,7 @@ Use the workflow summary's deployment ID to open Railway deployment logs. Inspec
 The backend emits JSON logs; store neither connection strings nor Clerk tokens in PR evidence.
 Public workflow artifacts retain a sanitized deployment summary and synthetic habit screenshots, not raw production logs.
 Failed browser reports and large image-transfer archives last three days. Source, migration metadata, and verified records last 90 days.
-Approve staging within the transfer window; expired archives fail closed. Production uses the same retained registry digest and matching metadata without downloading or rebuilding the image.
+Expired transfer archives fail closed. Production uses the same retained registry digest and matching metadata without downloading or rebuilding the image.
 Preserve release assets and retained digests beyond 90 days if rollback support requires it.
 
 App rollback redeploys a previously verified digest after explicit approval and proof that it reads and writes the current schema.
@@ -169,3 +138,5 @@ Railway's short provider rollback retention is supplementary. The retained immut
 - [Clerk staging isolation](https://clerk.com/docs/guides/development/managing-environments)
 - [Clerk signin tickets](https://clerk.com/docs/reference/backend/sign-in-tokens/create-sign-in-token)
 - [GitHub queued concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)
+
+- [Clerk invite-only access](https://clerk.com/docs/guides/secure/restricting-access)

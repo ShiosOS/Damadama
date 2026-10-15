@@ -4,17 +4,23 @@ import {
   requireApproval,
 } from "./controller.mjs";
 import { prepareArchive, publishArchive } from "./images.mjs";
-import { readFile, writeFile, appendFile } from "node:fs/promises";
+import { readFile, writeFile, appendFile, mkdir } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
-import { github, captureSource, requireCI } from "./github.mjs";
+import {
+  github,
+  captureSource,
+  attemptJobs,
+  runArtifacts,
+  selectArtifact,
+  readArtifact,
+} from "./github.mjs";
 import {
   repository,
   requireVerifiedRecord,
   requirePromotion,
+  requireStageRun,
+  requireCIEvidence,
   recordHash,
-  stagingContext,
-  ciContext,
-  verificationChecks,
 } from "./policy.mjs";
 import {
   deployImage,
@@ -24,179 +30,282 @@ import {
   requireEnvironment,
 } from "./railway.mjs";
 import { requireRecovery } from "./runtime.mjs";
+import { applicationState } from "./application.mjs";
 
 const operation = process.argv[2];
 const read = async (path) => JSON.parse(await readFile(path, "utf8"));
 const write = async (path, value) =>
   writeFile(path, JSON.stringify(value, null, 2));
+const output = async (value) =>
+  appendFile(process.env.GITHUB_OUTPUT, value + "\n");
+const summary = async (value) =>
+  appendFile(process.env.GITHUB_STEP_SUMMARY, value + "\n");
 
-async function promotionFacts(record) {
-  await requireController();
-  const pr = await github(`repos/${repository}/pulls/${record.source.pr}`);
-  const main = await github(`repos/${repository}/commits/main`);
-  const checks = await github(
-    `repos/${repository}/commits/${record.source.merge}/check-runs?per_page=100&filter=latest`,
+async function stageEvidence(runId) {
+  const run = await github(`repos/${repository}/actions/runs/${runId}`);
+  const authority = { sha: run.head_sha, runId, attempt: run.run_attempt };
+  requireStageRun(run, authority);
+  const source = await captureSource(authority.sha);
+  const jobs = await attemptJobs(authority);
+  requireCIEvidence(source, jobs, authority, [
+    "release-controls",
+    "check",
+    "build",
+    "stage",
+  ]);
+  const artifacts = await runArtifacts(runId);
+  const receipt = selectArtifact(
+    artifacts,
+    "verified-record",
+    authority,
+    jobs.find((j) => j.name === "stage"),
   );
-  const appId = Number(process.env.RELEASE_GATE_APP_ID);
-  const check = checks.check_runs.find(
-    (check) =>
-      check.name === stagingContext &&
-      check.app.id === appId &&
-      check.external_id === recordHash(record),
+  const metadata = selectArtifact(
+    artifacts,
+    "candidate-metadata",
+    authority,
+    jobs.find((j) => j.name === "build"),
   );
-  const ciCheck = checks.check_runs.find(
-    (check) =>
-      check.name === ciContext &&
-      check.app.id === appId &&
-      check.external_id === recordHash(record),
+  const record = requireVerifiedRecord(
+    JSON.parse(await readArtifact(receipt, "verified.json")),
   );
-  const run = await github(
-    `repos/${repository}/actions/runs/${record.authority.runId}`,
-  );
-  return {
-    approved: (await requireApproval("production")).length > 0,
-    mainSha: main.sha,
-    mainTree: main.commit.tree.sha,
-    merged: pr.merged,
-    mergedHead: pr.head.sha,
-    mergeCommit: pr.merge_commit_sha,
-    appId,
-    check,
-    ciCheck,
-    run,
+  if (
+    recordHash(record.authority) !== recordHash(authority) ||
+    recordHash(record.source) !== recordHash(source) ||
+    recordHash(record.evidence.ci) !==
+      recordHash(requireCIEvidence(source, jobs, authority))
+  )
+    throw new Error("record differs from authenticated main attempt evidence");
+  const build = JSON.parse(await readArtifact(metadata, "build.json"));
+  if (
+    build.archiveSha256 !== record.image.archiveSha256 ||
+    build.version !== record.image.version ||
+    recordHash(build.source) !== recordHash(record.source) ||
+    recordHash(build.authority) !== recordHash(authority)
+  )
+    throw new Error("promotion metadata differs from verified image");
+  return { record, run, jobs, artifacts: { receipt, metadata } };
+}
+
+async function verifyDeployment(record, recheck, verify) {
+  await observeDeployment(record.deployment);
+  const automated = await verify(record);
+  await observeDeployment(record.deployment);
+  await recheck();
+  return automated;
+}
+
+async function reportAppliedFailure(error, deployment, image) {
+  const applied = deployment ?? error.deployment;
+  if (!applied) return;
+  const outcome = {
+    status: "applied-but-unverified",
+    deployment: applied,
+    image,
+    reason: error.message,
   };
+  const message = `Applied but unverified. Deployment ${applied.id ?? "ID unavailable"}. Image ${image}. ${error.message}. No rollback was performed.`;
+  console.error(message);
+  try {
+    await mkdir("runtime-evidence", { recursive: true });
+    await write("runtime-evidence/provider-outcome.json", outcome);
+  } catch (reportError) {
+    console.error(`Could not write provider outcome: ${reportError.message}`);
+  }
+  try {
+    await summary(message);
+  } catch (reportError) {
+    console.error(`Could not write deployment summary: ${reportError.message}`);
+  }
 }
 
 if (operation === "snapshot") {
   const authority = await requireController();
-  const source = await captureSource(Number(process.env.PR_NUMBER));
-  await requireCI(source);
-  await write("source.json", source);
-  await write("candidate.json", { schema: 1, source, authority });
-  await appendFile(process.env.GITHUB_OUTPUT, `merge=${source.merge}\n`);
+  if (process.env.GITHUB_EVENT_NAME !== "push")
+    throw new Error("staging requires a main push");
+  const source = await captureSource(authority.sha);
+  const state = applicationState(source.commit, "controls");
+  await output(`state=${state}`);
+  if (state === "setup") {
+    await summary(
+      "Nondeployable controls setup. Immutable history since the approved baseline contains no application roots. No staging receipt is emitted.",
+    );
+  } else {
+    await write("source.json", source);
+    await write("candidate.json", { schema: 2, source, authority });
+  }
 } else if (operation === "stage") {
   const record = await read("candidate.json");
-  await requireFreshCandidate(record);
-  await requireApproval("staging");
+  const ci = await requireFreshCandidate(record);
+  const artifacts = await runArtifacts(record.authority.runId);
+  if (
+    artifacts.some(
+      (a) => a.name === `verified-record-${record.authority.attempt}`,
+    )
+  )
+    throw new Error("unexpected preexisting staging receipt");
   await requireEnvironment("staging");
-  const build = await read("build.json");
-  record.image = publishArchive(
-    await prepareArchive(
-      "application",
-      "image.tar",
-      build,
-      record.source,
-      record.authority,
-    ),
+  const prepared = await prepareArchive(
+    "application",
+    "image.tar",
+    await read("build.json"),
+    record.source,
+    record.authority,
   );
   await requireFreshCandidate(record);
-  record.deployment = {
-    ...(await deployImage(record.image.reference)),
-    url: process.env.APP_ORIGIN,
-  };
-  await observeDeployment(record.deployment);
-  const { publicChecks, stagingBrowserChecks } = await import("./smoke.mjs");
-  record.evidence = {
-    automated: {
-      ...(await publicChecks(record)),
-      ...(await stagingBrowserChecks(record)),
-    },
-    observedAt: new Date().toISOString(),
-  };
-  await observeDeployment(record.deployment);
+  record.image = publishArchive(prepared);
   await requireFreshCandidate(record);
-  await write("staged.json", record);
-  await write(
-    "runtime-evidence/deployment-summary.json",
-    await logSummary(record.deployment.id),
-  );
-  await appendFile(
-    process.env.GITHUB_STEP_SUMMARY,
-    `Candidate ${record.image.version}\n\nImage ${record.image.reference}\n\nDeployment ${record.deployment.id}\n\nOrigin ${record.deployment.url}\n\nAutomated Clerk ticket sessions passed. Email delivery remains a required human attestation. Review migrations.sql and complete the runbook before approving staging-verification.\n`,
-  );
-} else if (operation === "approve") {
-  const record = await read("staged.json");
-  await requireFreshCandidate(record);
-  await requireEnvironment("staging");
-  await observeDeployment(record.deployment);
-  const reviewers = await requireApproval("staging-verification");
-  record.evidence.operator = {
-    approvalRunId: record.authority.runId,
-    reviewers,
-    email: "approved-attestation",
-    migrations: "approved-attestation",
-    rollback: "approved-attestation",
-  };
-  record.evidence.ci = await requireCI(record.source);
-  requireVerifiedRecord(record);
-  await write("verified.json", record);
-} else if (operation === "publish-check") {
-  const record = requireVerifiedRecord(await read("verified.json"));
-  await requireFreshCandidate(record);
-  await requireEnvironment("staging");
-  await observeDeployment(record.deployment);
-  await requireApproval("staging-verification");
-  if (!process.env.STAGING_CHECK_TOKEN)
-    throw new Error("dedicated verifier token is required");
-  for (const body of verificationChecks(record)) {
+  try {
+    record.deployment = {
+      ...(await deployImage(record.image.reference, () =>
+        requireFreshCandidate(record),
+      )),
+      url: process.env.APP_ORIGIN,
+    };
+    const { publicChecks, stagingBrowserChecks } = await import("./smoke.mjs");
+    const automated = await verifyDeployment(
+      record,
+      () => requireFreshCandidate(record),
+      async (current) => ({
+        ...(await publicChecks(current)),
+        ...(await stagingBrowserChecks(current)),
+      }),
+    );
+    record.evidence = { ci, automated, observedAt: new Date().toISOString() };
+    requireVerifiedRecord(record);
+    await write(
+      "runtime-evidence/deployment-summary.json",
+      await logSummary(record.deployment.id),
+    );
     await requireFreshCandidate(record);
-    await github(`repos/${repository}/check-runs`, {
-      method: "POST",
-      token: process.env.STAGING_CHECK_TOKEN,
-      body,
-    });
+    await write("verified.json", record);
+    await summary(
+      `Automatically staged ${record.source.commit}. Image ${record.image.reference}. Record SHA-256 ${recordHash(record)}. Email delivery, migration review, and recovery remain production approval attestations.`,
+    );
+  } catch (error) {
+    await reportAppliedFailure(
+      error,
+      record.deployment,
+      record.image.reference,
+    );
+    throw error;
   }
-} else if (operation === "promotion-source") {
-  await requireController();
+} else if (operation === "preflight") {
+  const authority = await requireController();
+  if (authority.attempt !== 1)
+    throw new Error(
+      "dispatch a new promotion run; approval attempt ambiguity is refused",
+    );
   const runId = Number(process.env.STAGING_RUN_ID);
   if (!Number.isSafeInteger(runId) || runId < 1)
-    throw new Error("a successful staging run ID is required");
-  const run = await github(`repos/${repository}/actions/runs/${runId}`);
+    throw new Error("successful staging run ID required");
+  const evidence = await stageEvidence(runId);
+  const plan = {
+    schema: 1,
+    authority,
+    stagingAuthority: evidence.record.authority,
+    artifacts: evidence.artifacts,
+    recordHash: recordHash(evidence.record),
+    image: evidence.record.image.reference,
+    version: process.env.RELEASE_VERSION,
+    notes: process.env.RELEASE_NOTES?.trim(),
+    recovery: JSON.parse(process.env.RECOVERY_EVIDENCE),
+  };
   if (
-    run.event !== "workflow_dispatch" ||
-    run.path !== ".github/workflows/stage.yml" ||
-    run.head_branch !== "main" ||
-    run.conclusion !== "success"
+    !/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(plan.version) ||
+    !plan.notes ||
+    plan.notes.length > 2000
   )
-    throw new Error("promotion requires a successful trusted staging run");
-  await appendFile(
-    process.env.GITHUB_OUTPUT,
-    `artifact=verified-record-${run.run_attempt}\nimageArtifact=candidate-metadata-${run.run_attempt}\n`,
+    throw new Error("valid version and short release notes required");
+  const migrations = await readArtifact(
+    plan.artifacts.metadata,
+    "migrations.sql",
+  );
+  plan.migrationsHash = recordHash(migrations);
+  await write("promotion-plan.json", plan);
+  await writeFile("migrations.sql", migrations);
+  await output(`hash=${recordHash(plan)}`);
+  await summary(
+    `## Production approval plan\n\nVersion ${plan.version}\n\nSource ${evidence.record.source.commit}\n\nImage ${plan.image}\n\nStaging run ${runId}, attempt ${plan.stagingAuthority.attempt}\n\nRecord SHA-256 ${plan.recordHash}\n\nPlan SHA-256 ${recordHash(plan)}\n\n${plan.notes}\n\nRecovery evidence\n\n\`\`\`json\n${JSON.stringify(plan.recovery, null, 2)}\n\`\`\`\n\nReview the migration artifact. Approval attests to ordinary email delivery, migrations, and rollback compatibility for this exact plan.`,
   );
 } else if (operation === "promote") {
-  const record = requireVerifiedRecord(await read("verified.json"));
-  if (record.authority.runId !== Number(process.env.STAGING_RUN_ID))
-    throw new Error("record belongs to another staging run");
-  const current = await promotionFacts(record);
-  const image = requirePromotion(record, current);
-  await requireEnvironment("production");
-  const build = await read("build.json");
+  const authority = await requireController();
+  if (authority.attempt !== 1)
+    throw new Error(
+      "dispatch a new promotion run; approval attempt ambiguity is refused",
+    );
+  const jobs = await attemptJobs(authority);
+  const artifact = selectArtifact(
+    await runArtifacts(authority.runId),
+    "promotion-plan",
+    authority,
+    jobs.find((j) => j.name === "preflight"),
+  );
+  if (artifact.id !== Number(process.env.PLAN_ARTIFACT_ID))
+    throw new Error("frozen plan artifact ID differs");
+  const plan = JSON.parse(await readArtifact(artifact, "promotion-plan.json"));
   if (
-    build.archiveSha256 !== record.image.archiveSha256 ||
-    build.version !== record.image.version
+    recordHash(plan) !== process.env.PLAN_HASH ||
+    recordHash(plan.authority) !== recordHash(authority)
   )
-    throw new Error("promotion metadata differs from verified image");
+    throw new Error("frozen plan changed after approval");
+  const approval = {
+    runId: authority.runId,
+    attempt: authority.attempt,
+    recordHash: plan.recordHash,
+    reviewers: await requireApproval("production"),
+  };
+  const evidence = await stageEvidence(plan.stagingAuthority.runId);
+  const record = evidence.record;
+  const recheck = async () => {
+    await requireController();
+    const current = await stageEvidence(plan.stagingAuthority.runId);
+    if (
+      recordHash(current.artifacts) !== recordHash(plan.artifacts) ||
+      recordHash(current.record) !== plan.recordHash ||
+      current.record.image.reference !== plan.image
+    )
+      throw new Error("frozen staging evidence changed after approval");
+    return requirePromotion(current.record, {
+      mainSha: authority.sha,
+      mainTree: current.record.source.tree,
+      run: current.run,
+      jobs: current.jobs,
+      approval,
+      promotionAuthority: authority,
+    });
+  };
+  const image = await recheck();
+  await requireEnvironment("production");
+  const migrations = await readArtifact(
+    plan.artifacts.metadata,
+    "migrations.sql",
+  );
+  if (recordHash(migrations) !== plan.migrationsHash)
+    throw new Error("migration artifact changed");
+  await writeFile("migrations.sql", migrations);
+  await write("verified.json", record);
   const previous = await inspectRailway();
   if (previous.hasEverDeployed && !previous.activeId)
     throw new Error(
       "production was previously deployed but is not healthy; investigate and recover before promotion",
     );
-  const recovery = JSON.parse(process.env.RECOVERY_EVIDENCE);
+  const recovery = plan.recovery;
   requireRecovery(recovery, previous.activeId ? previous.image : null);
-  const version = process.env.RELEASE_VERSION;
+  const version = plan.version;
   if (!/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version))
     throw new Error("release version must be a semantic version tag");
-  const notes = process.env.RELEASE_NOTES?.trim();
+  const notes = plan.notes;
   if (!notes || notes.length > 2000)
     throw new Error("short release notes are required");
-  const body = `${notes}\n\nSource ${current.mainSha}\nTree ${record.source.tree}\nImage ${image}\nStaging https://github.com/${repository}/actions/runs/${record.authority.runId}\nRecord SHA-256 ${recordHash(record)}`;
+  const body = `${notes}\n\nSource ${record.source.commit}\nTree ${record.source.tree}\nImage ${image}\nStaging https://github.com/${repository}/actions/runs/${record.authority.runId}\nRecord SHA-256 ${recordHash(record)}`;
   let release = await github(`repos/${repository}/releases/tags/${version}`, {
     missing: true,
   });
   if (release) {
     const tag = await github(`repos/${repository}/commits/${version}`);
     if (
-      tag.sha !== current.mainSha ||
+      tag.sha !== record.source.commit ||
       !release.body.includes(recordHash(record))
     )
       throw new Error("version already belongs to another verified source");
@@ -205,52 +314,64 @@ if (operation === "snapshot") {
       method: "POST",
       body: {
         tag_name: version,
-        target_commitish: current.mainSha,
+        target_commitish: record.source.commit,
         name: version,
         body,
         draft: true,
       },
     });
   }
-  requirePromotion(record, await promotionFacts(record));
-  const deployment = {
-    ...(await deployImage(image)),
-    url: process.env.APP_ORIGIN,
-  };
-  await observeDeployment(deployment);
-  const { publicChecks } = await import("./smoke.mjs");
-  await publicChecks({ ...record, deployment });
-  requirePromotion(record, await promotionFacts(record));
-  await write("production.json", {
-    version,
-    source: current.mainSha,
-    image,
-    deployment,
-    recovery,
-    verification:
-      "readiness, unauthorized refusal, runtime Clerk key and release identity; production email login requires operator confirmation",
-    stagedRecordHash: recordHash(record),
-  });
-  execFileSync(
-    "gh",
-    [
-      "release",
-      "upload",
+  await recheck();
+  let deployment;
+  try {
+    deployment = {
+      ...(await deployImage(image, recheck)),
+      url: process.env.APP_ORIGIN,
+    };
+    const { publicChecks } = await import("./smoke.mjs");
+    const automated = await verifyDeployment(
+      { ...record, deployment },
+      recheck,
+      publicChecks,
+    );
+
+    await write("production.json", {
       version,
-      "verified.json",
-      "production.json",
-      "migrations.sql",
-      "--repo",
-      repository,
-      "--clobber",
-    ],
-    { stdio: "inherit" },
-  );
-  await github(`repos/${repository}/releases/${release.id}`, {
-    method: "PATCH",
-    body: { draft: false },
-  });
-  console.log(`Released ${version} at ${deployment.id} with ${image}`);
+      source: record.source.commit,
+      image,
+      deployment,
+      automated,
+      recovery,
+      verification:
+        "readiness, unauthorized refusal, runtime Clerk key and release identity; production email login requires operator confirmation",
+      stagedRecordHash: recordHash(record),
+      approval,
+      planHash: recordHash(plan),
+    });
+    execFileSync(
+      "gh",
+      [
+        "release",
+        "upload",
+        version,
+        "verified.json",
+        "production.json",
+        "migrations.sql",
+        "--repo",
+        repository,
+        "--clobber",
+      ],
+      { stdio: "inherit" },
+    );
+    await github(`repos/${repository}/releases/${release.id}`, {
+      method: "PATCH",
+      body: { draft: false },
+    });
+    console.log(`Released ${version} at ${deployment.id} with ${image}`);
+  } catch (error) {
+    await reportAppliedFailure(error, deployment, image);
+    throw error;
+  }
 } else {
   throw new Error("unknown trusted release operation");
 }

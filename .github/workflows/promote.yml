@@ -28,17 +28,12 @@ concurrency:
   queue: max
   cancel-in-progress: false
 jobs:
-  promote:
+  preflight:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment:
-      name: production
-      url: ${{ vars.APP_ORIGIN }}
-    permissions:
-      contents: write
-      actions: read
-      checks: read
-      pull-requests: read
+    timeout-minutes: 5
+    outputs:
+      hash: ${{ steps.plan.outputs.hash }}
+      artifact: ${{ steps.upload.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -48,29 +43,48 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: controls/release/package-lock.json
-      - run: npm ci --ignore-scripts --prefix controls/release
-      - id: source
-        run: node controls/release/operate.mjs promotion-source
+      - id: plan
+        run: node controls/release/operate.mjs preflight
         env:
           GH_TOKEN: ${{ github.token }}
           STAGING_RUN_ID: ${{ inputs.staging_run_id }}
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_NOTES: ${{ inputs.notes }}
+          RECOVERY_EVIDENCE: ${{ inputs.recovery }}
+      - id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: ${{ steps.source.outputs.artifact }}
-          run-id: ${{ inputs.staging_run_id }}
-          github-token: ${{ github.token }}
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+          name: promotion-plan-${{ github.run_attempt }}
+          path: |
+            promotion-plan.json
+            migrations.sql
+          retention-days: 90
+          if-no-files-found: error
+  promote:
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: ${{ vars.APP_ORIGIN }}
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          name: ${{ steps.source.outputs.imageArtifact }}
-          run-id: ${{ inputs.staging_run_id }}
-          github-token: ${{ github.token }}
+          ref: ${{ github.sha }}
+          path: controls
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts --prefix controls/release
       - run: node controls/release/operate.mjs promote
         env:
           GH_TOKEN: ${{ github.token }}
-          STAGING_RUN_ID: ${{ inputs.staging_run_id }}
-          RELEASE_GATE_APP_ID: ${{ vars.RELEASE_GATE_APP_ID }}
+          PLAN_HASH: ${{ needs.preflight.outputs.hash }}
+          PLAN_ARTIFACT_ID: ${{ needs.preflight.outputs.artifact }}
           RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_NOTES: ${{ inputs.notes }}
           RECOVERY_EVIDENCE: ${{ inputs.recovery }}
@@ -81,3 +95,9 @@ jobs:
           RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
           APP_ORIGIN: ${{ vars.APP_ORIGIN }}
           CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure()
+        with:
+          name: production-failure-${{ github.run_attempt }}
+          path: runtime-evidence
+          retention-days: 3

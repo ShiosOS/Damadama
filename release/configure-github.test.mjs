@@ -4,78 +4,20 @@ import {
   configure,
   environmentPlan,
   assertConfigured,
-  summarizeChecks,
 } from "./configure-github.mjs";
 import { mainRules } from "./policy.mjs";
 
-const source = { head: "head", merge: "merge" };
-
-test("image publication has its own protected main approval boundary", async () => {
-  const plan = await configure("plan", {
-    bootstrap: false,
-    appId: 9001,
-    reviewerId: 123,
-  });
-  assert.deepEqual(Object.keys(plan.environments), [
-    "staging",
-    "staging-verification",
-    "production",
-    "image-publication",
+test("staging is automatic and production requires protected approval", async () => {
+  const plan = await configure("plan", { reviewerId: 123 });
+  assert.deepEqual(Object.keys(plan.environments), ["staging", "production"]);
+  assert.deepEqual(plan.environments.staging.reviewers, []);
+  assert.deepEqual(plan.environments.production.reviewers, [
+    { type: "User", id: 123 },
   ]);
-  assert.deepEqual(plan.environments["image-publication"], {
-    wait_timer: 0,
-    prevent_self_review: false,
-    can_admins_bypass: false,
-    reviewers: [{ type: "User", id: 123 }],
-    deployment_branch_policy: {
-      protected_branches: false,
-      custom_branch_policies: true,
-    },
-  });
 });
-function successfulCheck(name, head_sha, appId) {
-  return {
-    name,
-    head_sha,
-    app: { id: appId },
-    status: "completed",
-    conclusion: "success",
-  };
-}
-
-test("probe recognizes ordinary Actions CI attached to the current PR head", () => {
-  const checks = summarizeChecks(
-    [{ context: "release-controls", integration_id: 15368 }],
-    source,
-    [successfulCheck("release-controls", "head", 15368)],
-    [],
-  );
-  assert.equal(checks[0].success, true);
-});
-
-test("probe refuses head-only staging evidence for the proposed merge", () => {
-  const checks = summarizeChecks(
-    [{ context: "staging/verified", integration_id: 9001 }],
-    source,
-    [successfulCheck("staging/verified", "head", 9001)],
-    [],
-  );
-  assert.equal(checks[0].success, false);
-});
-
-test("probe refuses head-only CI attestation for the proposed merge", () => {
-  const checks = summarizeChecks(
-    [{ context: "ci/verified", integration_id: 9001 }],
-    source,
-    [successfulCheck("ci/verified", "head", 9001)],
-    [],
-  );
-  assert.equal(checks[0].success, false);
-});
-
 function configured() {
   const plan = {
-    ruleset: mainRules(9001),
+    ruleset: mainRules(),
     environments: { staging: environmentPlan(123) },
   };
   const observed = {
@@ -143,16 +85,6 @@ for (const [change, expected] of [
     assert.throws(() => assertConfigured(plan, observed), expected);
   });
 }
-test("bootstrap explicitly omits staging and cannot be confused with full enforcement", () => {
-  const bootstrap = mainRules(undefined, true);
-  const checks = bootstrap.rules.find(
-    (r) => r.type === "required_status_checks",
-  ).parameters.required_status_checks;
-  assert.deepEqual(
-    checks.map((c) => c.context),
-    ["release-controls"],
-  );
-});
 test("environment plan requires a concrete human reviewer", () => {
   assert.throws(() => environmentPlan(0), /reviewer/);
   assert.equal(environmentPlan(123).can_admins_bypass, false);
