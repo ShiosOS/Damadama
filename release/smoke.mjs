@@ -1,18 +1,17 @@
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
-import { chromium, expect } from "@playwright/test";
 
 export async function publicChecks(record) {
   const origin = new URL(record.deployment.url);
   if (origin.protocol !== "https:" || origin.origin !== record.deployment.url)
     throw new Error("a configured HTTPS origin is required");
   for (const endpoint of ["/health/live", "/health/ready"]) {
-    const response = await fetch(`${origin}${endpoint}`, {
+    const response = await fetch(`${origin.origin}${endpoint}`, {
       signal: AbortSignal.timeout(15_000),
     });
     assert.equal(response.status, 200, `${endpoint} readiness`);
   }
-  const unauthenticated = await fetch(`${origin}/api/habits`, {
+  const unauthenticated = await fetch(`${origin.origin}/api/habits`, {
     signal: AbortSignal.timeout(15_000),
   });
   assert.equal(
@@ -21,7 +20,9 @@ export async function publicChecks(record) {
     "API refuses missing authentication",
   );
   const config = await (
-    await fetch(`${origin}/api/config`, { signal: AbortSignal.timeout(15_000) })
+    await fetch(`${origin.origin}/api/config`, {
+      signal: AbortSignal.timeout(15_000),
+    })
   ).json();
   assert.equal(
     config.clerkPublishableKey,
@@ -34,7 +35,7 @@ export async function publicChecks(record) {
     "hosted environment uses an isolated production Clerk instance",
   );
   const runtime = await (
-    await fetch(`${origin}/release.json`, {
+    await fetch(`${origin.origin}/release.json`, {
       signal: AbortSignal.timeout(15_000),
     })
   ).json();
@@ -103,6 +104,7 @@ async function authenticatedGet(page, path) {
 }
 
 export async function stagingBrowserChecks(record) {
+  const { chromium, expect } = await import("@playwright/test");
   const a = process.env.CLERK_TEST_USER_A;
   const b = process.env.CLERK_TEST_USER_B;
   if (a === b || !a || !b)
