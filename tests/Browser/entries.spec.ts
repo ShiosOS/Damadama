@@ -230,6 +230,54 @@ test("retry after a lost acknowledgment preserves the exact edit", async ({
   expect(writes[1]).toEqual(writes[0]);
 });
 
+test("creating another habit preserves an entry awaiting acknowledgment", async ({
+  page,
+}) => {
+  await openDailyHabit(page, "entriesCreation", "Entry during creation");
+  const controls = controlsFor(page, "Entry during creation");
+  await expect(controls).toBeVisible();
+  const committed = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  await page.route("**/api/habits/*/entries/*", async (route) => {
+    const response = await route.fetch();
+    expect(response.status()).toBe(200);
+    committed.resolve();
+    await release.promise;
+    await route.fulfill({ response });
+  });
+  await controls.getByRole("button", { name: "Good", exact: true }).click();
+  await committed.promise;
+  try {
+    await page.getByRole("button", { name: "Add habit", exact: true }).click();
+    const panel = page.getByRole("dialog", { name: "Create a habit" });
+    await panel
+      .getByLabel("Name", { exact: true })
+      .fill("New habit during entry save");
+    await panel.getByLabel("Good", { exact: true }).fill("Read one page");
+    await panel.getByLabel("Better", { exact: true }).fill("Read five pages");
+    await panel.getByLabel("Best", { exact: true }).fill("Read ten pages");
+    await panel.getByLabel("Sunday", { exact: true }).check();
+    await panel
+      .getByRole("button", { name: "Save habit", exact: true })
+      .click();
+    await expect(panel).toHaveCount(0);
+    await expect(
+      page
+        .getByRole("region", { name: "Today", exact: true })
+        .getByRole("heading", {
+          name: "New habit during entry save",
+          exact: true,
+        }),
+    ).toBeVisible();
+    await expect(controls.getByRole("status")).toHaveText("No entry recorded.");
+  } finally {
+    release.resolve();
+  }
+  await expect(controls.getByRole("status")).toHaveText("Good is saved.");
+  await page.reload();
+  await expect(controls.getByRole("status")).toHaveText("Good is saved.");
+});
+
 test("the browser displays the server winner when its own edit loses", async ({
   page,
 }) => {
