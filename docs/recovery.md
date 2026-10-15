@@ -14,6 +14,8 @@ This tooling can land independently of application code, after the release-polic
 6. Use a dedicated database backup role with read access to all application tables and default read privileges for future tables.
 7. Record the latest successful completion and alert if it is older than 24 hours. Review failed cron logs each day until monitoring is established.
 
+The backup image limits each run to 1,800 seconds by default. Set `BACKUP_MAX_SECONDS` to a positive whole number of seconds to change that limit. The default is an engineering cap to stop a stalled job; it has not been sized against hosted backup volume. An invalid value exits with status 2 before the backup starts. A run that reaches the limit normally exits with status 124. GNU `timeout` sends `TERM`, then `KILL` after five more seconds if the process has not exited. The `KILL` fallback can leave temporary files because the shell cannot run its cleanup trap.
+
 Create these variables separately in each backup service:
 
 ```text
@@ -38,6 +40,7 @@ The job validates its environment name and requires all connection, bucket, and 
 
 The job writes a PostgreSQL custom-format dump, encrypts it with age, and uploads the encrypted archive and SHA-256 checksum.
 It uploads completion JSON only after both objects succeed. Each attempt uses a unique timestamp and nonce; retries cannot overwrite a completed backup.
+Completion JSON marks restorable backup data after the archive and checksum uploads; the retention sweep runs afterward. A retention failure still fails the job and prints no final success JSON, but can leave a valid newly completed backup.
 Restore only objects with completion JSON and a matching checksum. Failed uploads may leave uncommitted objects; they are not successful backups.
 The dump covers the whole application database, including future daily-entry tables when those features land.
 
@@ -73,6 +76,30 @@ It restores without ownership/ACL commands, `--clean`, or EF downgrade and uses 
 An existing target is never cleared automatically. PostgreSQL startup applies only the committed forward migrations.
 The first one-hour rehearsal is a local sample; measure the hosted exercise with realistic backup sizes after setup.
 
+## Recover after a spending hard stop
+
+The [approved $20 Compute limit](hosting-cost.md) can stop every workload in the Railway workspace, including both environments and their daily backup jobs.
+At the limit, Railway also suspends bucket reads and uploads. Existing bucket data remains billed.
+Preserve the database volumes, completed backups, and the hard limit. A spending outage does not authorize data deletion or a restore over the existing database.
+
+1. Record the outage time, current-cycle usage, billing-cycle reset date, service status, and saved $20 limit and $15 alert in the correct workspace.
+2. Record each environment's last-known backup completion from available logs or prior records. Mark it unknown if no record is available. Record missed jobs and any gap beyond the agreed 24-hour loss window; verify stored objects after bucket access returns.
+3. If the operator keeps the no-overage policy, wait for the next billing-cycle reset. Do not raise or remove the limit to restart services.
+4. If earlier recovery needs more spend, obtain explicit operator approval stating the new spending boundary and recovery action before changing anything.
+5. After reset, confirm that the $20 limit and $15 alert remain saved and that the new cycle has enough headroom. Inspect every service rather than assuming recovery succeeded.
+6. Verify PostgreSQL readiness and the retained volume first. For previously approved app deployments, check the retained image digest, app readiness, real sign-in, and saved-data reads.
+7. If automatic recovery fails, redeploy only the previously approved service image after checking remaining headroom. Never deploy an unapproved production app as a recovery shortcut.
+8. After bucket access returns, identify the latest completed candidate from the bucket's completion records, even if step 2 recorded unknown. Verify its environment, archive, and checksum before treating it as recoverable. If no valid candidate exists, record that no recoverable backup is verified. Check job state and the next schedule. When budget headroom permits, run the approved backup job and verify its checksum and completion record before declaring backups current.
+
+Railway [tries to restart resources at the next billing cycle](https://docs.railway.com/pricing/cost-control#usage-limits-faq).
+Do not assume that a reset, manual redeployment, or unchanged service settings proves a private image pull or a healthy application.
+Record what actually restarted and what remains offline. As of 2026-10-15, both hosted backup jobs have completed and their encrypted archive checksums have been verified. Both applications remain undeployed; real sign-in, saved-data reads, decryption, and hosted restore remain unverified.
+
+A missed backup can leave the latest recoverable copy older than 24 hours. A later successful backup does not fill the missing recovery interval.
+If a restore is necessary, state the backup time and lost-write window before requesting restore and cutover approval.
+The one-hour restore target depends on accessible backups, a usable approved image, a healthy target, and sufficient budget headroom.
+Waiting for billing reset can exceed that target. Do not claim a one-hour recovery guarantee under the hard limit or trigger a live hard stop to test this procedure.
+
 ## Roll back a release
 
 1. Read the production release's source, digest, previous image, backup, and compatibility evidence.
@@ -100,6 +127,7 @@ checks migration/readiness, restarts it, encrypts and uploads sample data to an 
 restores a separate database, and starts the image against the restored schema.
 It compares independently read owner, definition text, UTC instant, weekdays, timezone, and saved dates.
 It also checks refusal of corrupt archives and nonempty targets.
+It checks that stalled dump and archive upload commands hit a three-second test deadline without publishing a completion marker. A stalled retention sweep hits a fifteen-second test deadline, after the new archive, checksum, and completion marker are present. The same tests check temporary-file cleanup after normal termination, reject a zero deadline, and preserve an expired completed backup when replacement manifest upload fails.
 Every container/network is created for the exercise and removed by its captured identity. Other local services and Aspire volumes are untouched.
 The generated age identity is local test data under `.audit`; it is never committed or uploaded as CI evidence.
 
