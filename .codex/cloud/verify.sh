@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+script_directory=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+cd "${1:-$script_directory/../..}"
 
-export DOTNET_ROOT="$HOME/.dotnet"
-export PATH="$HOME/.local/share/damadama-cloud/node/bin:$HOME/.bun/bin:$DOTNET_ROOT:$PATH"
-export DOTNET_CLI_TELEMETRY_OPTOUT=1
+source "$script_directory/runtime.sh"
 
 repository=$(git remote get-url origin)
 revision=$(git rev-parse HEAD)
 printf 'Repository %s\nRevision %s\n' "$repository" "$revision"
-node --version
-bun --version
-dotnet --list-sdks
+cloud_require_versions
 
 docker_ready=false
 if command -v docker >/dev/null && timeout 20 docker info --format '{{.ServerVersion}}'; then
@@ -64,3 +61,5 @@ else
   node --test release/*.test.mjs
   echo 'Release tooling checks passed. No application exists on this revision.'
 fi
+
+[[ "$docker_ready" == true ]] || exit 2

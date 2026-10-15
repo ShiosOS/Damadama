@@ -16,7 +16,8 @@ Keep cloud setup changes on their own branch. Select the application branch expl
 
 ## Prepare and test dependencies
 
-Ask the setup conversation to use Ubuntu 24.04 x64 with Bash, curl, unzip, tar, xz, Git, and SHA-256 tools.
+Use Linux x64 with Bash, curl, unzip, tar, xz, Git, and SHA-256 tools.
+The existing cloud VM runs Debian 13.6. Local validation uses Ubuntu 24.04.
 Use the repository install script after this setup PR is available on the selected revision:
 
 ```bash
@@ -26,17 +27,33 @@ bash .codex/cloud/verify.sh
 ```
 
 The script pins .NET SDK 10.0.112, Bun 1.3.14, and Node.js 24.21.0.
-It installs runtimes under the cloud user's home directory and sets their paths explicitly in both scripts.
-It restores locked dependencies and installs the lockfile's Playwright Chromium with its Linux dependencies.
-It installs .NET's ICU, OpenSSL, and zlib dependencies, plus `tzdata` for IANA device calendar dates.
-System package installation requires root or existing passwordless sudo access.
+The shared `runtime.sh` puts runtimes, .NET CLI state, and package/browser caches under `.audit/codex-cloud-runtime`.
+That directory is excluded from Git and the application's existing lint rules.
+To use another writable volume, export an absolute `DAMADAMA_CLOUD_ROOT` consistently for both commands.
+The scripts preserve `HOME`, which is read-only in the existing cloud VM.
+They restore locked dependencies and install the lockfile's Playwright Chromium.
+The host must already supply .NET's ICU, OpenSSL, and zlib dependencies, Chromium's native libraries, and `tzdata` for IANA device calendar dates.
+Setup does not install system packages. Preserve vendor diagnostics when a host dependency is missing.
 On a revision with application manifests, it restores Bun dependencies, .NET tools, and NuGet packages.
-On today's `main`, it restores only the release package with `npm ci --ignore-scripts`.
+On today's `main`, it restores the release package with `npm ci --ignore-scripts` and installs its pinned Chromium.
+Run setup sequentially within one checkout.
+
+To prepare an older branch without copying setup files into tracked source, retain all three scripts together outside the checkout.
+Pass the target checkout as their optional first argument:
+
+```bash
+export DAMADAMA_CLOUD_ROOT=/workspace/.damadama/dev-runtime
+bash /workspace/.damadama/cloud-tools/setup.sh /workspace/Damadama
+bash /workspace/.damadama/cloud-tools/verify.sh /workspace/Damadama
+```
+
+Extract those scripts with `git show` from an explicitly reviewed setup commit after fetching it from this repository.
+Record that full commit in the environment's installation instructions.
 
 Allow package downloads using **Package managers** and the additional hosts actually required by setup.
-Typical extra hosts include `nodejs.org`, `bun.com`, `dot.net`, `builds.dotnet.microsoft.com`, `ci.dot.net`,
+Typical extra hosts include `nodejs.org`, `github.com`, `release-assets.githubusercontent.com`, `dot.net`, `builds.dotnet.microsoft.com`, `ci.dot.net`,
 `api.nuget.org`, `globalcdn.nuget.org`, `cdn.playwright.dev`, `playwright.download.prss.microsoft.com`,
-and Docker Hub's `auth.docker.io`, `registry-1.docker.io`, and image download hosts.
+`storage.googleapis.com`, and Docker Hub's `auth.docker.io`, `registry-1.docker.io`, and image download hosts.
 Use failed download logs to identify redirect hosts before expanding access.
 
 Run the capability probe early. It checks an actual Docker daemon, a disposable PostgreSQL container, and a headless Chromium page.
@@ -44,7 +61,10 @@ The PostgreSQL probe has no network access or published ports. It removes its an
 It uses a generated password that exists only for that probe.
 
 If Docker is unavailable, record PostgreSQL, Testcontainers, and Aspire startup as unverified.
-The application probe exits with code 2 and does not report `bun run check` as passed.
+The probe does not run the full application check.
+If its other probes succeed, it exits with code 2 to report missing Docker.
+In the measured cloud VM, the command tool's scoped network permission was required to reach the existing local Docker socket.
+Use that supported permission when needed. Keep the inherited daemon and proxy configuration.
 Keep the existing check command and tests intact.
 An installed PostgreSQL executable does not establish Testcontainers support.
 
@@ -101,7 +121,13 @@ Detect the actual Docker endpoint in cloud instead of copying that local overrid
 Repeated application checks can lint generated browser reports in a reused checkout.
 That separate application issue is [tracked in issue 20](https://github.com/ShiosOS/Damadama/issues/20).
 This local container does not establish cloud runtime support.
-Cloud environment inspection is blocked by ChatGPT sign-in in the available browser.
-No cloud environment identifier, published setup, or cloud task result has been verified yet.
-Keep this limitation explicit until the fresh cloud task above completes.
+The existing private **Damadama** environment for `ShiosOS/Damadama` was reused after sign-in.
+A [fresh cloud acceptance task](https://chatgpt.com/local/01a13dcd-fbd4-7240-86d4-967b1aed90dc) ran on Debian 13.6 x64 at `465b816`.
+It passed all 171 release tests with zero skips, repeated locked npm setup, queried PostgreSQL 17.11 through Docker 28.4.0,
+and installed and ran .NET 10.0.112 and Bun 1.3.14 in writable workspace paths.
+The supplied Node was 24.19.0, so this run does not verify the script's Node 24.21.0 pin.
+Pinned Chromium installation and launch failed because its download redirects to `storage.googleapis.com`, where the proxy returned HTTP 403.
+The [cloud results](../.github/evidence/codex-cloud/cloud-results.md) distinguish measured capabilities from remaining checks.
+The setup conversation's browser panel reports **Couldn't confirm publishing status** and disables **Save draft** and **Publish**.
+It instructs the user to reopen setup where it started. Publication of the corrected development setup remains unverified.
 Planning and the decision record are in the private [Notion setup page](https://app.notion.com/p/3f99c0510118811a9c60fbb6107a8e54).
