@@ -1,0 +1,6 @@
+{
+  "fontGzipBytes": 400143,
+  "exitCode": 1,
+  "stdout": "",
+  "stderr": "Referenced asset oversized.woff2 is outside the inventoried assets directory."
+}

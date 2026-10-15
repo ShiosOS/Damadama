@@ -15,6 +15,16 @@ export default defineConfig({
     }),
   ],
   cacheDir: resolve(".audit/vite-browser"),
+  build: {
+    outDir: resolve(".audit/browser-build"),
+    emptyOutDir: true,
+  },
+  preview: {
+    host: "127.0.0.1",
+    port: 5174,
+    strictPort: true,
+    proxy: { "/api": "http://localhost:5055" },
+  },
   server: {
     host: "127.0.0.1",
     port: 5174,

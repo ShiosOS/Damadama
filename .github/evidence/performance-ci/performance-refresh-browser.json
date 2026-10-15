@@ -1,0 +1,24 @@
+{
+  "sourceRevision": "b8689dbb1ee64606c700e4b909eb58f957d4e290",
+  "browser": "chromium",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "environment": "optimized local fixture, actual API and ephemeral PostgreSQL, test RSA JWT",
+  "budgets": {
+    "cls": 0.1,
+    "requests": 20
+  },
+  "cls": 0.0020248173236846923,
+  "requests": 15,
+  "runtimeErrors": 0,
+  "failedRequests": 0,
+  "nonSuccessResponses": 0,
+  "optimizedScripts": 1,
+  "diagnosticTimesMs": {
+    "ready": 221.00260000000162,
+    "save": 286.89969999999994,
+    "reload": 96.93529999999919
+  }
+}

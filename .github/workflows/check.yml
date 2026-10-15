@@ -1,7 +1,6 @@
 name: Check
 on:
   pull_request:
-    branches: [main]
 permissions:
   contents: read
 concurrency:
@@ -65,6 +64,9 @@ jobs:
           name: failure-reports-${{ github.run_attempt }}
           path: |
             .audit/TestResults
+            .audit/performance-assets.json
+            .audit/performance-browser.json
+            .audit/performance-saved.png
             test-results
             playwright-report
           retention-days: 3

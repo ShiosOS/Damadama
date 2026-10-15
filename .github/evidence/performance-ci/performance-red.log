@@ -1,0 +1,28 @@
+✔ accepts a complete small build and reports exact asset counts (119.3944ms)
+✖ rejects JavaScript above the committed gzip budget (115.3018ms)
+✔ rejects an entrypoint that references a missing asset (72.0479ms)
+✔ rejects an empty build instead of reporting zero-byte success (66.1856ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 3
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 460.0416
+
+✖ failing tests:
+
+test at scripts\performance-budget.test.mjs:36:1
+✖ rejects JavaScript above the committed gzip budget (115.3018ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///C:/Users/emofo/.codex/worktrees/ci-browser-quality/Damadama%20Rewrite/scripts/performance-budget.test.mjs:39:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    operator: 'rejects',
+    diff: 'simple'
+  }

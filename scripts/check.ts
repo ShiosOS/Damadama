@@ -32,6 +32,16 @@ const commands = [
     "dev/Properties/launchSettings.json",
   ],
   ["bun", "run", "--cwd", "web", "build"],
+  ["bun", "run", "check:performance"],
+  [
+    "bun",
+    "x",
+    "--no-install",
+    "vite",
+    "build",
+    "--config",
+    "tests/Browser/vite.config.ts",
+  ],
   ["node", "node_modules/@playwright/test/cli.js", "install", "chromium"],
   [
     "node",

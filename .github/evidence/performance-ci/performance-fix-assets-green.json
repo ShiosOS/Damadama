@@ -1,0 +1,80 @@
+{
+  "sourceRevision": "9c8437e1e4a46965513b53f60d7fa569c0fd18ea",
+  "runtime": "v24.19.0",
+  "budgets": {
+    "javascript": 170000,
+    "css": 32000,
+    "fonts": 150000,
+    "totalGzipBytes": 360000,
+    "assetCount": 10
+  },
+  "assetCount": 7,
+  "totalGzipBytes": 313242,
+  "categories": {
+    "javascript": {
+      "assetCount": 1,
+      "bytes": 489552,
+      "gzipBytes": 148847
+    },
+    "css": {
+      "assetCount": 1,
+      "bytes": 202296,
+      "gzipBytes": 26734
+    },
+    "fonts": {
+      "assetCount": 5,
+      "bytes": 137516,
+      "gzipBytes": 137661
+    },
+    "other": {
+      "assetCount": 0,
+      "bytes": 0,
+      "gzipBytes": 0
+    }
+  },
+  "assets": [
+    {
+      "file": "assets/index-Cbq4DGlp.js",
+      "category": "javascript",
+      "bytes": 489552,
+      "gzipBytes": 148847
+    },
+    {
+      "file": "assets/index-DfIX3NNC.css",
+      "category": "css",
+      "bytes": 202296,
+      "gzipBytes": 26734
+    },
+    {
+      "file": "assets/nunito-cyrillic-ext-wght-normal-D4X5GqEv.woff2",
+      "category": "fonts",
+      "bytes": 28928,
+      "gzipBytes": 28956
+    },
+    {
+      "file": "assets/nunito-cyrillic-wght-normal-CY6AOgYE.woff2",
+      "category": "fonts",
+      "bytes": 20776,
+      "gzipBytes": 20804
+    },
+    {
+      "file": "assets/nunito-latin-ext-wght-normal-CXYtwYOx.woff2",
+      "category": "fonts",
+      "bytes": 35588,
+      "gzipBytes": 35621
+    },
+    {
+      "file": "assets/nunito-latin-wght-normal-BzFMHfZw.woff2",
+      "category": "fonts",
+      "bytes": 39128,
+      "gzipBytes": 39161
+    },
+    {
+      "file": "assets/nunito-vietnamese-wght-normal-U01xdrZh.woff2",
+      "category": "fonts",
+      "bytes": 13096,
+      "gzipBytes": 13119
+    }
+  ],
+  "violations": []
+}

@@ -31,6 +31,8 @@ Run `bun run check`. The first run downloads Chromium, which subsequent runs reu
 The command checks locked dependencies, builds, formatting, nested conditional lint rules, Vue types, domain rules, Reqnroll API examples, PostgreSQL integration, and browser flows.
 An unavailable Docker engine fails the command. Testcontainers databases are separate from your persistent local database.
 Pull request checks cache dependencies, cancel superseded runs, and retain failed reports for three days.
+The [browser performance checks](docs/browser-performance.md) document fixed production-asset, layout, and request budgets, the baseline, and fixture limits.
+Browser tests use optimized assets and exclude authentication tokens from reports.
 
 Acceptance examples use ephemeral RSA-signed tokens through the ordinary JWT middleware configured by the test host.
 Playwright mounts the actual habit page through a separate entry in `tests/Browser`, backed by the actual API and PostgreSQL.

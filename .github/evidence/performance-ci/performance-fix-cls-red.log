@@ -1,0 +1,33 @@
+[WebServer] (node:34976) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 1 test using 1 worker
+
+(node:29776) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  1 tests\Browser\performance.spec.ts:19:1 › optimized habit page stays within layout and request budgets (1.9s)
+
+
+  1) tests\Browser\performance.spec.ts:19:1 › optimized habit page stays within layout and request budgets
+
+    Error: expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 0.1
+    Received:    0.3031966923236847
+
+      181 |   expect(nonSuccessResponses).toBe(0);
+      182 |   expect(requests).toBeLessThanOrEqual(measurement.budgets.requests);
+    > 183 |   expect(measurement.cls).toBeLessThanOrEqual(measurement.budgets.cls);
+          |                           ^
+      184 | });
+      185 |
+        at C:\Users\emofo\.codex\worktrees\ci-browser-quality\Damadama Rewrite\tests\Browser\performance.spec.ts:183:27
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\performance-optimized-habi-74b1a--layout-and-request-budgets\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\performance-optimized-habi-74b1a--layout-and-request-budgets\error-context.md
+
+  1 failed
+    tests\Browser\performance.spec.ts:19:1 › optimized habit page stays within layout and request budgets
