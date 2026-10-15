@@ -5,7 +5,8 @@ using Testcontainers.PostgreSql;
 await using var database = new PostgreSqlBuilder("postgres:17-alpine").Build();
 await database.StartAsync();
 using var app = new TestApp(database.GetConnectionString());
-app.UseKestrel(5055);
+var apiPort = int.Parse(Environment.GetEnvironmentVariable("DAMADAMA_API_PORT") ?? "5055");
+app.UseKestrel(apiPort);
 var fixture = JsonSerializer.Serialize(new
 {
     owner = app.Token(),
@@ -42,7 +43,7 @@ await File.WriteAllTextAsync("tests/Browser/fixture.json", fixture);
 if (Directory.Exists(".audit/browser-build"))
     await File.WriteAllTextAsync(".audit/browser-build/fixture.json", fixture);
 using var client = app.CreateClient();
-Console.WriteLine("Browser fixture ready at http://localhost:5055. This does not test Clerk sign-in.");
+Console.WriteLine($"Browser fixture ready at http://localhost:{apiPort}. This does not test Clerk sign-in.");
 var stopped = new TaskCompletionSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; stopped.TrySetResult(); };
 System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += _ => stopped.TrySetResult();
