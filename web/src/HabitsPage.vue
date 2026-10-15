@@ -265,6 +265,7 @@ async function save() {
         :description="activity.message"
       />
       <TodayView
+        :key="accountId ?? ''"
         :account-id="accountId"
         :get-token="getToken"
         :saved-revision="savedRevision"

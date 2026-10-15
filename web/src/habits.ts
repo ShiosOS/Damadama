@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { entrySchema, type EntryEdit } from "./entries";
 
 export const habitSchema = z.object({
   id: z.uuid(),
@@ -66,6 +67,24 @@ export function habitsApi(getToken: () => Promise<string | null>) {
     return parsed.data;
   }
   return {
+    entries: (date: string) =>
+      request(
+        `/api/entries?date=${encodeURIComponent(date)}`,
+        z.array(entrySchema),
+      ),
+    saveEntry: (
+      habitId: string,
+      date: string,
+      input: EntryEdit & { deviceToday: string; timeZone: string },
+    ) =>
+      request(
+        `/api/habits/${habitId}/entries/${encodeURIComponent(date)}`,
+        entrySchema,
+        {
+          method: "PUT",
+          body: JSON.stringify(input),
+        },
+      ),
     list: () => request("/api/habits", z.array(habitSchema)),
     scheduled: (date: string) =>
       request(
