@@ -1,0 +1,27 @@
+{
+  "focusBefore": {
+    "tag": "BODY",
+    "id": "",
+    "role": null,
+    "label": null,
+    "documentFocused": true,
+    "inDialog": false
+  },
+  "focusAfter": {
+    "tag": "BODY",
+    "id": "",
+    "role": null,
+    "label": null,
+    "documentFocused": true,
+    "inDialog": false
+  },
+  "afterTab": {
+    "tag": "BODY",
+    "id": "",
+    "role": null,
+    "label": null,
+    "documentFocused": false,
+    "inDialog": false
+  },
+  "moves": 0
+}

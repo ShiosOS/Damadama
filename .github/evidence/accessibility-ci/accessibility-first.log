@@ -1,0 +1,212 @@
+[WebServer] (node:12792) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 6 tests using 1 worker
+
+(node:17404) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 tests\Browser\accessibility.spec.ts:80:1 › the audit rejects an unnamed button and accepts the repaired page (1.5s)
+  x  2 tests\Browser\accessibility.spec.ts:105:1 › the production entry explains missing sign-in configuration accessibly (871ms)
+(node:13396) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  3 tests\Browser\accessibility.spec.ts:142:1 › signed-out and expired-session messages pass WCAG scans (1.6s)
+(node:32344) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  4 tests\Browser\accessibility.spec.ts:169:1 › keyboard creation contains focus, explains API refusal, and persists a save (2.9s)
+(node:23080) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 5 tests\Browser\accessibility.spec.ts:328:3 › mobile creation and saved content stay usable (2.5s)
+  ok 6 tests\Browser\accessibility.spec.ts:328:3 › zoom creation and saved content stay usable (2.2s)
+
+
+  1) tests\Browser\accessibility.spec.ts:105:1 › the production entry explains missing sign-in configuration accessibly
+
+    Error: WCAG violations in application-configuration
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 23
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "help": "Elements must meet minimum color contrast ratio thresholds",
+    +     "id": "color-contrast",
+    +     "impact": "serious",
+    +     "nodes": Array [
+    +       Object {
+    +         "failureSummary": "Fix any of the following:
+    +   Element has insufficient color contrast of 1.91 (foreground color: #ffffff, background color: #f0b100, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1",
+    +         "target": Array [
+    +           ".font-medium",
+    +         ],
+    +       },
+    +       Object {
+    +         "failureSummary": "Fix any of the following:
+    +   Element has insufficient color contrast of 1.78 (foreground color: #fef7e6, background color: #f0b100, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1",
+    +         "target": Array [
+    +           ".opacity-90",
+    +         ],
+    +       },
+    +     ],
+    +   },
+    + ]
+
+      75 |
+      76 | function assertAccessible(report: ScanReport) {
+    > 77 |   expect(report.violations, `WCAG violations in ${report.state}`).toEqual([]);
+         |                                                                   ^
+      78 | }
+      79 |
+      80 | test("the audit rejects an unnamed button and accepts the repaired page", async ({
+        at assertAccessible (C:\Users\emofo\.codex\worktrees\ci-browser-quality\Damadama Rewrite\tests\Browser\accessibility.spec.ts:77:67)
+        at C:\Users\emofo\.codex\worktrees\ci-browser-quality\Damadama Rewrite\tests\Browser\accessibility.spec.ts:139:3
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\accessibility-the-producti-db380-in-configuration-accessibly\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #4: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\accessibility-the-producti-db380-in-configuration-accessibly\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\accessibility-the-producti-db380-in-configuration-accessibly\video-1.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\accessibility-the-producti-db380-in-configuration-accessibly\error-context.md
+
+  2) tests\Browser\accessibility.spec.ts:142:1 › signed-out and expired-session messages pass WCAG scans
+
+    Error: WCAG violations in expired-session
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 23
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "help": "Elements must meet minimum color contrast ratio thresholds",
+    +     "id": "color-contrast",
+    +     "impact": "serious",
+    +     "nodes": Array [
+    +       Object {
+    +         "failureSummary": "Fix any of the following:
+    +   Element has insufficient color contrast of 3.8 (foreground color: #ffffff, background color: #fb2c36, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1",
+    +         "target": Array [
+    +           "div[data-slot=\"title\"]",
+    +         ],
+    +       },
+    +       Object {
+    +         "failureSummary": "Fix any of the following:
+    +   Element has insufficient color contrast of 3.3 (foreground color: #ffeaeb, background color: #fb2c36, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1",
+    +         "target": Array [
+    +           ".opacity-90",
+    +         ],
+    +       },
+    +     ],
+    +   },
+    + ]
+
+      75 |
+      76 | function assertAccessible(report: ScanReport) {
+    > 77 |   expect(report.violations, `WCAG violations in ${report.state}`).toEqual([]);
+         |                                                                   ^
+      78 | }
+      79 |
+      80 | test("the audit rejects an unnamed button and accepts the repaired page", async ({
+        at assertAccessible (C:\Users\emofo\.codex\worktrees\ci-browser-quality\Damadama Rewrite\tests\Browser\accessibility.spec.ts:77:67)
+        at C:\Users\emofo\.codex\worktrees\ci-browser-quality\Damadama Rewrite\tests\Browser\accessibility.spec.ts:166:3
+
+    attachment #5: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\accessibility-signed-out-a-a59d8-on-messages-pass-WCAG-scans\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #6: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\accessibility-signed-out-a-a59d8-on-messages-pass-WCAG-scans\video-1.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #7: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\accessibility-signed-out-a-a59d8-on-messages-pass-WCAG-scans\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #8: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\accessibility-signed-out-a-a59d8-on-messages-pass-WCAG-scans\video-2.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\accessibility-signed-out-a-a59d8-on-messages-pass-WCAG-scans\error-context.md
+
+  3) tests\Browser\accessibility.spec.ts:169:1 › keyboard creation contains focus, explains API refusal, and persists a save
+
+    Error: WCAG violations in validation-refusal
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 23
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "help": "Elements must meet minimum color contrast ratio thresholds",
+    +     "id": "color-contrast",
+    +     "impact": "serious",
+    +     "nodes": Array [
+    +       Object {
+    +         "failureSummary": "Fix any of the following:
+    +   Element has insufficient color contrast of 3.8 (foreground color: #ffffff, background color: #fb2c36, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1",
+    +         "target": Array [
+    +           ".text-sm.font-medium[data-slot=\"title\"]",
+    +         ],
+    +       },
+    +       Object {
+    +         "failureSummary": "Fix any of the following:
+    +   Element has insufficient color contrast of 3.3 (foreground color: #ffeaeb, background color: #fb2c36, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1",
+    +         "target": Array [
+    +           ".opacity-90",
+    +         ],
+    +       },
+    +     ],
+    +   },
+    + ]
+
+      75 |
+      76 | function assertAccessible(report: ScanReport) {
+    > 77 |   expect(report.violations, `WCAG violations in ${report.state}`).toEqual([]);
+         |                                                                   ^
+      78 | }
+      79 |
+      80 | test("the audit rejects an unnamed button and accepts the repaired page", async ({
+        at assertAccessible (C:\Users\emofo\.codex\worktrees\ci-browser-quality\Damadama Rewrite\tests\Browser\accessibility.spec.ts:77:67)
+        at C:\Users\emofo\.codex\worktrees\ci-browser-quality\Damadama Rewrite\tests\Browser\accessibility.spec.ts:254:3
+
+    attachment #7: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\accessibility-keyboard-cre-04a56-refusal-and-persists-a-save\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #8: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\accessibility-keyboard-cre-04a56-refusal-and-persists-a-save\video-3.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #9: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\accessibility-keyboard-cre-04a56-refusal-and-persists-a-save\video-2.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #10: video (video/webm) ─────────────────────────────────────────────────────────────
+    test-results\accessibility-keyboard-cre-04a56-refusal-and-persists-a-save\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #11: video (video/webm) ─────────────────────────────────────────────────────────────
+    test-results\accessibility-keyboard-cre-04a56-refusal-and-persists-a-save\video-1.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\accessibility-keyboard-cre-04a56-refusal-and-persists-a-save\error-context.md
+
+  3 failed
+    tests\Browser\accessibility.spec.ts:105:1 › the production entry explains missing sign-in configuration accessibly
+    tests\Browser\accessibility.spec.ts:142:1 › signed-out and expired-session messages pass WCAG scans
+    tests\Browser\accessibility.spec.ts:169:1 › keyboard creation contains focus, explains API refusal, and persists a save
+  3 passed (27.1s)

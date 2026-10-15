@@ -1,0 +1,38 @@
+[WebServer] (node:28396) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 1 test using 1 worker
+
+(node:35712) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  1 tests\Browser\accessibility.spec.ts:4:1 › the audit detects a button with no accessible name (868ms)
+
+
+  1) tests\Browser\accessibility.spec.ts:4:1 › the audit detects a button with no accessible name ──
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "button-name",
+    + ]
+
+      16 |     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+      17 |     .analyze();
+    > 18 |   expect(results.violations.map((rule) => rule.id)).toEqual([]);
+         |                                                     ^
+      19 | });
+      20 |
+        at C:\Users\emofo\.codex\worktrees\ci-browser-quality\Damadama Rewrite\tests\Browser\accessibility.spec.ts:18:53
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\accessibility-the-audit-de-74717-ton-with-no-accessible-name\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\accessibility-the-audit-de-74717-ton-with-no-accessible-name\error-context.md
+
+  1 failed
+    tests\Browser\accessibility.spec.ts:4:1 › the audit detects a button with no accessible name ───

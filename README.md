@@ -32,6 +32,7 @@ The command checks locked dependencies, builds, formatting, nested conditional l
 An unavailable Docker engine fails the command. Testcontainers databases are separate from your persistent local database.
 Pull request checks cache dependencies, cancel superseded runs, and retain failed reports for three days.
 The [browser performance checks](docs/browser-performance.md) document fixed production-asset, layout, and request budgets, the baseline, and fixture limits.
+The [browser accessibility checks](docs/browser-accessibility.md) cover WCAG scans, keyboard creation, API refusal, mobile layout, and CSS zoom, with explicit provider limits.
 Browser tests use optimized assets and exclude authentication tokens from reports.
 
 Acceptance examples use ephemeral RSA-signed tokens through the ordinary JWT middleware configured by the test host.

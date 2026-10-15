@@ -1,0 +1,59 @@
+[WebServer] (node:29224) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 1 test using 1 worker
+
+(node:15504) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  1 tests\Browser\accessibility.spec.ts:169:1 › keyboard creation contains focus, explains API refusal, and persists a save (8.6s)
+
+
+  1) tests\Browser\accessibility.spec.ts:169:1 › keyboard creation contains focus, explains API refusal, and persists a save
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByRole('dialog', { name: 'Create a habit' }).locator(':focus')
+    Expected: 1
+    Received: 0
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveCount" getByRole('dialog', { name: 'Create a habit' }).locator(':focus') with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Create a habit' }).locator(':focus')
+        14 × locator resolved to 0 elements
+           - unexpected value "0"
+
+
+      275 |     await page.keyboard.press("Tab");
+      276 |     await writeFile(".audit/accessibility-focus-debug.json", JSON.stringify({focusBefore, focusAfter, afterTab: await focusSnapshot(), moves}, null, 2));
+    > 277 |     await expect(panel.locator(":focus")).toHaveCount(1);
+          |                                           ^
+      278 |   }
+      279 |   await expect(save).toBeFocused();
+      280 |   await page.keyboard.press("Shift+Tab");
+        at C:\Users\emofo\.codex\worktrees\ci-browser-quality\Damadama Rewrite\tests\Browser\accessibility.spec.ts:277:43
+
+    attachment #7: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\accessibility-keyboard-cre-04a56-refusal-and-persists-a-save\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #8: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\accessibility-keyboard-cre-04a56-refusal-and-persists-a-save\video-1.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #9: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\accessibility-keyboard-cre-04a56-refusal-and-persists-a-save\video-3.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #10: video (video/webm) ─────────────────────────────────────────────────────────────
+    test-results\accessibility-keyboard-cre-04a56-refusal-and-persists-a-save\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #11: video (video/webm) ─────────────────────────────────────────────────────────────
+    test-results\accessibility-keyboard-cre-04a56-refusal-and-persists-a-save\video-2.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\accessibility-keyboard-cre-04a56-refusal-and-persists-a-save\error-context.md
+
+  1 failed
+    tests\Browser\accessibility.spec.ts:169:1 › keyboard creation contains focus, explains API refusal, and persists a save
