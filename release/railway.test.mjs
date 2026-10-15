@@ -16,6 +16,7 @@ function provider(t, failObservation = false) {
     assert.equal(url, "https://backboard.railway.com/graphql/v2");
     const { query } = JSON.parse(options.body);
     let data;
+    const deploymentId = failObservation ? "replacement" : "actual-deployment";
     if (query.startsWith("mutation")) mutations.push(query);
     if (query.includes("serviceInstanceUpdate("))
       data = { serviceInstanceUpdate: true };
@@ -34,7 +35,7 @@ function provider(t, failObservation = false) {
           activeDeployments: deployed
             ? [
                 {
-                  id: failObservation ? "replacement" : "actual-deployment",
+                  id: deploymentId,
                   status: "SUCCESS",
                   meta: { image },
                 },

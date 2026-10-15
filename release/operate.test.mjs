@@ -45,18 +45,19 @@ test("stage reports the actual deployment when main advances during log summary"
   );
 });
 
-for (const failure of ["write", "upload", "patch"]) {
+for (const [failure, error, expectedEvents] of [
+  ["write", /EISDIR/, ["draft", "deploy"]],
+  ["upload", /release upload failed/, ["draft", "deploy", "upload"]],
+  [
+    "patch",
+    /GitHub PATCH .* returned 503/,
+    ["draft", "deploy", "upload", "publish"],
+  ],
+]) {
   test(`production reports its actual deployment after ${failure} failure`, (t) => {
     const result = operate(t, `production-${failure}`);
     assert.equal(result.status, 1);
-    assert.match(
-      result.stderr,
-      failure === "write"
-        ? /EISDIR/
-        : failure === "upload"
-          ? /release upload failed/
-          : /GitHub PATCH .* returned 503/,
-    );
+    assert.match(result.stderr, error);
     assert.equal(
       existsSync(join(result.dir, "runtime-evidence/provider-outcome.json")),
       true,
@@ -74,11 +75,7 @@ for (const failure of ["write", "upload", "patch"]) {
       .map(JSON.parse);
     assert.deepEqual(
       events.map((e) => e.type),
-      failure === "write"
-        ? ["draft", "deploy"]
-        : failure === "upload"
-          ? ["draft", "deploy", "upload"]
-          : ["draft", "deploy", "upload", "publish"],
+      expectedEvents,
     );
     assert.equal(events[0].body.draft, true);
     assert.equal(events[1].image, record().image.reference);
