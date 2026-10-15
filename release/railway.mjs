@@ -83,6 +83,12 @@ export async function requireEnvironment(name) {
   const policy = requireIsolation(JSON.parse(process.env.RELEASE_ENVIRONMENTS))[
     name
   ];
+  const expectedOrigin =
+    name === "staging"
+      ? "https://staging.damadama.app"
+      : "https://prod.damadama.app";
+  if (policy.origin !== expectedOrigin)
+    throw new Error("release origin differs from the approved rewrite domain");
   const config = configuration();
   if (
     policy.railwayProjectId !== config.projectId ||
@@ -153,7 +159,7 @@ export async function observeDeployment(expected) {
   return observed;
 }
 
-export async function deployImage(image) {
+export async function deployImage(image, beforeMutation = async () => {}) {
   if (!/^ghcr\.io\/shiosos\/damadama@sha256:[a-f0-9]{64}$/.test(image))
     throw new Error("deployment requires an immutable Damadama digest");
   await inspectRailway();
@@ -162,47 +168,57 @@ export async function deployImage(image) {
       "verify Railway immutable deployment metadata during approved setup before automated deployment",
     );
   const config = configuration();
-  await query(
-    "mutation($serviceId:String!,$environmentId:String!,$input:ServiceInstanceUpdateInput!){serviceInstanceUpdate(serviceId:$serviceId,environmentId:$environmentId,input:$input)}",
-    {
-      serviceId: config.serviceId,
-      environmentId: config.environmentId,
-      input: {
-        source: { image },
-        numReplicas: 1,
-        sleepApplication: false,
-        healthcheckPath: "/health/ready",
-        healthcheckTimeout: 300,
+  let applied;
+  try {
+    await beforeMutation();
+    await query(
+      "mutation($serviceId:String!,$environmentId:String!,$input:ServiceInstanceUpdateInput!){serviceInstanceUpdate(serviceId:$serviceId,environmentId:$environmentId,input:$input)}",
+      {
+        serviceId: config.serviceId,
+        environmentId: config.environmentId,
+        input: {
+          source: { image },
+          numReplicas: 1,
+          sleepApplication: false,
+          healthcheckPath: "/health/ready",
+          healthcheckTimeout: 300,
+        },
       },
-    },
-  );
-  const data = await query(
-    "mutation($serviceId:String!,$environmentId:String!){serviceInstanceDeployV2(serviceId:$serviceId,environmentId:$environmentId)}",
-    { serviceId: config.serviceId, environmentId: config.environmentId },
-  );
-  const id = data.serviceInstanceDeployV2;
-  if (typeof id !== "string" || !id)
-    throw new Error("Railway did not return a deployment ID");
-  const deadline = Date.now() + 360_000;
-  while (Date.now() < deadline) {
-    const result = await query(
-      "query($id:String!){deployment(id:$id){id status}}",
-      { id },
     );
-    console.log(`Deployment ${id}: ${result.deployment.status}`);
-    if (
-      ["FAILED", "CRASHED", "REMOVED", "SLEEPING", "SKIPPED"].includes(
-        result.deployment.status,
+    applied = { id: null, environmentId: config.environmentId, image };
+    await beforeMutation();
+    const data = await query(
+      "mutation($serviceId:String!,$environmentId:String!){serviceInstanceDeployV2(serviceId:$serviceId,environmentId:$environmentId)}",
+      { serviceId: config.serviceId, environmentId: config.environmentId },
+    );
+    const id = data.serviceInstanceDeployV2;
+    applied.id = id;
+    if (typeof id !== "string" || !id)
+      throw new Error("Railway did not return a deployment ID");
+    const deadline = Date.now() + 360_000;
+    while (Date.now() < deadline) {
+      const result = await query(
+        "query($id:String!){deployment(id:$id){id status}}",
+        { id },
+      );
+      console.log(`Deployment ${id}: ${result.deployment.status}`);
+      if (
+        ["FAILED", "CRASHED", "REMOVED", "SLEEPING", "SKIPPED"].includes(
+          result.deployment.status,
+        )
       )
-    )
-      throw new Error("deployment failed; inspect Railway runtime logs");
-    if (result.deployment.status === "SUCCESS") {
-      await observeDeployment({ id, image });
-      return { id, environmentId: config.environmentId, image };
+        throw new Error("deployment failed; inspect Railway runtime logs");
+      if (result.deployment.status === "SUCCESS") {
+        await observeDeployment({ id, image });
+        return { id, environmentId: config.environmentId, image };
+      }
+      await setTimeout(5_000);
     }
-    await setTimeout(5_000);
+    throw new Error("deployment did not become ready within six minutes");
+  } catch (error) {
+    if (applied) error.deployment = applied;
+    throw error;
   }
-  throw new Error("deployment did not become ready within six minutes");
 }
 
 export async function logSummary(id) {

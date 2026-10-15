@@ -323,7 +323,7 @@ try {
     resolve(directory, "failure-bin/aws"),
     '#!/bin/sh\nfor arg; do case "$arg" in list-objects-v2) touch /proof/stalled-retention; sleep 900 ;; esac; done\nexec /usr/bin/aws "$@"\n',
   );
-  const stalledRetention = stalledBackup();
+  const stalledRetention = stalledBackup(15);
   assert.equal(
     stalledRetention.status,
     124,

@@ -15,14 +15,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24
-      - name: Compose the unmerged foundation dependency
-        if: ${{ hashFiles('release/policy.mjs') == '' }}
-        run: |
-          git fetch origin aa570ab3d34ffa6bb0345f5ca0b66065c224698f
-          git show aa570ab3d34ffa6bb0345f5ca0b66065c224698f:release/policy.mjs > release/policy.mjs
-          git show aa570ab3d34ffa6bb0345f5ca0b66065c224698f:release/github.mjs > release/github.mjs
       - run: node --test release/*.test.mjs
       - run: node --check release/operate.mjs && node --check release/smoke.mjs && node --check release/railway.mjs

@@ -11,7 +11,7 @@
     "clerkApplicationId": "REPLACE_STAGING_CLERK_APPLICATION_ID",
     "clerkIssuer": "https://clerk.staging.example.com",
     "clerkPublishableKey": "pk_live_REPLACE_STAGING_KEY",
-    "origin": "https://staging.example.com"
+    "origin": "https://staging.damadama.app"
   },
   "production": {
     "railwayProjectId": "REPLACE_PROJECT_ID",
@@ -25,6 +25,6 @@
     "clerkApplicationId": "REPLACE_PRODUCTION_CLERK_APPLICATION_ID",
     "clerkIssuer": "https://clerk.example.com",
     "clerkPublishableKey": "pk_live_REPLACE_PRODUCTION_KEY",
-    "origin": "https://example.com"
+    "origin": "https://prod.damadama.app"
   }
 }

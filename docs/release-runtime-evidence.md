@@ -1,5 +1,7 @@
 # Runtime tooling evidence
 
+Historical evidence below describes the earlier premerge design. It is not a schema 2 staging receipt and cannot authorize current promotion. The main staging implementation still requires hosted Railway metadata, ordinary Clerk access, and actual recovery observations.
+
 Verified locally on 2026-10-12 against PR #11's explicitly captured proposed result.
 The feature branch and its original worktree were not changed by release setup.
 
