@@ -1,4 +1,5 @@
 using Damadama.Habits;
+using Damadama.Entries;
 using Damadama;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -83,6 +84,7 @@ app.MapGet("/api/habits/{id:guid}", async (Guid id, System.Security.Claims.Claim
     return habit is null ? Results.NotFound() : Results.Ok(HabitResponse.From(habit));
 }).RequireAuthorization();
 app.MapScheduledHabits();
+app.MapEntries();
 app.Map("/api/{**path}", () => Results.Problem(statusCode: 404, title: "API route not found."));
 app.MapFallbackToFile("index.html");
 app.Run();

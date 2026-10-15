@@ -1,0 +1,81 @@
+using System.Globalization;
+using System.Security.Claims;
+using Damadama.Habits;
+using Microsoft.EntityFrameworkCore;
+
+namespace Damadama.Entries;
+
+public static class EntryEndpoints
+{
+    public static void MapEntries(this WebApplication app)
+    {
+        app.MapPut("/api/habits/{id:guid}/entries/{date}", async (Guid id, string date, WriteEntry input,
+            ClaimsPrincipal user, HabitsDb db, TimeProvider clock, CancellationToken cancellationToken) =>
+        {
+            var owner = user.FindFirst("sub")!.Value;
+            var habit = await db.Habits.AsNoTracking().Include(h => h.Schedule)
+                .SingleOrDefaultAsync(h => h.Id == id && h.OwnerId == owner, cancellationToken);
+            if (habit is null) return Results.NotFound();
+
+            var calendarDate = ParseDate(date, nameof(date));
+            var today = DeviceToday(input, clock);
+            if (calendarDate > today)
+                throw new ArgumentException("Choose today or a past scheduled date.", nameof(date));
+            if (!Enum.TryParse<EntryResult>(input.Result, out var result) || !Enum.IsDefined(result) ||
+                input.Result != result.ToString())
+                throw new ArgumentException("Choose Good, Better, Best, Rest, or Clear.", nameof(input.Result));
+            if (input.EditedAt is not { } editedAt)
+                throw new ArgumentException("Include the edit timestamp.", nameof(input.EditedAt));
+
+            var retained = await db.DailyEntries.AnyAsync(e => e.HabitId == id && e.CalendarDate == calendarDate,
+                cancellationToken);
+            if (!retained && !ScheduleEligibility.IsScheduled(habit.Schedule, calendarDate))
+                throw new ArgumentException("This habit was not scheduled on that date.", nameof(date));
+            var saved = await DailyEntryStore.Save(db, habit, calendarDate, result, editedAt, cancellationToken);
+            return Results.Ok(EntryResponse.From(saved));
+        }).RequireAuthorization();
+
+        app.MapGet("/api/entries", async (string date, ClaimsPrincipal user, HabitsDb db,
+            CancellationToken cancellationToken) =>
+        {
+            var calendarDate = ParseDate(date, nameof(date));
+            var owner = user.FindFirst("sub")!.Value;
+            var entries = await (from entry in db.DailyEntries.AsNoTracking()
+                                 join habit in db.Habits on entry.HabitId equals habit.Id
+                                 where habit.OwnerId == owner && entry.CalendarDate == calendarDate
+                                 orderby entry.HabitId
+                                 select entry).ToListAsync(cancellationToken);
+            return entries.Select(EntryResponse.From);
+        }).RequireAuthorization();
+    }
+
+    private static DateOnly ParseDate(string? value, string field)
+    {
+        if (!DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+            throw new ArgumentException("Use a calendar date in YYYY-MM-DD format.", field);
+        return date;
+    }
+
+    private static DateOnly DeviceToday(WriteEntry input, TimeProvider clock)
+    {
+        if (string.IsNullOrWhiteSpace(input.TimeZone) ||
+            !TimeZoneInfo.TryFindSystemTimeZoneById(input.TimeZone, out var zone) ||
+            !zone.HasIanaId && input.TimeZone != "UTC")
+            throw new ArgumentException("Use a valid IANA timezone from your device.", nameof(input.TimeZone));
+        var deviceToday = ParseDate(input.DeviceToday, nameof(input.DeviceToday));
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), zone).DateTime);
+        if (deviceToday != today)
+            throw new ArgumentException("Your device date has changed. Refresh and try again.", nameof(input.DeviceToday));
+        return today;
+    }
+}
+
+public sealed record WriteEntry(string? Result, DateTimeOffset? EditedAt, string? DeviceToday, string? TimeZone);
+
+public sealed record EntryResponse(Guid HabitId, DateOnly CalendarDate, string Result, DateTimeOffset EditedAt,
+    string Good, string Better, string Best)
+{
+    public static EntryResponse From(DailyEntry entry) => new(entry.HabitId, entry.CalendarDate,
+        entry.Result.ToString(), entry.EditedAt, entry.OriginalLevels.Good, entry.OriginalLevels.Better,
+        entry.OriginalLevels.Best);
+}
