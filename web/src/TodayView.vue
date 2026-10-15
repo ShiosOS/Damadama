@@ -77,7 +77,11 @@ async function refresh() {
     }
     let message =
       "Could not reach the service. Check your connection and try again.";
-    if (error instanceof ApiError) message = error.message;
+    if (error instanceof ApiError && error.status === 401) {
+      message = "Sign in to continue.";
+    } else if (error instanceof ApiError) {
+      message = error.message;
+    }
     state.value = { kind: "error", date, message };
   }
 }
