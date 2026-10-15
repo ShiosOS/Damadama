@@ -110,8 +110,10 @@ Record interactive Clerk verification separately when the cloud product can supp
 
 ## Current verification record
 
-The repository setup is prepared on `codex/cloud-development` from `main` at `465b816`.
-Local Ubuntu 24.04 x64 validation completed dependency setup twice, launched Chromium, queried PostgreSQL 17,
+The setup branch is refreshed onto `main` at `a8a51bd`.
+The revised scripts passed setup twice, Docker/PostgreSQL, Chromium launch, and all 162 current release tests locally with a read-only home.
+The unchanged application check also passed all 11 browser and 51 backend tests with the new default cache path.
+These are local Ubuntu results. The initial baseline at `465b816` completed dependency setup twice, launched Chromium, queried PostgreSQL 17,
 and passed all 171 release tests. The probe used the existing local Docker Desktop daemon.
 The [local output excerpt](../.github/evidence/codex-cloud/local-results.txt) records the source revision and commands.
 On PR11's unchanged application source at `9c8437e1`, setup twice and `bun run check` passed locally,
@@ -127,6 +129,9 @@ It passed all 171 release tests with zero skips, repeated locked npm setup, quer
 and installed and ran .NET 10.0.112 and Bun 1.3.14 in writable workspace paths.
 The supplied Node was 24.19.0, so this run does not verify the script's Node 24.21.0 pin.
 Pinned Chromium installation and launch failed because its download redirects to `storage.googleapis.com`, where the proxy returned HTTP 403.
+The [second fresh task](https://chatgpt.com/local/01a13de0-85b9-7534-9141-5caa97ad30ff) ran the exact revised scripts at `5ee2e42`, based on current main `a8a51bd`.
+It verified Node 24.21.0, Bun 1.3.14, .NET 10.0.112, Docker/PostgreSQL, and all 162 release tests in actual Debian cloud execution.
+Both setup runs and verification exited 1 because pinned Chromium remained blocked at the same redirected host.
 The [cloud results](../.github/evidence/codex-cloud/cloud-results.md) distinguish measured capabilities from remaining checks.
 The setup conversation's browser panel reports **Couldn't confirm publishing status** and disables **Save draft** and **Publish**.
 It instructs the user to reopen setup where it started. Publication of the corrected development setup remains unverified.

@@ -1,5 +1,8 @@
 Local Linux validation only. This is not a Codex Cloud task.
 
+The initial results below describe setup commit 3ee7e5e0757c4eac6657b31b9e15c8c9ffca00f6.
+The workspace-path follow-up is recorded at the end of this file.
+
 Ubuntu 24.04 x64 container, existing local Docker Desktop daemon through its socket.
 Linux checkouts were fetched from scoped Git bundles, then the cloud scripts were copied into them.
 No provider credentials were supplied. Testcontainers used TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal
@@ -100,6 +103,53 @@ A subsequent check in the first checkout linted generated Playwright report asse
 That application report-path issue is tracked at https://github.com/ShiosOS/Damadama/issues/20.
 No report deletion or lint suppression was added to the setup.
 
-Cloud environment inventory, environment identifier, publication, and fresh cloud task remain
-NOT VERIFIED because the available browser requires ChatGPT sign-in.
+At this initial baseline, cloud inventory and execution were blocked by ChatGPT sign-in.
+See cloud-results.md for the later actual cloud run and remaining publication/browser gates.
 Interactive Aspire startup, Clerk sign-in/email delivery, and provider deployment were not tested.
+
+Workspace-path follow-up, 2026-10-15. Still local Ubuntu 24.04, not cloud.
+Read-only HOME was mounted at /readonly. Host native libraries and Docker client were
+provisioned separately from setup. The existing local Docker Desktop daemon was retained.
+The first workspace-owned installation completed; later checkouts reused those pinned binaries.
+Scripts match 5ee2e42f4509a719cb031bd1dea6eb7cd4810ded.
+
+Current main source a8a51bdcda588a13ed0381b247253be7c79a52ca:
+  bash -n .codex/cloud/*.sh
+  bash .codex/cloud/setup.sh
+  bash .codex/cloud/setup.sh
+  bash .codex/cloud/verify.sh
+All exited 0. Default runtime root was /workspace/cloud-current-main/.audit/codex-cloud-runtime.
+Selected stdout:
+  Node 24.21.0
+  Bun 1.3.14
+  .NET SDK 10.0.112
+  Docker and disposable PostgreSQL verified.
+  Chromium launch verified: 156.0.8078.4
+  tests 162
+  pass 162
+  fail 0
+  skipped 0
+The SQL output reported PostgreSQL 17.7. Current main changed the release test set;
+162 is the current executed count, while 171 above belongs to the older source revision.
+
+Unchanged application source 9c8437e1e4a46965513b53f60d7fa569c0fd18ea:
+  bash /workspace/Damadama/.codex/cloud/setup.sh /workspace/cloud-app
+  bash /workspace/Damadama/.codex/cloud/setup.sh /workspace/cloud-app
+  TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
+    bash /workspace/Damadama/.codex/cloud/verify.sh /workspace/cloud-app
+All exited 0 with the default /workspace/cloud-app/.audit/codex-cloud-runtime.
+The external script path and optional target-checkout argument were exercised directly.
+Selected unchanged check output:
+  Build succeeded.
+  11 passed (1.2m)
+  Passed!  - Failed:     0, Passed:    51, Skipped:     0, Total:    51
+Formatting, lint, locked restores, browser and backend tests remained unchanged.
+
+Negative checks:
+  HOME write probe exit 1, Read-only file system.
+  Relative DAMADAMA_CLOUD_ROOT rejected, exit 1.
+  Missing local Docker socket on current main reported unverified Docker, passed Chromium
+  and all 162 release tests, then returned exit 2. Passed unit tests did not mask capability failure.
+
+Detailed own-worktree logs are .audit/cloud-current-main.log, cloud-compat-final.log,
+cloud-compat-negative.log, and cloud-compat-backend.trx. These contain local evidence only.
