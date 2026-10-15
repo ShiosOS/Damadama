@@ -1,0 +1,4 @@
+    Locator: getByRole('group', { name: 'Result for Entry immediate', exact: true })
+    Expected: visible
+    Error: element(s) not found
+  1 failed
