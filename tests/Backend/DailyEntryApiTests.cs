@@ -90,6 +90,10 @@ public class DailyEntryApiTests
         var saved = await changed.Content.ReadFromJsonAsync<JsonElement>();
         Assert.That(saved.GetProperty("result").GetString(), Is.EqualTo("Better"));
         Assert.That(await DatabaseFixture.Count("DailyEntries"), Is.EqualTo(1));
+        using var history = await client.GetAsync("/api/entries?date=2026-01-04");
+        var retained = (await history.Content.ReadFromJsonAsync<JsonElement>())[0];
+        var name = retained.TryGetProperty("habitName", out var property) ? property.GetString() : null;
+        Assert.That(name, Is.EqualTo("Walking"), "Retained history needs its owned habit name even when the scheduled read omits it.");
     }
 
     [TestCase(false)]
