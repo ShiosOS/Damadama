@@ -53,5 +53,5 @@ It derives the calendar date from the server's UTC creation instant in the devic
 
 ## Release
 
-Release setup starts with the [staging gate and bootstrap procedure](docs/release-gate.md).
+Release setup starts with the [PR checks and release environment setup](docs/release-gate.md).
 The [release design](docs/release-design.md) describes source identity and deployment trust.

@@ -1,5 +1,7 @@
 # Release policy evidence
 
+Historical evidence below describes the earlier premerge design. It is not a schema 2 staging receipt and cannot authorize current promotion. The main staging implementation still requires hosted Railway metadata, ordinary Clerk access, and actual recovery observations.
+
 Verified on 2026-10-12. This evidence covers release controls, not a deployed application.
 
 - Baseline GitHub inspection found `main` at `543880fc46ccc7c664d8ae36ae416ed3b58f1e56`, no rulesets, and no environments.
