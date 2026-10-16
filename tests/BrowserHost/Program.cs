@@ -21,7 +21,22 @@ var fixture = JsonSerializer.Serialize(new
     accessibilityMobile = app.Token("accessibility-mobile-account"),
     accessibilityZoom = app.Token("accessibility-zoom-account"),
     accessibilityExpired = app.Token("accessibility-expired-account", expired: true),
-    stale = app.Token("stale-account")
+    stale = app.Token("stale-account"),
+    todayScheduled = app.Token("today-scheduled-account"),
+    todayLoading = app.Token("today-loading-account"),
+    todayError = app.Token("today-error-account"),
+    todayCreate = app.Token("today-create-account"),
+    todayReload = app.Token("today-reload-account"),
+    todayOwner = app.Token("today-owner-account"),
+    todayStaleSuccess = app.Token("today-stale-success-account"),
+    todayStaleError = app.Token("today-stale-error-account"),
+    todayDateSuccess = app.Token("today-date-success-account"),
+    todayDateError = app.Token("today-date-error-account"),
+    todayTravel = app.Token("today-travel-account"),
+    todayMidnight = app.Token("today-midnight-account"),
+    todayYear = app.Token("today-year-account"),
+    todayVisible = app.Token("today-visible-account"),
+    todayUnmount = app.Token("today-unmount-account")
 });
 await File.WriteAllTextAsync("tests/Browser/fixture.json", fixture);
 if (Directory.Exists(".audit/browser-build"))

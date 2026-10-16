@@ -9,6 +9,7 @@ import {
 } from "./habits";
 import HabitDetails from "./HabitDetails.vue";
 import CheckeredD from "./CheckeredD.vue";
+import TodayView from "./TodayView.vue";
 
 const props = defineProps<{
   accountId: string | null;
@@ -23,6 +24,7 @@ type Activity =
   | { kind: "error"; message: string };
 const activity = ref<Activity>({ kind: "idle" });
 const adding = ref(false);
+const savedRevision = ref(0);
 const blank = (): Omit<NewHabit, "timeZone"> => ({
   name: "",
   good: "",
@@ -98,6 +100,7 @@ async function save() {
     });
     if (current !== generation) return;
     habits.value.push(saved);
+    savedRevision.value++;
     adding.value = false;
     Object.assign(form, blank());
     activity.value = { kind: "idle" };
@@ -260,6 +263,11 @@ async function save() {
         color="error"
         title="Request failed"
         :description="activity.message"
+      />
+      <TodayView
+        :account-id="accountId"
+        :get-token="getToken"
+        :saved-revision="savedRevision"
       />
       <section aria-label="Saved habits">
         <h2 class="page-title">Your habits</h2>
