@@ -63,6 +63,7 @@ app.UseAuthorization();
 app.MapHealthChecks("/health/live", new() { Predicate = _ => false });
 app.MapHealthChecks("/health/ready", new() { Predicate = check => check.Tags.Contains("ready") });
 app.MapGet("/api/config", (IConfiguration configuration) => new { clerkPublishableKey = configuration["Clerk:PublishableKey"] });
+app.MapGet("/sw.js", WorkerRetirement.Respond);
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapPost("/api/habits", async (CreateHabit input, System.Security.Claims.ClaimsPrincipal user,
