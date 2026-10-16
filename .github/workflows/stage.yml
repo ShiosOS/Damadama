@@ -95,7 +95,7 @@ jobs:
           path: |
             .audit/TestResults
             test-results
-            playwright-report
+            tests/Browser/playwright-report
           retention-days: 3
   build:
     needs: [source, release-controls, check]
