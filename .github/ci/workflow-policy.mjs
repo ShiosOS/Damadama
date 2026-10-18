@@ -1,5 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { gates, releaseCallables } from "./required-jobs.mjs";
+import {
+  readSecurityContract,
+  acceptedSecurityErrors,
+} from "./security-policy.mjs";
 const recipes = [
   [
     "check.yml",
@@ -71,6 +75,11 @@ const recipes = [
 
 export function gateGraphErrors(workflows) {
   const errors = [];
+  try {
+    errors.push(...acceptedSecurityErrors(readSecurityContract(workflows)));
+  } catch (error) {
+    errors.push(error.message);
+  }
   const expect = (condition, message) => {
     if (!condition) errors.push(message);
   };
