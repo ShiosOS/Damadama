@@ -47,7 +47,7 @@ A workflow in this repository can call these controls with relative paths. Grant
 
 CodeQL analysis jobs keep `contents: read`. Fresh SARIF upload jobs also need `actions: read` and `security-events: write`. When the dependency workflow is called from a pull request, its dependency review job runs because the called workflow receives the caller's pull request context. On a non-pull-request call, that pull-request-only job skips; the Bun audit still runs.
 
-The standalone pull request, main push, schedule, and manual triggers remain active where each workflow defines them. Once CI composition is verified, coordinate removal of the standalone pull request triggers to avoid duplicate scans.
+Pull request security checks run through the reusable calls in `release-controls.yml`, whose native final gate requires all six caller outcomes to succeed. CodeQL and dependency scanning also run on main pushes, weekly schedules, and manual dispatch. Security fixtures also support manual dispatch. The three security workflows have no standalone pull request trigger.
 
 ## Activation and verification
 
