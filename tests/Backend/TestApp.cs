@@ -79,7 +79,7 @@ public sealed class TestApp(string connectionString, Action<IEndpointRouteBuilde
         if (disposing) rsa.Dispose();
     }
 
-    private sealed class AdditionalEndpoints(Action<IEndpointRouteBuilder> map) : IStartupFilter
+    internal sealed class AdditionalEndpoints(Action<IEndpointRouteBuilder> map) : IStartupFilter
     {
         public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
         {

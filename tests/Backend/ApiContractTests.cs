@@ -31,6 +31,9 @@ public class ApiContractTests
         using var client = app.SignedIn();
         await DatabaseFixture.Reset();
         var document = await client.GetFromJsonAsync<JsonElement>("/openapi/v1.json");
+        var artifacts = Path.Combine(RepositoryRoot(), ".audit", "api-contract");
+        Directory.CreateDirectory(artifacts);
+        await File.WriteAllTextAsync(Path.Combine(artifacts, "openapi.json"), document.GetRawText());
         Assert.That(document.GetProperty("openapi").GetString(), Does.StartWith("3.1."));
         Assert.That(ApiContractAssertions.Inventory(app.Services.GetRequiredService<EndpointDataSource>().Endpoints, document, Scenarios), Is.Empty);
         var run = new ContractRun(app, client);
@@ -55,9 +58,6 @@ public class ApiContractTests
         using var shell = await client.GetAsync("/habits");
         Assert.That(shell.Content.Headers.ContentType?.MediaType, Is.EqualTo("text/html"));
         ApiContractAssertions.Unchanged(before, await ContractRun.Snapshot());
-        var artifacts = Path.Combine(RepositoryRoot(), ".audit", "api-contract");
-        Directory.CreateDirectory(artifacts);
-        await File.WriteAllTextAsync(Path.Combine(artifacts, "openapi.json"), document.GetRawText());
         await File.WriteAllTextAsync(Path.Combine(artifacts, "responses.json"), JsonSerializer.Serialize(run.Observations, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
     }
 
@@ -158,7 +158,11 @@ internal sealed class ContractRun(TestApp app, HttpClient client)
     private string HabitPath => $"/api/habits/{HabitId}";
     private string EntryPath => $"{HabitPath}/entries/2026-01-04";
 
-    internal async Task Configuration() => await SafeRead("/api/config");
+    internal async Task Configuration()
+    {
+        using var anonymous = app.CreateClient();
+        await SafeRead("/api/config", requester: anonymous);
+    }
     internal async Task CreateHabit()
     {
         using var response = await client.PostAsJsonAsync("/api/habits", HabitTests.Walking with { Weekdays = [1, 2, 3, 4, 5, 6, 7], RepeatEveryWeeks = 1 });
@@ -205,6 +209,13 @@ internal sealed class ContractRun(TestApp app, HttpClient client)
         ApiContractAssertions.Unchanged(beforeLoser, await Snapshot());
         using var clear = await client.PutAsJsonAsync(EntryPath, EntrySteps.Change("Clear", "2026-01-05T00:02:00Z"));
         await Observe(clear, 200);
+        var beforeFailure = await Snapshot();
+        await using (var failure = await EntryWriteFailure.Install(DatabaseFixture.Execute, EntryWriteOperation.Update, EntryFailureTiming.AtCommit))
+        {
+            using var failed = await client.PutAsJsonAsync(EntryPath, EntrySteps.Change("Good", "2026-01-05T00:03:00Z"));
+            await Observe(failed, 503);
+        }
+        ApiContractAssertions.Unchanged(beforeFailure, await Snapshot());
         using var invalid = await client.PutAsJsonAsync(EntryPath, new { result = "unknown" });
         await Observe(invalid, 400);
         using var foreign = app.SignedIn("contract-foreign");

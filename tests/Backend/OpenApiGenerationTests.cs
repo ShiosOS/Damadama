@@ -22,6 +22,8 @@ public class OpenApiGenerationTests
         builder.WebHost.UseTestServer();
         builder.Services.AddApiContract();
         builder.Services.AddProblemDetails();
+        builder.Services.AddSingleton<IStartupFilter>(new TestApp.AdditionalEndpoints(endpoints =>
+            endpoints.MapGet("/api/extra-probe", () => TypedResults.Ok(new { value = "extra" }))));
         await using var app = builder.Build();
         app.UseRouting();
         app.UseApiProtocol();
@@ -37,6 +39,8 @@ public class OpenApiGenerationTests
         app.MapFallbackToFile("index.html").WithName("application-shell");
         await app.StartAsync();
         using var client = app.GetTestClient();
+        using var extra = await client.GetAsync("/api/extra-probe");
+        Assert.That(ApiContractAssertions.Response(await ApiContractAssertions.Read(extra, "/api/extra-probe", "GET"), 200), Is.Empty);
         using var conflict = await client.PutAsync("/api/conflict-probe", null);
         var observed = await ApiContractAssertions.Read(conflict, "/api/conflict-probe", "PUT");
         Assert.That(ApiContractAssertions.Response(observed, 409), Is.Empty);
@@ -64,12 +68,14 @@ public class OpenApiGenerationTests
         app.MapHabits();
         app.MapEntries();
         app.MapGet("/api/config", () => new ApplicationConfig("pk_test_fixture")).WithName("application-config").ProducesProblem(400);
-        app.MapOpenApi();
+        app.MapOpenApi().WithName("openapi-document");
         await app.StartAsync();
         using var client = app.GetTestClient();
         var json = await client.GetStringAsync("/openapi/v1.json");
         using var document = JsonDocument.Parse(json);
         Assert.That(document.RootElement.GetProperty("openapi").GetString(), Does.StartWith("3.1."));
+        Assert.That(ApiContractAssertions.Inventory(app.Services.GetRequiredService<Microsoft.AspNetCore.Routing.EndpointDataSource>().Endpoints,
+            document.RootElement, ApiContractTests.Scenarios), Is.Empty);
         var artifacts = Path.Combine(ApiContractTests.RepositoryRoot(), ".audit", "api-contract-smoke");
         Directory.CreateDirectory(artifacts);
         await File.WriteAllTextAsync(Path.Combine(artifacts, "openapi.json"), json);

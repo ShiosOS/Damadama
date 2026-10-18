@@ -6,9 +6,6 @@ export type WriteEntryInput = EntryEdit & {
   deviceToday: string;
   timeZone: string;
 };
-export type SaveEntryResult =
-  { kind: "accepted"; entry: Entry } | { kind: "superseded"; current: Entry };
-
 export interface HabitsApi {
   entries(date: string): Promise<Entry[]>;
   saveEntry(

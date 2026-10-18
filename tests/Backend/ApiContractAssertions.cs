@@ -54,6 +54,9 @@ internal static class ApiContractAssertions
                     _ => false
                 };
                 if (!allowed) failures.Add($"endpoint.resource-method:{key}");
+                if (document.GetProperty("paths").TryGetProperty(path, out var pathItem) &&
+                    pathItem.TryGetProperty(method.ToLowerInvariant(), out var operation))
+                    Metadata(endpoint, operation, key, failures);
             }
         }
         foreach (var path in document.GetProperty("paths").EnumerateObject())
@@ -66,7 +69,8 @@ internal static class ApiContractAssertions
                 if (scenario is null) { failures.Add($"document.unclassified:{key}"); continue; }
                 if (operation.Value.GetProperty("operationId").GetString() != scenario.Name) failures.Add($"document.name:{key}");
                 var secured = operation.Value.TryGetProperty("security", out var security) &&
-                    security.EnumerateArray().Any(value => value.TryGetProperty("Bearer", out _));
+                    security.GetArrayLength() == 1 && security[0].EnumerateObject().Count() == 1 &&
+                    security[0].TryGetProperty("Bearer", out var scopes) && scopes.GetArrayLength() == 0;
                 if (secured != scenario.Authorized) failures.Add($"document.auth:{key}");
                 if (operation.Name == "get" && operation.Value.TryGetProperty("requestBody", out _)) failures.Add($"document.get-body:{key}");
             }
@@ -75,6 +79,50 @@ internal static class ApiContractAssertions
         foreach (var scenario in scenarios)
             if (!actual.Contains(scenario.Key)) failures.Add($"scenario.orphan:{scenario.Key}");
         return failures;
+    }
+
+    private static void Metadata(RouteEndpoint endpoint, JsonElement operation, string key, List<string> failures)
+    {
+        var declared = endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>()
+            .GroupBy(metadata => metadata.StatusCode).ToDictionary(group => group.Key.ToString(), group => group.Last());
+        var responses = operation.GetProperty("responses");
+        if (!declared.Keys.ToHashSet().SetEquals(responses.EnumerateObject().Select(response => response.Name)))
+            failures.Add($"metadata.statuses:{key}");
+        foreach (var (status, metadata) in declared)
+        {
+            if (!responses.TryGetProperty(status, out var response) || !response.TryGetProperty("content", out var content))
+            {
+                failures.Add($"metadata.response:{key}:{status}");
+                continue;
+            }
+            if (!metadata.ContentTypes.ToHashSet().SetEquals(content.EnumerateObject().Select(media => media.Name)))
+                failures.Add($"metadata.media:{key}:{status}");
+            foreach (var media in content.EnumerateObject())
+                if (metadata.Type is { } type && type != typeof(void) &&
+                    (!media.Value.TryGetProperty("schema", out var schema) || !References(schema, type)))
+                    failures.Add($"metadata.schema:{key}:{status}");
+        }
+        var accepts = endpoint.Metadata.GetMetadata<IAcceptsMetadata>();
+        var hasBody = operation.TryGetProperty("requestBody", out var requestBody);
+        if ((accepts?.RequestType is not null) != hasBody) failures.Add($"metadata.request:{key}");
+        if (hasBody && accepts?.RequestType is { } requestType)
+        {
+            var content = requestBody.GetProperty("content");
+            if (!accepts.ContentTypes.ToHashSet().SetEquals(content.EnumerateObject().Select(media => media.Name)))
+                failures.Add($"metadata.request-media:{key}");
+            foreach (var media in content.EnumerateObject())
+                if (!References(media.Value.GetProperty("schema"), requestType)) failures.Add($"metadata.request-schema:{key}");
+        }
+    }
+
+    private static bool References(JsonElement schema, Type type)
+    {
+        if (type.IsArray)
+        {
+            if (!schema.TryGetProperty("items", out var items)) return false;
+            return References(items, type.GetElementType()!);
+        }
+        return schema.TryGetProperty("$ref", out var reference) && reference.GetString() == $"#/components/schemas/{type.Name}";
     }
 
     private static bool Operational(RouteEndpoint endpoint)

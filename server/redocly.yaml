@@ -87,7 +87,19 @@ rules:
       type: Operation
       property: security
     assertions:
-      nonEmpty: true
+      defined: true
+      schema:
+        type: array
+        minItems: 1
+        maxItems: 1
+        items:
+          type: object
+          required: [Bearer]
+          additionalProperties: false
+          properties:
+            Bearer:
+              type: array
+              maxItems: 0
   rule/private-unauthorized:
     where:
       - subject:

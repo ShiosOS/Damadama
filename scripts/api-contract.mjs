@@ -229,30 +229,115 @@ function validator(...segments) {
     $ref: `urn:damadama:openapi#/${segments.map(escapePointer).join("/")}`,
   });
 }
-const validHabit = { name: "Walking", good: "5 minutes", better: "15 minutes", best: "30 minutes", weekdays: [1, 7], repeatEveryWeeks: 2, timeZone: "America/New_York" };
-const validEdit = { result: "Good", editedAt: "2026-01-05T00:00:00Z", deviceToday: "2026-01-05", timeZone: "Asia/Tokyo" };
-for (const [path, method, input] of [[habits, "post", validHabit], [entry, "put", validEdit]]) {
-  const validate = validator("paths", path, method, "requestBody", "content", "application/json", "schema");
+const validHabit = {
+  name: "Walking",
+  good: "5 minutes",
+  better: "15 minutes",
+  best: "30 minutes",
+  weekdays: [1, 7],
+  repeatEveryWeeks: 2,
+  timeZone: "America/New_York",
+};
+const validEdit = {
+  result: "Good",
+  editedAt: "2026-01-05T00:00:00Z",
+  deviceToday: "2026-01-05",
+  timeZone: "Asia/Tokyo",
+};
+for (const [path, method, input] of [
+  [habits, "post", validHabit],
+  [entry, "put", validEdit],
+]) {
+  const validate = validator(
+    "paths",
+    path,
+    method,
+    "requestBody",
+    "content",
+    "application/json",
+    "schema",
+  );
   assert.ok(validate(input), ajv.errorsText(validate.errors));
   for (const key of Object.keys(input)) {
     const missing = { ...input };
     delete missing[key];
-    assert.equal(validate(missing), false, `Request schema did not require ${key}`);
-    assert.equal(validate({ ...input, [key]: null }), false, `Request schema accepted null ${key}`);
+    assert.equal(
+      validate(missing),
+      false,
+      `Request schema did not require ${key}`,
+    );
+    assert.equal(
+      validate({ ...input, [key]: null }),
+      false,
+      `Request schema accepted null ${key}`,
+    );
   }
 }
-const validateHabit = validator("paths", habits, "post", "requestBody", "content", "application/json", "schema");
-for (const invalid of [{ ...validHabit, name: " " }, { ...validHabit, good: "" }, { ...validHabit, weekdays: [] }, { ...validHabit, weekdays: [0, 8] }, { ...validHabit, repeatEveryWeeks: 0 }, { ...validHabit, repeatEveryWeeks: 1.5 }, { ...validHabit, repeatEveryWeeks: "2" }])
-  assert.equal(validateHabit(invalid), false, `Habit schema accepted ${JSON.stringify(invalid)}`);
-const validateEdit = validator("paths", entry, "put", "requestBody", "content", "application/json", "schema");
-for (const invalid of [{ ...validEdit, result: "Unknown" }, { ...validEdit, deviceToday: "2026-02-30" }, { ...validEdit, editedAt: "yesterday" }])
-  assert.equal(validateEdit(invalid), false, `Entry schema accepted ${JSON.stringify(invalid)}`);
-for (const [path, name, validValue, invalidValue] of [[member, "id", "be3990ed-527d-451e-8a11-981648333ac9", "123"], [entry, "date", "2026-01-04", "2026-02-30"], [habits, "scheduledOn", "2026-01-04", "2026-1-4"]]) {
-  const index = document.paths[path].get.parameters.findIndex((parameter) => parameter.name === name);
+const validateHabit = validator(
+  "paths",
+  habits,
+  "post",
+  "requestBody",
+  "content",
+  "application/json",
+  "schema",
+);
+for (const invalid of [
+  { ...validHabit, name: " " },
+  { ...validHabit, good: "" },
+  { ...validHabit, weekdays: [] },
+  { ...validHabit, weekdays: [0, 8] },
+  { ...validHabit, repeatEveryWeeks: 0 },
+  { ...validHabit, repeatEveryWeeks: 1.5 },
+  { ...validHabit, repeatEveryWeeks: "2" },
+])
+  assert.equal(
+    validateHabit(invalid),
+    false,
+    `Habit schema accepted ${JSON.stringify(invalid)}`,
+  );
+const validateEdit = validator(
+  "paths",
+  entry,
+  "put",
+  "requestBody",
+  "content",
+  "application/json",
+  "schema",
+);
+for (const invalid of [
+  { ...validEdit, result: "Unknown" },
+  { ...validEdit, deviceToday: "2026-02-30" },
+  { ...validEdit, editedAt: "yesterday" },
+])
+  assert.equal(
+    validateEdit(invalid),
+    false,
+    `Entry schema accepted ${JSON.stringify(invalid)}`,
+  );
+for (const [path, name, validValue, invalidValue] of [
+  [member, "id", "be3990ed-527d-451e-8a11-981648333ac9", "123"],
+  [entry, "date", "2026-01-04", "2026-02-30"],
+  [habits, "scheduledOn", "2026-01-04", "2026-1-4"],
+]) {
+  const index = document.paths[path].get.parameters.findIndex(
+    (parameter) => parameter.name === name,
+  );
   assert.notEqual(index, -1, `Missing parameter ${name}`);
-  const validate = validator("paths", path, "get", "parameters", index, "schema");
+  const validate = validator(
+    "paths",
+    path,
+    "get",
+    "parameters",
+    index,
+    "schema",
+  );
   assert.equal(validate(validValue), true, `Parameter schema rejected ${name}`);
-  assert.equal(validate(invalidValue), false, `Parameter schema accepted invalid ${name}`);
+  assert.equal(
+    validate(invalidValue),
+    false,
+    `Parameter schema accepted invalid ${name}`,
+  );
 }
 if (!smoke) {
   const observations = JSON.parse(
