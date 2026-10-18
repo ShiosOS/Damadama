@@ -91,12 +91,20 @@ for (const current of [
   { ...entry, result: "Unknown" },
 ]) {
   void test(`rejects an invalid or mismatched conflict ${JSON.stringify(current)}`, async () => {
-    respond({ status: 409, title: "Conflict", current }, 409, {
-      "Content-Type": "application/problem+json",
-    });
+    respond(
+      { status: 409, title: "Conflict", current, traceId: "conflict-probe-01" },
+      409,
+      {
+        "Content-Type": "application/problem+json",
+      },
+    );
     await assert.rejects(
       api.saveEntry(habitId, date, input),
-      (error: unknown) => error instanceof ApiError && error.status === 502,
+      (error: unknown) =>
+        error instanceof ApiError &&
+        error.status === 502 &&
+        error.traceId === "conflict-probe-01" &&
+        error.message.endsWith("Support reference: conflict-probe-01."),
     );
   });
 }
@@ -107,10 +115,13 @@ for (const [status, headers] of [
   [200, { "Content-Type": "text/plain" }],
 ] satisfies [number, Record<string, string>][]) {
   void test(`rejects undocumented success ${status} ${JSON.stringify(headers)}`, async () => {
-    respond(entry, status, headers);
+    respond({ ...entry, traceId: "entry-probe-01" }, status, headers);
     await assert.rejects(
       api.saveEntry(habitId, date, input),
-      (error: unknown) => error instanceof ApiError && error.status === 502,
+      (error: unknown) =>
+        error instanceof ApiError &&
+        error.status === 502 &&
+        error.traceId === "entry-probe-01",
     );
   });
 }
@@ -160,3 +171,210 @@ void test("missing authentication prevents a request", async () => {
     (error: unknown) => error instanceof ApiError && error.status === 401,
   );
 });
+
+for (const traceId of [
+  "0HNABCDEF0123:00000001",
+  "00-abc_123-456",
+  "a".repeat(128),
+]) {
+  void test(`refusal displays a validated reference of length ${traceId.length}`, async () => {
+    respond({ title: "Unavailable", detail: "Try again later.", traceId }, 503);
+    await assert.rejects(api.list(), (error: unknown) => {
+      assert.ok(error instanceof ApiError);
+      assert.equal(error.status, 503);
+      assert.equal(error.traceId, traceId);
+      assert.equal(
+        error.message,
+        `Try again later. Support reference: ${traceId}.`,
+      );
+      return true;
+    });
+  });
+}
+
+for (const traceId of [
+  undefined,
+  null,
+  42,
+  {},
+  "",
+  "a".repeat(129),
+  "has space",
+  "has\nnewline",
+  "has\rreturn",
+  "has\ttab",
+  "<script>",
+  "path/value",
+  "unicode-\u00e9",
+]) {
+  void test(`invalid reference ${JSON.stringify(traceId)} preserves useful problem text`, async () => {
+    respond({ title: "Unavailable", detail: "Try again later.", traceId }, 503);
+    await assert.rejects(api.list(), (error: unknown) => {
+      assert.ok(error instanceof ApiError);
+      assert.equal(error.status, 503);
+      assert.equal(error.traceId, undefined);
+      assert.equal(error.message, "Try again later.");
+      return true;
+    });
+  });
+}
+
+void test("the constructor rejects an unsafe reference for every view", () => {
+  const error = new ApiError("Try again later.", 503, "unsafe\nvalue");
+  assert.equal(error.traceId, undefined);
+  assert.equal(error.message, "Try again later.");
+});
+
+void test("a reference is independent of problem validation", async () => {
+  respond({ title: 42, traceId: "problem-probe-01" }, 500);
+  await assert.rejects(api.list(), (error: unknown) => {
+    assert.ok(error instanceof ApiError);
+    assert.equal(error.status, 500);
+    assert.equal(error.traceId, "problem-probe-01");
+    assert.equal(
+      error.message,
+      "The request could not be completed. Support reference: problem-probe-01.",
+    );
+    return true;
+  });
+});
+
+void test("validation messages and authentication status keep their reference", async () => {
+  respond(
+    {
+      title: "Check fields",
+      errors: { name: ["Use a name."], good: ["Use a good level."] },
+      traceId: "validation-probe-01",
+    },
+    400,
+  );
+  await assert.rejects(
+    api.list(),
+    (error: unknown) =>
+      error instanceof ApiError &&
+      error.status === 400 &&
+      error.message ===
+        "Use a name. Use a good level. Support reference: validation-probe-01.",
+  );
+  respond(
+    { title: "Sign in to continue.", traceId: "authentication-probe-01" },
+    401,
+  );
+  await assert.rejects(
+    api.list(),
+    (error: unknown) =>
+      error instanceof ApiError &&
+      error.status === 401 &&
+      error.traceId === "authentication-probe-01",
+  );
+});
+
+for (const [name, call, body, status, headers] of [
+  ["collection body shape", (): Promise<unknown> => api.list(), {}, 200, {}],
+  [
+    "collection success status",
+    (): Promise<unknown> => api.list(),
+    {},
+    201,
+    {},
+  ],
+  [
+    "collection media type",
+    (): Promise<unknown> => api.list(),
+    {},
+    200,
+    { "Content-Type": "text/plain" },
+  ],
+  [
+    "entry body shape",
+    (): Promise<unknown> => api.saveEntry(habitId, date, input),
+    {},
+    200,
+    {},
+  ],
+  [
+    "entry habit relationship",
+    (): Promise<unknown> => api.saveEntry(habitId, date, input),
+    { ...entry, habitId: "c782d172-a403-4cbb-a138-0e97f903df24" },
+    200,
+    {},
+  ],
+  [
+    "entry date relationship",
+    (): Promise<unknown> => api.saveEntry(habitId, date, input),
+    { ...entry, calendarDate: "2026-01-03" },
+    200,
+    {},
+  ],
+] satisfies [
+  string,
+  () => Promise<unknown>,
+  object,
+  number,
+  Record<string, string>,
+][]) {
+  void test(`${name} rejection preserves the response reference`, async () => {
+    respond({ ...body, traceId: "boundary-probe-01" }, status, headers);
+    await assert.rejects(call(), (error: unknown) => {
+      assert.ok(error instanceof ApiError);
+      assert.equal(error.status, 502);
+      assert.equal(error.traceId, "boundary-probe-01");
+      assert.equal(
+        error.message,
+        "The service returned an unexpected response. Support reference: boundary-probe-01.",
+      );
+      return true;
+    });
+  });
+}
+
+void test("validated conflict adoption ignores an invalid optional reference", async () => {
+  respond(
+    {
+      status: 409,
+      title: "Conflict",
+      current: entry,
+      traceId: { invalid: true },
+    },
+    409,
+    {
+      "Content-Type": "application/problem+json",
+    },
+  );
+  assert.deepEqual(await api.saveEntry(habitId, date, input), entry);
+});
+
+for (const [name, call] of [
+  ["collection", (): Promise<unknown> => api.list()],
+  ["entry", (): Promise<unknown> => api.saveEntry(habitId, date, input)],
+] satisfies [string, () => Promise<unknown>][]) {
+  void test(`malformed ${name} JSON becomes a safe error without a fabricated reference`, async () => {
+    globalThis.fetch = Object.assign(
+      async () =>
+        new Response(
+          '{"traceId":"fake-body-reference","private-body":"private-json-sentinel"',
+          {
+            status: 503,
+            headers: { "Content-Type": "application/problem+json" },
+          },
+        ),
+      { preconnect: originalFetch.preconnect },
+    );
+    await assert.rejects(call(), (error: unknown) => {
+      assert.ok(error instanceof ApiError);
+      assert.equal(error.status, 502);
+      assert.equal(
+        error.message,
+        "The service returned an unexpected response.",
+      );
+      assert.equal(error.traceId, undefined);
+      assert.equal("cause" in error, false);
+      assert.deepEqual(Object.keys(error).sort(), ["status", "traceId"]);
+      assert.doesNotMatch(
+        JSON.stringify(error),
+        /fake-body-reference|private-json-sentinel|Bearer|token|api\/habits/,
+      );
+      return true;
+    });
+  });
+}

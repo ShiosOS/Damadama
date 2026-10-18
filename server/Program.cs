@@ -7,10 +7,8 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
-builder.Logging.AddJsonConsole(options => options.IncludeScopes = true);
-builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
-    context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier);
-builder.Services.AddExceptionHandler<ApiErrors>();
+builder.Logging.AddJsonConsole(options => options.IncludeScopes = false);
+builder.Services.AddRequestDiagnostics();
 builder.Services.AddDbContext<HabitsDb>(options => options.UseNpgsql(builder.Configuration.GetConnectionString("habits")));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
@@ -65,7 +63,11 @@ using (var scope = app.Services.CreateScope())
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapHealthChecks("/health/live", new() { Predicate = _ => false }).WithName("health-live").ExcludeFromDescription();
-app.MapHealthChecks("/health/ready", new() { Predicate = check => check.Tags.Contains("ready") }).WithName("health-ready").ExcludeFromDescription();
+app.MapHealthChecks("/health/ready", new()
+{
+    Predicate = check => check.Tags.Contains("ready"),
+    ResponseWriter = RequestDiagnostics.WriteReadinessResponse
+}).WithName("health-ready").ExcludeFromDescription();
 app.MapGet("/api/config", (IConfiguration configuration) => TypedResults.Ok(new ApplicationConfig(configuration["Clerk:PublishableKey"])))
     .WithName("application-config").WithTags("Configuration").WithSummary("Read public application configuration")
     .ProducesProblem(400);

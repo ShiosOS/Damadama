@@ -84,6 +84,50 @@ test("the committed result appears before any reload", async ({ page }) => {
 const controlsFor = (page: Page, name: string): Locator =>
   page.getByRole("group", { name: `Result for ${name}`, exact: true });
 
+test("a simulated entry failure displays its safe support reference", async ({
+  page,
+  context,
+}) => {
+  const video = page.video();
+  if (!video) throw new Error("The support reference fixture requires video.");
+  try {
+    await openDailyHabit(page, "entriesImmediate", "Entry support reference");
+    const controls = controlsFor(page, "Entry support reference");
+    await expect(controls).toBeVisible();
+    await controls.scrollIntoViewIfNeeded();
+    await page.route("**/api/habits/*/entries/*", async (route) => {
+      await route.fulfill({
+        status: 503,
+        contentType: "application/problem+json",
+        body: JSON.stringify({
+          title: "The habit could not be saved or loaded.",
+          detail:
+            "Storage is unavailable. Try again when the service is ready.",
+          traceId: "fixture-entry-support-01",
+        }),
+      });
+    });
+    await controls.getByRole("button", { name: "Good", exact: true }).click();
+    await expect(controls.getByRole("alert")).toContainText(
+      "Storage is unavailable. Try again when the service is ready. Support reference: fixture-entry-support-01.",
+    );
+    await expect(controls.getByRole("status")).toHaveText("No entry recorded.");
+    await expect(
+      controls.getByRole("button", { name: "Retry save", exact: true }),
+    ).toBeVisible();
+    await controls.scrollIntoViewIfNeeded();
+    await expect(controls.getByRole("alert")).toBeInViewport({ ratio: 1 });
+    await expect(
+      controls.getByRole("button", { name: "Retry save", exact: true }),
+    ).toBeInViewport({ ratio: 1 });
+    await capture(page, ".audit/entries-support-reference.png");
+    await page.waitForTimeout(1000);
+  } finally {
+    await context.close();
+    await video.saveAs(".audit/entries-support-reference.webm");
+  }
+});
+
 async function choose(
   page: Page,
   controls: Locator,

@@ -1,0 +1,12 @@
+[
+  "/api/config",
+  "/api/entries",
+  "/api/habits",
+  "/api/habits/{id:guid}",
+  "/api/habits/{id:guid}/entries/{date}",
+  "/health/live",
+  "/health/ready",
+  "/openapi/{documentName}.json",
+  "/sw.js",
+  "{*path:nonfile}"
+]

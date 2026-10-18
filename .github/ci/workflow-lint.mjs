@@ -4,6 +4,7 @@ import { arch, platform } from "node:process";
 import { join, resolve } from "node:path";
 import { gateGraphErrors, queueErrors } from "./workflow-policy.mjs";
 import { releaseCallables } from "./required-jobs.mjs";
+import { verifyReceiverWorkflow } from "./receiver-conformance.mjs";
 
 const root = resolve(import.meta.dir, "../..");
 const toolsDirectory = join(root, ".audit", "workflow-tools");
@@ -159,6 +160,7 @@ async function selfTest(actionlint, zizmor) {
     );
   }
   const workflows = await loadWorkflows();
+  await verifyReceiverWorkflow(workflows["ops-request-errors.yml"], root);
   const validGraph = gateGraphErrors(workflows);
   if (validGraph.length)
     throw new Error(`Real gate graph failed: ${validGraph.join("\n")}`);
