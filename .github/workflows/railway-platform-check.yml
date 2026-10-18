@@ -20,3 +20,45 @@ jobs:
       - run: npm ci --prefix .railway --ignore-scripts --no-audit --no-fund
       - run: npm run check --prefix .railway
       - run: docker build --file .railway/Preview.Dockerfile --tag damadama-preview:${{ github.event.pull_request.head.sha }} .
+      - name: Verify the built preview runtime and dependency versions
+        env:
+          PREVIEW_IMAGE: damadama-preview:${{ github.event.pull_request.head.sha }}
+          PUBLISHED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p .audit/preview-runtime
+          container_id="$(docker create "$PREVIEW_IMAGE")"
+          trap 'docker rm -f "$container_id" >/dev/null' EXIT
+          docker cp "$container_id:/app/Damadama.deps.json" .audit/preview-runtime/deps.json
+          docker run --rm --entrypoint dotnet "$PREVIEW_IMAGE" --list-runtimes > .audit/preview-runtime/runtimes.txt
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { execFileSync } from 'node:child_process';
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const read = (path) => readFileSync(path, 'utf8');
+          const runtime = read('release/Dockerfile').match(/aspnet:([0-9.]+)@/)[1];
+          const runtimes = read('.audit/preview-runtime/runtimes.txt').trim().split(/\r?\n/)
+            .map((line) => line.split(' ').slice(0, 2).join('/'));
+          assert(runtimes.includes('Microsoft.NETCore.App/' + runtime));
+          assert(runtimes.includes('Microsoft.AspNetCore.App/' + runtime));
+          const dependencies = JSON.parse(read('.audit/preview-runtime/deps.json'));
+          const packages = {};
+          for (const reference of read('server/Damadama.csproj').matchAll(/<PackageReference Include="([^"]+)" Version="([^"]+)"[^>]*\/>/g)) {
+            if (reference[0].includes('PrivateAssets="all"')) continue;
+            const [, name, version] = reference;
+            assert(dependencies.libraries[name + '/' + version], 'Built preview must contain ' + name + '/' + version);
+            packages[name] = version;
+          }
+          assert(Object.keys(packages).length > 0, 'Verify the declared runtime packages');
+          const proof = { publishedSha: process.env.PUBLISHED_SHA,
+            testedSha: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+            runtime, runtimes, packages };
+          writeFileSync('.audit/preview-runtime/proof.json', JSON.stringify(proof, null, 2) + '\n');
+          console.log(JSON.stringify(proof));
+          NODE
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: preview-runtime-${{ github.event.pull_request.head.sha }}
+          path: .audit/preview-runtime/proof.json
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 7
