@@ -3,6 +3,7 @@ import { spawn } from "bun";
 const prettierPaths = [
   "web",
   "tests/Browser",
+  "tests/Provider",
   "scripts",
   "package.json",
   "tsconfig.base.json",
@@ -15,7 +16,7 @@ const prettierPaths = [
   "dev/Properties/launchSettings.json",
 ];
 
-export function prettierCommand(write: boolean): string[] {
+export function prettierCommand(write: boolean): [string, ...string[]] {
   let mode = "--check";
   if (write) mode = "--write";
   return ["bun", "x", "--no-install", "prettier", mode, ...prettierPaths];
