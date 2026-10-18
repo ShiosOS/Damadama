@@ -3,7 +3,7 @@ FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf100
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 ENV PATH=/usr/local/bin:/usr/bin:/bin
 WORKDIR /src
-COPY package.json bun.lock bunfig.toml ./
+COPY package.json bun.lock bunfig.toml tsconfig.base.json ./
 COPY web/package.json web/package.json
 RUN bun install --frozen-lockfile --ignore-scripts
 COPY web web
