@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { resolve, relative, dirname, extname } from "node:path";
 import { ESLint } from "eslint";
+import { parse } from "@vue/compiler-sfc";
 import ts from "typescript";
 
 const root = resolve(import.meta.dirname, "..");
@@ -68,6 +69,38 @@ for (const project of projects) {
 
 const eslint = new ESLint();
 const failures = [];
+const suppression =
+  /(?:@ts-(?:ignore|expect-error|nocheck)|@vue-(?:ignore|expect-error|skip)|eslint-disable)\b/;
+
+function hasScriptSuppression(source) {
+  const scanner = ts.createScanner(
+    ts.ScriptTarget.Latest,
+    false,
+    ts.LanguageVariant.Standard,
+    source,
+  );
+  for (
+    let token = scanner.scan();
+    token !== ts.SyntaxKind.EndOfFileToken;
+    token = scanner.scan()
+  ) {
+    if (
+      (token === ts.SyntaxKind.SingleLineCommentTrivia ||
+        token === ts.SyntaxKind.MultiLineCommentTrivia) &&
+      suppression.test(scanner.getTokenText())
+    )
+      return true;
+  }
+  return false;
+}
+
+function hasTemplateSuppression(nodes) {
+  return nodes.some(
+    (node) =>
+      (node.type === 3 && suppression.test(node.content)) ||
+      (node.children && hasTemplateSuppression(node.children)),
+  );
+}
 for (const file of maintained) {
   const name = relative(root, file).replaceAll("\\", "/");
   if (!covered.has(file.toLowerCase()))
@@ -91,9 +124,17 @@ for (const file of maintained) {
     )
       failures.push(`${name}: every Vue script must use lang="ts"`);
   }
-  if (
-    /\b(?:@ts-(?:ignore|expect-error|nocheck)|eslint-disable)\b/.test(source)
-  ) {
+  let suppressed = hasScriptSuppression(source);
+  if (extname(file) === ".vue") {
+    const descriptor = parse(source).descriptor;
+    suppressed =
+      [descriptor.script, descriptor.scriptSetup].some(
+        (script) => script && hasScriptSuppression(script.content),
+      ) ||
+      (descriptor.template &&
+        hasTemplateSuppression(descriptor.template.ast.children));
+  }
+  if (suppressed) {
     failures.push(`${name}: type or lint suppression is forbidden`);
   }
 }

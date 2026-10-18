@@ -139,6 +139,66 @@ export const result = first + double(parsed);
   );
 });
 
+test("coverage accepts directive names in string literals", async () => {
+  const typed = resolve(root, "web/src/type-probe-literals.ts");
+  const vue = resolve(root, "web/src/type-probe-literals.vue");
+  await withProbes(
+    [
+      [typed, 'export const text = "@ts-ignore eslint-disable";\n'],
+      [
+        vue,
+        '<script setup lang="ts">\nconst text = "@vue-ignore @vue-expect-error";\n</script>\n<template><span>{{ text }}</span></template>\n',
+      ],
+    ],
+    () => {
+      accepts("scripts/type-coverage.mjs", []);
+      accepts("node_modules/vue-tsc/bin/vue-tsc.js", [
+        "-p",
+        "web/tsconfig.json",
+        "--noEmit",
+      ]);
+    },
+  );
+});
+
+test("coverage rejects real TypeScript and Vue suppression comments", async () => {
+  const typed = resolve(root, "web/src/type-probe-directives.ts");
+  const ignored = resolve(root, "web/src/type-probe-ignored.vue");
+  const expected = resolve(root, "web/src/type-probe-expected.vue");
+  await withProbes(
+    [
+      [
+        typed,
+        "// @ts-ignore\n// eslint-disable-next-line\nexport const value = 1;\n",
+      ],
+      [
+        ignored,
+        '<script setup lang="ts">\ndefineProps<{ count: number }>();\n</script>\n<template><span><!-- @vue-ignore -->{{ count.toUpperCase() }}</span></template>\n',
+      ],
+      [
+        expected,
+        '<script setup lang="ts">\ndefineProps<{ count: number }>();\n</script>\n<template><span><!-- @vue-expect-error -->{{ count.toUpperCase() }}</span></template>\n',
+      ],
+    ],
+    () => {
+      accepts("node_modules/vue-tsc/bin/vue-tsc.js", [
+        "-p",
+        "web/tsconfig.json",
+        "--noEmit",
+      ]);
+      rejects(
+        "scripts/type-coverage.mjs",
+        [],
+        [
+          /web\/src\/type-probe-directives\.ts: type or lint suppression is forbidden/,
+          /web\/src\/type-probe-ignored\.vue: type or lint suppression is forbidden/,
+          /web\/src\/type-probe-expected\.vue: type or lint suppression is forbidden/,
+        ],
+      );
+    },
+  );
+});
+
 test("browser fixture Vue templates are checked", async () => {
   const path = resolve(root, "tests/Browser/type-probe.vue");
   await withProbes(
@@ -187,6 +247,35 @@ export const forced = optional!;
           /@typescript-eslint\/consistent-type-assertions/,
           /@typescript-eslint\/no-non-null-assertion/,
         ],
+      );
+    },
+  );
+});
+
+test("typed ESLint requires return types for exported object methods and const arrows", async () => {
+  const object = resolve(root, "scripts/type-probe-object.ts");
+  const arrow = resolve(root, "scripts/type-probe-const-arrow.ts");
+  await withProbes(
+    [
+      [
+        object,
+        "export const api = { value(input: string) { return input.length; } };\n",
+      ],
+      [
+        arrow,
+        'export const singleton = () => ({ status: "ready" } as const);\n',
+      ],
+    ],
+    () => {
+      rejects(
+        "node_modules/eslint/bin/eslint.js",
+        [object],
+        [/@typescript-eslint\/explicit-function-return-type/],
+      );
+      rejects(
+        "node_modules/eslint/bin/eslint.js",
+        [arrow],
+        [/@typescript-eslint\/explicit-function-return-type/],
       );
     },
   );

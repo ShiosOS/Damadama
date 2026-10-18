@@ -46,10 +46,11 @@ export default [
       "@typescript-eslint/explicit-function-return-type": [
         "error",
         {
-          allowExpressions: true,
+          allowExpressions: false,
           allowTypedFunctionExpressions: true,
           allowHigherOrderFunctions: false,
           allowIIFEs: true,
+          allowDirectConstAssertionInArrowFunctions: false,
         },
       ],
       "@typescript-eslint/no-explicit-any": "error",

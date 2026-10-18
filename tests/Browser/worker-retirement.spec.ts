@@ -59,10 +59,11 @@ test("staging worker retires a cached shell without changing open drafts or stor
       localStorage.setItem("legacy-settings", "keep-settings");
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
         const open = indexedDB.open("legacy-data", 1);
-        open.onupgradeneeded = () =>
+        open.onupgradeneeded = (): void => {
           open.result.createObjectStore("pending", { keyPath: "id" });
-        open.onsuccess = () => resolve(open.result);
-        open.onerror = () =>
+        };
+        open.onsuccess = (): void => resolve(open.result);
+        open.onerror = (): void =>
           reject(open.error ?? new Error("Could not open legacy data"));
       });
       await new Promise<void>((resolve, reject) => {
@@ -73,8 +74,8 @@ test("staging worker retires a cached shell without changing open drafts or stor
         transaction
           .objectStore("pending")
           .put({ id: "two", owner: "account-two", draft: "second pending" });
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () =>
+        transaction.oncomplete = (): void => resolve();
+        transaction.onerror = (): void =>
           reject(
             transaction.error ?? new Error("Could not store pending data"),
           );
@@ -94,8 +95,8 @@ test("staging worker retires a cached shell without changing open drafts or stor
       draft.evaluate(async () => {
         const database = await new Promise<IDBDatabase>((resolve, reject) => {
           const open = indexedDB.open("legacy-data");
-          open.onsuccess = () => resolve(open.result);
-          open.onerror = () =>
+          open.onsuccess = (): void => resolve(open.result);
+          open.onerror = (): void =>
             reject(open.error ?? new Error("Could not open legacy data"));
         });
         const pending = await new Promise<unknown>((resolve, reject) => {
@@ -103,8 +104,8 @@ test("staging worker retires a cached shell without changing open drafts or stor
             .transaction("pending")
             .objectStore("pending")
             .getAll();
-          read.onsuccess = () => resolve(read.result);
-          read.onerror = () =>
+          read.onsuccess = (): void => resolve(read.result);
+          read.onerror = (): void =>
             reject(read.error ?? new Error("Could not read pending data"));
         });
         database.close();
