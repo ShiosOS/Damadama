@@ -79,7 +79,8 @@ public static class ApiProtocol
     {
         if (!request.Headers.ContainsKey("Accept")) return true;
         if (!MediaTypeHeaderValue.TryParseList(request.Headers.Accept.Select(value => value ?? "").ToArray(), out var ranges)) return false;
-        var matches = ranges.Select(range => new
+        var representation = new MediaTypeHeaderValue(ApiRepresentations.MediaType);
+        var matches = ranges.Where(representation.IsSubsetOf).Select(range => new
         {
             Range = range,
             Specificity = range.MediaType.Value?.ToLowerInvariant() switch

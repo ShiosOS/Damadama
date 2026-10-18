@@ -1,12 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from "vue";
-import {
-  ApiError,
-  type ApplicationBootstrap,
-  weekdays,
-  type Habit,
-  type NewHabit,
-} from "./habits";
+import { ApiError, type ApplicationBootstrap } from "./habits";
+import { weekdays, type Habit, type NewHabit } from "./habits.schema";
 import HabitDetails from "./HabitDetails.vue";
 import CheckeredD from "./CheckeredD.vue";
 import TodayView from "./TodayView.vue";

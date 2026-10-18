@@ -174,6 +174,9 @@ public class RestContractTests
     [TestCase("text/html")]
     [TestCase("application/json")]
     [TestCase("application/vnd.siren+json;q=0, */*;q=1")]
+    [TestCase("application/vnd.siren+json;profile=\"urn:unsupported\"")]
+    [TestCase("application/vnd.siren+json;profile=\"urn:unsupported\";q=1, application/vnd.siren+json;q=0")]
+    [TestCase("application/vnd.siren+json;charset=iso-8859-1")]
     public async Task Unsupported_or_explicitly_excluded_success_media_is_not_silently_returned(string accept)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/config");
@@ -185,6 +188,8 @@ public class RestContractTests
     [TestCase("*/*")]
     [TestCase("application/*")]
     [TestCase("text/html;q=1, application/vnd.siren+json;q=0.5")]
+    [TestCase("application/vnd.siren+json;profile=\"urn:unsupported\";q=0, application/vnd.siren+json;q=1")]
+    [TestCase("application/*;profile=\"urn:unsupported\";q=1, */*;q=0.5")]
     public async Task Supported_wildcards_and_quality_preferences_receive_the_resource(string accept)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/config");

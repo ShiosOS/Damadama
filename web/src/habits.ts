@@ -1,12 +1,6 @@
 import { z } from "zod";
 import { entrySchema, type Entry, type EntryEdit } from "./entries.schema";
 import { habitSchema, type Habit, type NewHabit } from "./habits.schema";
-export {
-  habitSchema,
-  weekdays,
-  type Habit,
-  type NewHabit,
-} from "./habits.schema";
 
 const siren = "application/vnd.siren+json";
 const problemSchema = z.object({
@@ -184,7 +178,6 @@ async function readResponse(
   return readJson(response);
 }
 
-// The browser fixture passes the unmodified envelope fetched from the real host.
 export function readApplication(data: unknown): ApplicationBootstrap {
   const bootstrap = resource(data, "application");
   const config = properties(
