@@ -109,18 +109,19 @@ test("the production entry explains missing sign-in configuration accessibly", a
   let habitRequests = 0;
   const scripts = new Set<string>();
   const errors: string[] = [];
+  const apiOrigin = `http://localhost:${process.env.DAMADAMA_API_PORT ?? "5055"}`;
   page.on("pageerror", (error) => errors.push(error.name));
   page.on("request", (request) => {
     const path = new URL(request.url()).pathname;
     if (path === "/api/habits") habitRequests++;
     if (path.startsWith("/assets/") && path.endsWith(".js")) scripts.add(path);
   });
-  await page.route("http://localhost:5055/api/config", async (route) => {
+  await page.route(`${apiOrigin}/api/config`, async (route) => {
     const response = await route.fetch();
     realConfigStatus = response.status();
     await route.fulfill({ response, json: { clerkPublishableKey: null } });
   });
-  await page.goto("http://localhost:5055/");
+  await page.goto(`${apiOrigin}/`);
   await expect(
     page.getByRole("heading", { name: "Damadama", exact: true }),
   ).toBeVisible();

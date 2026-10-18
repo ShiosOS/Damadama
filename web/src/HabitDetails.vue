@@ -1,27 +1,14 @@
 <script setup lang="ts">
-import { weekdays, type Habit } from "./habits";
-defineProps<{ habit: Habit }>();
+import { weekdays } from "./habits";
+import type { Habit } from "./habits.schema";
+import HabitLevels from "./HabitLevels.vue";
+type Props = { habit: Habit };
+defineProps<Props>();
 </script>
 
 <template>
   <div class="habit-details">
-    <div class="habit-tiers">
-      <p>
-        <span class="tier-swatch tier-good" aria-hidden="true" /><span
-          ><strong>Good:</strong> {{ habit.good }}</span
-        >
-      </p>
-      <p>
-        <span class="tier-swatch tier-better" aria-hidden="true" /><span
-          ><strong>Better:</strong> {{ habit.better }}</span
-        >
-      </p>
-      <p>
-        <span class="tier-swatch tier-best" aria-hidden="true" /><span
-          ><strong>Best:</strong> {{ habit.best }}</span
-        >
-      </p>
-    </div>
+    <HabitLevels :good="habit.good" :better="habit.better" :best="habit.best" />
     <div class="habit-schedule">
       <ul class="weekday-list" aria-label="Scheduled weekdays">
         <li
