@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { delimiter, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -37,6 +38,21 @@ try {
     "Commit and independently review every authoring change before a credentialed plan.",
   );
   const cli = process.env.RAILWAY_CLI ?? "railway";
+  const planEnvironment = {
+    ...process.env,
+    CI: "true",
+    RAILWAY_CALLER: "skill:use-railway@1.7.0",
+    RAILWAY_AGENT_SESSION: "damadama-reviewed-plan",
+  };
+  if (process.env.RAILWAY_CLI) {
+    const pathKey =
+      Object.keys(planEnvironment).find(
+        (key) => key.toLowerCase() === "path",
+      ) ?? "PATH";
+    planEnvironment[pathKey] = [dirname(resolve(cli)), planEnvironment[pathKey]]
+      .filter(Boolean)
+      .join(delimiter);
+  }
   const version = spawnSync(cli, ["--version"], {
     encoding: "utf8",
     timeout: 10_000,
@@ -66,12 +82,7 @@ try {
       cwd: root,
       encoding: "utf8",
       timeout: 120_000,
-      env: {
-        ...process.env,
-        CI: "true",
-        RAILWAY_CALLER: "skill:use-railway@1.7.0",
-        RAILWAY_AGENT_SESSION: "damadama-reviewed-plan",
-      },
+      env: planEnvironment,
     },
   );
   if (plan.status === 0) {

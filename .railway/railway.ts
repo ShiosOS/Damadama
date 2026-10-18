@@ -80,6 +80,12 @@ export default defineRailway((ctx): ProjectDefinition => {
     );
   }
 
+  if (ctx.command === "apply") {
+    throw new Error(
+      "Trusted infrastructure apply is blocked. Railway CLI 5.70.0 proposes clearing omitted image sources; require verified no-change plans with source preservation first.",
+    );
+  }
+
   let appName = "app";
   let domain = "staging.damadama.app";
   if (environment === "production") {

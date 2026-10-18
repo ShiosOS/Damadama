@@ -159,11 +159,8 @@ export function verifyDefinition(definition, environment) {
   );
 }
 
-export async function definitionFor(environment) {
-  return railway(
-    createRailwayContext({ environment, command: "plan" }),
-    project,
-  );
+export async function definitionFor(environment, command = "plan") {
+  return railway(createRailwayContext({ environment, command }), project);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
