@@ -32,7 +32,7 @@ jobs:
           node-version: 24
       - id: application
         run: |
-          state=$(node release/application.mjs $(git rev-parse HEAD))
+          state=$(node release/application.mjs "$(git rev-parse HEAD)")
           echo "state=$state" >> "$GITHUB_OUTPUT"
       - if: steps.application.outputs.state == 'setup'
         run: echo "Nondeployable setup. No application has existed since the approved controls baseline." >> "$GITHUB_STEP_SUMMARY"
