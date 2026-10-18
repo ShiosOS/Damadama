@@ -9,44 +9,48 @@ public static class EntryEndpoints
 {
     public static void MapEntries(this WebApplication app)
     {
-        app.MapPut("/api/habits/{id:guid}/entries/{date}", async (Guid id, string date, WriteEntry input,
-            ClaimsPrincipal user, HabitsDb db, TimeProvider clock, CancellationToken cancellationToken) =>
-        {
-            var owner = user.FindFirst("sub")!.Value;
-            var habit = await db.Habits.AsNoTracking().Include(h => h.Schedule)
-                .SingleOrDefaultAsync(h => h.Id == id && h.OwnerId == owner, cancellationToken);
-            if (habit is null) return Results.NotFound();
+        app.MapPut("/api/habits/{id:guid}/entries/{date}", SaveEntry).RequireAuthorization();
+        app.MapGet("/api/entries", ReadEntries).RequireAuthorization();
+    }
 
-            var calendarDate = ParseDate(date, nameof(date));
-            var today = DeviceToday(input, clock);
-            if (calendarDate > today)
-                throw new ArgumentException("Choose today or a past scheduled date.", nameof(date));
-            if (!Enum.TryParse<EntryResult>(input.Result, out var result) || !Enum.IsDefined(result) ||
-                input.Result != result.ToString())
-                throw new ArgumentException("Choose Good, Better, Best, Rest, or Clear.", nameof(input.Result));
-            if (input.EditedAt is not { } editedAt)
-                throw new ArgumentException("Include the edit timestamp.", nameof(input.EditedAt));
+    private static async Task<IResult> SaveEntry(Guid id, string date, WriteEntry input,
+        ClaimsPrincipal user, HabitsDb db, TimeProvider clock, CancellationToken cancellationToken)
+    {
+        var owner = user.FindFirst("sub")!.Value;
+        var habit = await db.Habits.AsNoTracking().Include(h => h.Schedule)
+            .SingleOrDefaultAsync(h => h.Id == id && h.OwnerId == owner, cancellationToken);
+        if (habit is null) return Results.NotFound();
 
-            var retained = await db.DailyEntries.AnyAsync(e => e.HabitId == id && e.CalendarDate == calendarDate,
-                cancellationToken);
-            if (!retained && !ScheduleEligibility.IsScheduled(habit.Schedule, calendarDate))
-                throw new ArgumentException("This habit was not scheduled on that date.", nameof(date));
-            var saved = await DailyEntryStore.Save(db, habit, calendarDate, result, editedAt, cancellationToken);
-            return Results.Ok(EntryResponse.From(saved, habit.Name));
-        }).RequireAuthorization();
+        var calendarDate = ParseDate(date, nameof(date));
+        var today = DeviceToday(input, clock);
+        if (calendarDate > today)
+            throw new ArgumentException("Choose today or a past scheduled date.", nameof(date));
+        if (!Enum.TryParse<EntryResult>(input.Result, out var result) || !Enum.IsDefined(result) ||
+            input.Result != result.ToString())
+            throw new ArgumentException("Choose Good, Better, Best, Rest, or Clear.", nameof(input.Result));
+        if (input.EditedAt is not { } editedAt)
+            throw new ArgumentException("Include the edit timestamp.", nameof(input.EditedAt));
 
-        app.MapGet("/api/entries", async (string date, ClaimsPrincipal user, HabitsDb db,
-            CancellationToken cancellationToken) =>
-        {
-            var calendarDate = ParseDate(date, nameof(date));
-            var owner = user.FindFirst("sub")!.Value;
-            var entries = await (from entry in db.DailyEntries.AsNoTracking()
-                                 join habit in db.Habits on entry.HabitId equals habit.Id
-                                 where habit.OwnerId == owner && entry.CalendarDate == calendarDate
-                                 orderby entry.HabitId
-                                 select new { Entry = entry, HabitName = habit.Name }).ToListAsync(cancellationToken);
-            return entries.Select(row => EntryResponse.From(row.Entry, row.HabitName));
-        }).RequireAuthorization();
+        var retained = await db.Entries.AnyAsync(e => e.HabitId == id && e.CalendarDate == calendarDate,
+            cancellationToken);
+        if (!retained && !ScheduleEligibility.IsScheduled(habit.Schedule, calendarDate))
+            throw new ArgumentException("This habit was not scheduled on that date.", nameof(date));
+
+        var saved = await EntryStore.Save(db, habit, calendarDate, result, editedAt, cancellationToken);
+        return Results.Ok(EntryResponse.From(saved, habit.Name));
+    }
+
+    private static async Task<IEnumerable<EntryResponse>> ReadEntries(string date, ClaimsPrincipal user, HabitsDb db,
+        CancellationToken cancellationToken)
+    {
+        var calendarDate = ParseDate(date, nameof(date));
+        var owner = user.FindFirst("sub")!.Value;
+        var entries = await (from entry in db.Entries.AsNoTracking()
+                             join habit in db.Habits on entry.HabitId equals habit.Id
+                             where habit.OwnerId == owner && entry.CalendarDate == calendarDate
+                             orderby entry.HabitId
+                             select new { Entry = entry, HabitName = habit.Name }).ToListAsync(cancellationToken);
+        return entries.Select(row => EntryResponse.From(row.Entry, row.HabitName));
     }
 
     private static DateOnly ParseDate(string? value, string field)
@@ -75,7 +79,7 @@ public sealed record WriteEntry(string? Result, DateTimeOffset? EditedAt, string
 public sealed record EntryResponse(Guid HabitId, string HabitName, DateOnly CalendarDate, string Result, DateTimeOffset EditedAt,
     string Good, string Better, string Best)
 {
-    public static EntryResponse From(DailyEntry entry, string habitName) => new(entry.HabitId, habitName, entry.CalendarDate,
+    public static EntryResponse From(Entry entry, string habitName) => new(entry.HabitId, habitName, entry.CalendarDate,
         entry.Result.ToString(), entry.EditedAt, entry.OriginalLevels.Good, entry.OriginalLevels.Better,
         entry.OriginalLevels.Best);
 }

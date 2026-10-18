@@ -5,7 +5,7 @@ using NUnit.Framework;
 
 namespace Damadama.Tests;
 
-public class DailyEntryApiTests
+public class EntryApiTests
 {
     private TestApp app = null!;
     private HttpClient client = null!;
@@ -23,6 +23,19 @@ public class DailyEntryApiTests
     }
 
     private string Path(string date = "2026-01-04") => $"/api/habits/{habitId}/entries/{date}";
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task Unknown_or_unowned_habits_are_not_found_before_field_validation(bool foreignOwner)
+    {
+        using var requester = app.SignedIn(foreignOwner ? "other-owner" : "owner");
+        var requestedHabit = foreignOwner ? habitId : Guid.NewGuid();
+        using var response = await requester.PutAsJsonAsync($"/api/habits/{requestedHabit}/entries/not-a-date", new
+        { result = "Unknown", deviceToday = "invalid", timeZone = "unknown" });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        Assert.That(await DatabaseFixture.Count("DailyEntries"), Is.Zero);
+    }
 
     [TestCase("Clear")]
     [TestCase("Rest")]
@@ -68,7 +81,7 @@ public class DailyEntryApiTests
         using var missing = await client.PutAsJsonAsync(Path(), new
         { result = "Good", deviceToday = "2026-01-05", timeZone = "Asia/Tokyo" });
         await AssertRefused(missing);
-        using var date = await client.PutAsJsonAsync(Path("2026-1-4"), DailyEntrySteps.Change());
+        using var date = await client.PutAsJsonAsync(Path("2026-1-4"), EntrySteps.Change());
         await AssertRefused(date);
     }
 
@@ -82,10 +95,10 @@ public class DailyEntryApiTests
     [Test]
     public async Task Retained_history_remains_editable_after_the_date_leaves_the_schedule()
     {
-        using var first = await client.PutAsJsonAsync(Path(), DailyEntrySteps.Change());
+        using var first = await client.PutAsJsonAsync(Path(), EntrySteps.Change());
         Assert.That(first.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         await DatabaseFixture.Execute($"UPDATE \"InitialSchedules\" SET \"Weekdays\" = ARRAY[3] WHERE \"HabitId\" = '{habitId}'");
-        using var changed = await client.PutAsJsonAsync(Path(), DailyEntrySteps.Change("Better", "2026-01-05T00:01:00Z"));
+        using var changed = await client.PutAsJsonAsync(Path(), EntrySteps.Change("Better", "2026-01-05T00:01:00Z"));
         Assert.That(changed.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var saved = await changed.Content.ReadFromJsonAsync<JsonElement>();
         Assert.That(saved.GetProperty("result").GetString(), Is.EqualTo("Better"));
@@ -109,7 +122,7 @@ public class DailyEntryApiTests
             : "CREATE TRIGGER reject_entry_api BEFORE INSERT ON \"DailyEntries\" FOR EACH ROW EXECUTE FUNCTION reject_entry_api()");
         try
         {
-            using var failed = await client.PutAsJsonAsync(Path(), DailyEntrySteps.Change());
+            using var failed = await client.PutAsJsonAsync(Path(), EntrySteps.Change());
             Assert.That(failed.StatusCode, Is.EqualTo(HttpStatusCode.ServiceUnavailable));
             var problem = await failed.Content.ReadFromJsonAsync<JsonElement>();
             Assert.That(problem.GetProperty("traceId").GetString(), Is.Not.Empty);
@@ -119,7 +132,7 @@ public class DailyEntryApiTests
         {
             await DatabaseFixture.Execute("DROP TRIGGER reject_entry_api ON \"DailyEntries\"; DROP FUNCTION reject_entry_api()");
         }
-        using var retry = await client.PutAsJsonAsync(Path(), DailyEntrySteps.Change());
+        using var retry = await client.PutAsJsonAsync(Path(), EntrySteps.Change());
         Assert.That(retry.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(await DatabaseFixture.Count("DailyEntries"), Is.EqualTo(1));
     }
@@ -129,7 +142,7 @@ public class DailyEntryApiTests
     {
         using var ready = await client.GetAsync("/health/ready");
         Assert.That(ready.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        await DatabaseFixture.Execute("ALTER TABLE \"DailyEntries\" RENAME TO \"MissingDailyEntries\"");
+        await DatabaseFixture.Execute("ALTER TABLE \"DailyEntries\" RENAME TO \"MissingEntries\"");
         try
         {
             using var unavailable = await client.GetAsync("/health/ready");
@@ -139,7 +152,7 @@ public class DailyEntryApiTests
         }
         finally
         {
-            await DatabaseFixture.Execute("ALTER TABLE \"MissingDailyEntries\" RENAME TO \"DailyEntries\"");
+            await DatabaseFixture.Execute("ALTER TABLE \"MissingEntries\" RENAME TO \"DailyEntries\"");
         }
     }
 

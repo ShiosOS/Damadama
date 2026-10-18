@@ -11,9 +11,9 @@ public enum EntryResult
     Best = 4
 }
 
-public sealed class DailyEntry
+public sealed class Entry
 {
-    private DailyEntry() { }
+    private Entry() { }
     public Guid HabitId { get; private set; }
     public DateOnly CalendarDate { get; private set; }
     public EntryResult Result { get; private set; }

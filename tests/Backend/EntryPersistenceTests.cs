@@ -8,7 +8,7 @@ using Testcontainers.PostgreSql;
 
 namespace Damadama.Tests;
 
-public class DailyEntryPersistenceTests
+public class EntryPersistenceTests
 {
     private static readonly DateOnly Day = new(2026, 10, 14);
     private static readonly DateTimeOffset Instant = new(2026, 10, 15, 13, 14, 15, TimeSpan.Zero);
@@ -28,7 +28,7 @@ public class DailyEntryPersistenceTests
     public async Task Stop() => await database.DisposeAsync();
 
     [Test]
-    public async Task Schema_contains_daily_entries_and_matches_the_model()
+    public async Task Schema_contains_entries_and_matches_the_model()
     {
         await using var connection = new NpgsqlConnection(database.GetConnectionString());
         await connection.OpenAsync();
@@ -258,14 +258,14 @@ public class DailyEntryPersistenceTests
         await secondDb.Database.OpenConnectionAsync(timeout.Token);
         var firstPid = await firstDb.Database.SqlQuery<int>($"SELECT pg_backend_pid() AS \"Value\"").SingleAsync(timeout.Token);
         var secondPid = await secondDb.Database.SqlQuery<int>($"SELECT pg_backend_pid() AS \"Value\"").SingleAsync(timeout.Token);
-        Task<DailyEntry>? first = null;
-        Task<DailyEntry>? second = null;
+        Task<Entry>? first = null;
+        Task<Entry>? second = null;
         try
         {
-            first = DailyEntryStore.Save(firstDb, habit, Day, winnerFirst ? winnerResult : loserResult,
+            first = EntryStore.Save(firstDb, habit, Day, winnerFirst ? winnerResult : loserResult,
                 winnerFirst ? winnerTime : Instant, timeout.Token);
             await AssertBlockedBy(firstPid, gatePid);
-            second = DailyEntryStore.Save(secondDb, habit, Day, winnerFirst ? loserResult : winnerResult,
+            second = EntryStore.Save(secondDb, habit, Day, winnerFirst ? loserResult : winnerResult,
                 winnerFirst ? Instant : winnerTime, timeout.Token);
             await AssertBlockedBy(secondPid, firstPid);
             Assert.Multiple(() =>
@@ -337,10 +337,10 @@ public class DailyEntryPersistenceTests
         return habit;
     }
 
-    private async Task<DailyEntry> Save(Habit habit, DateOnly date, EntryResult result, DateTimeOffset editedAt)
+    private async Task<Entry> Save(Habit habit, DateOnly date, EntryResult result, DateTimeOffset editedAt)
     {
         await using var db = new HabitsDb(options);
-        return await DailyEntryStore.Save(db, habit, date, result, editedAt, CancellationToken.None);
+        return await EntryStore.Save(db, habit, date, result, editedAt, CancellationToken.None);
     }
 
     private async Task Execute(string sql)

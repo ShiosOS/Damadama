@@ -19,5 +19,5 @@ export const entrySchema = z.object({
   best: z.string(),
 });
 
-export type DailyEntry = z.infer<typeof entrySchema>;
-export type EntryEdit = Pick<DailyEntry, "result" | "editedAt">;
+export type Entry = z.infer<typeof entrySchema>;
+export type EntryEdit = Pick<Entry, "result" | "editedAt">;

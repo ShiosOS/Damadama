@@ -42,7 +42,7 @@ The job writes a PostgreSQL custom-format dump, encrypts it with age, and upload
 It uploads completion JSON only after both objects succeed. Each attempt uses a unique timestamp and nonce; retries cannot overwrite a completed backup.
 Completion JSON marks restorable backup data after the archive and checksum uploads; the retention sweep runs afterward. A retention failure still fails the job and prints no final success JSON, but can leave a valid newly completed backup.
 Restore only objects with completion JSON and a matching checksum. Failed uploads may leave uncommitted objects; they are not successful backups.
-The dump covers the whole application database, including future daily-entry tables when those features land.
+The dump covers the whole application database, including future entry tables when those features land.
 
 The retention sweep deletes only recognized backup objects under that environment's prefix whose object modification time is older than seven days.
 Unknown keys remain untouched. A retention failure fails the job and needs investigation even if the new archive uploaded.

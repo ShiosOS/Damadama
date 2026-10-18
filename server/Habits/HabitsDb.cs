@@ -8,7 +8,7 @@ public sealed class HabitsDb(DbContextOptions<HabitsDb> options) : DbContext(opt
 {
     public DbSet<Habit> Habits => Set<Habit>();
     public DbSet<InitialSchedule> InitialSchedules => Set<InitialSchedule>();
-    public DbSet<DailyEntry> DailyEntries => Set<DailyEntry>();
+    public DbSet<Entry> Entries => Set<Entry>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -34,7 +34,7 @@ public sealed class HabitsDb(DbContextOptions<HabitsDb> options) : DbContext(opt
             });
             schedule.HasKey(s => s.HabitId);
         });
-        model.Entity<DailyEntry>(entry =>
+        model.Entity<Entry>(entry =>
         {
             entry.ToTable("DailyEntries", table => table.HasCheckConstraint("EntryResult", "\"Result\" BETWEEN 0 AND 4"));
             entry.HasKey(e => new { e.HabitId, e.CalendarDate });

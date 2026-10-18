@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from "vue";
-import { entryResultSchema, type DailyEntry, type EntryEdit } from "./entries";
+import { entryResultSchema, type Entry, type EntryEdit } from "./entries";
 import { ApiError } from "./habits";
 
 const props = defineProps<{
   habitName: string;
-  entry: DailyEntry | undefined;
-  save: (edit: EntryEdit) => Promise<DailyEntry>;
+  entry: Entry | undefined;
+  save: (edit: EntryEdit) => Promise<Entry>;
 }>();
 const emit = defineEmits<{
-  saved: [entry: DailyEntry];
+  saved: [entry: Entry];
   unauthorized: [];
 }>();
 

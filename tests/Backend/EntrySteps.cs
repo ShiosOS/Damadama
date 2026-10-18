@@ -9,7 +9,7 @@ using Reqnroll;
 namespace Damadama.Tests;
 
 [Binding]
-public sealed class DailyEntrySteps
+public sealed class EntrySteps
 {
     private TestApp app = null!;
     private HttpClient client = null!;

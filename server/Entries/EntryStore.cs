@@ -4,9 +4,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Damadama.Entries;
 
-public static class DailyEntryStore
+public static class EntryStore
 {
-    public static async Task<DailyEntry> Save(HabitsDb db, Habit habit, DateOnly calendarDate,
+    public static async Task<Entry> Save(HabitsDb db, Habit habit, DateOnly calendarDate,
         EntryResult result, DateTimeOffset editedAt, CancellationToken cancellationToken)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
@@ -19,7 +19,7 @@ public static class DailyEntryStore
             WHERE (EXCLUDED."EditedAtTicks", EXCLUDED."Result") > ("DailyEntries"."EditedAtTicks", "DailyEntries"."Result")
             """, cancellationToken);
         // A separate Read Committed statement sees a conflicting insert after its transaction commits.
-        var winner = await db.DailyEntries.AsNoTracking()
+        var winner = await db.Entries.AsNoTracking()
             .SingleAsync(entry => entry.HabitId == habit.Id && entry.CalendarDate == calendarDate, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return winner;

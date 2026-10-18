@@ -1,4 +1,4 @@
-Feature: Online daily entries
+Feature: Online entries
   A signed-in owner records one result per habit and calendar date.
 
   Scenario: Save a past result before refusing other accounts
