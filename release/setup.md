@@ -21,4 +21,4 @@ Remove unused verifier App credentials and obsolete staging-verification and ima
 
 A setup-only main revision is nondeployable. All application roots must be absent, and immutable ancestry from controls baseline `465b8165c1b4b0f29c4daed33d6f3a13b09a8e14` must show that none was ever installed. Partial roots or later deletion refuse setup. PR setup checks report this explicit state. They never fabricate application test or staging evidence.
 
-After application merge, the main-push DAG runs actual application checks and automatically stages the image. Staging does not gate the earlier PR merge. See [stage main and promote the tested image](release-operations.md).
+After application merge, the main-push DAG runs actual application checks and automatically stages the image. Staging does not gate the earlier PR merge. See [stage main and promote the tested image](README.md).
