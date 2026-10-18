@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { setTimeout } from "node:timers/promises";
+import { proveRestoreFailures } from "./restore-faults.mjs";
+import { selectSource } from "./proof-source.mjs";
 
-const app = process.argv[2];
 const postgres =
   "postgres:17-bookworm@sha256:66aafa11cf15800a3c94763f7e11d1e7b2e37e5e84bc4ce027cb6e1e4bfaf4df";
 const storage =
@@ -14,16 +15,38 @@ const task = randomUUID();
 const directory = resolve(".audit", `recovery-proof-${task}`);
 await mkdir(directory, { recursive: true });
 const docker = (...args) =>
-  execFileSync("docker", args, { encoding: "utf8", timeout: 180_000 }).trim();
+  execFileSync("docker", args, {
+    encoding: "utf8",
+    timeout: 180_000,
+    stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
 const containers = [];
-const network = docker("network", "create", `damadama-proof-${task}`);
+let network;
 const password = randomUUID();
+const targetPassword = randomUUID();
+const startedAt = new Date();
+let phase = "identity";
+const receipt = {
+  schema: 1,
+  proofId: task,
+  scope: "local-synthetic",
+  mode: "unselected",
+  outcome: "failed",
+  startedAt: startedAt.toISOString(),
+  image: null,
+  migrations: {},
+  assertions: {},
+  scenarios: {},
+  checks: [],
+  hostedRehearsal: "unknown-not-executed",
+  previousProductionCompatibility: "unknown-no-supported-image-established",
+};
 const run = (...args) => {
   const id = docker("run", "-d", "--network", network, ...args);
   containers.push(id);
   return id;
 };
-const sql = (id, query) =>
+const sql = (id, query, database = "habits") =>
   execFileSync(
     "docker",
     [
@@ -39,11 +62,16 @@ const sql = (id, query) =>
       "-U",
       "postgres",
       "-d",
-      "habits",
+      database,
       "-v",
       "ON_ERROR_STOP=1",
     ],
-    { input: query, encoding: "utf8" },
+    {
+      input: query,
+      encoding: "utf8",
+      timeout: 30_000,
+      stdio: ["pipe", "pipe", "pipe"],
+    },
   ).trim();
 async function wait(ready, label) {
   const deadline = Date.now() + 60_000;
@@ -53,35 +81,38 @@ async function wait(ready, label) {
   }
   throw new Error(`${label} did not become ready`);
 }
-async function startApp(host) {
-  const id = run(
-    "-p",
-    "127.0.0.1::8080",
-    "-e",
-    `ConnectionStrings__habits=Host=${host};Database=habits;Username=postgres;Password=${password}`,
-    "-e",
-    "Clerk__Issuer=https://invalid.example",
-    app,
-  );
-  const port = docker("port", id, "8080/tcp").match(/:(\d+)$/)?.[1];
-  const origin = `http://127.0.0.1:${port}`;
-  await wait(async () => {
-    try {
-      return (await fetch(`${origin}/health/ready`)).status === 200;
-    } catch {
-      return false;
-    }
-  }, "production image readiness");
-  assert.equal((await fetch(`${origin}/api/habits`)).status, 401);
-  return { id, origin };
-}
 
-function appOrigin(id) {
-  const port = docker("port", id, "8080/tcp").match(/:(\d+)$/)?.[1];
-  return `http://127.0.0.1:${port}`;
-}
+const objectsQuery = `SELECT (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON c.relnamespace=n.oid WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema') + (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON p.pronamespace=n.oid WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema') + (SELECT count(*) FROM pg_type t JOIN pg_namespace n ON t.typnamespace=n.oid WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema') + (SELECT count(*) FROM pg_namespace WHERE nspname NOT LIKE 'pg_%' AND nspname NOT IN ('information_schema','public'));`;
+
+const onCheck = (code, status, createdAtDifference) => {
+  phase = code;
+  const check = { code };
+  if (Number.isInteger(status) && status >= 100 && status <= 599)
+    check.status = status;
+  if (createdAtDifference)
+    check.createdAtDifference = {
+      postCreatedAt: createdAtDifference.postCreatedAt,
+      getCreatedAt: createdAtDifference.getCreatedAt,
+      deltaTicks: createdAtDifference.deltaTicks,
+    };
+  receipt.checks.push(check);
+  console.error(
+    JSON.stringify({ scope: "synthetic-recovery-check", ...check }),
+  );
+};
 
 try {
+  const prepareSource = await selectSource(process.argv.slice(2), {
+    receipt,
+    directory,
+    run,
+    docker,
+    sql,
+    wait,
+    onCheck,
+  });
+  phase = "isolated-resources";
+  network = docker("network", "create", `damadama-proof-${task}`);
   const source = run(
     "--network-alias",
     "source-db",
@@ -95,7 +126,7 @@ try {
     "--network-alias",
     "target-db",
     "-e",
-    `POSTGRES_PASSWORD=${password}`,
+    `POSTGRES_PASSWORD=${targetPassword}`,
     "-e",
     "POSTGRES_DB=habits",
     postgres,
@@ -114,42 +145,16 @@ try {
         ]).status === 0,
       "isolated PostgreSQL",
     );
-  let running;
-  if (app) running = await startApp("source-db");
-  else
-    sql(
-      source,
-      'CREATE TABLE "Habits" ("Id" uuid PRIMARY KEY, "OwnerId" text, "Name" text, "Good" text, "Better" text, "Best" text, "CreatedAt" timestamptz); CREATE TABLE "InitialSchedules" ("HabitId" uuid PRIMARY KEY, "Weekdays" integer[], "RepeatEveryWeeks" integer, "TimeZone" text, "CreationDate" date, "FirstWeekMonday" date);',
-    );
-  sql(
-    source,
-    `INSERT INTO "Habits" VALUES ('00000000-0000-0000-0000-000000000001','recovery-sample-owner','Restore sample','five','fifteen','thirty','2026-01-01T04:30:00Z'); INSERT INTO "InitialSchedules" VALUES ('00000000-0000-0000-0000-000000000001',ARRAY[1,7],2,'America/New_York','2025-12-31','2025-12-29');`,
+  assert.equal(
+    sql(target, objectsQuery),
+    "0",
+    "Restore target starts independently empty",
   );
-  const query = `SET TIME ZONE 'UTC'; SELECT h."OwnerId", h."Name", h."Good", h."Better", h."Best", h."CreatedAt", s."Weekdays", s."RepeatEveryWeeks", s."TimeZone", s."CreationDate", s."FirstWeekMonday" FROM "Habits" h JOIN "InitialSchedules" s ON h."Id"=s."HabitId" ORDER BY h."Id";`;
-  const expected = sql(source, query);
-  assert.match(
-    expected,
-    /recovery-sample-owner\|Restore sample\|five\|fifteen\|thirty/,
-  );
-  assert.match(expected, /2025-12-31\|2025-12-29/);
-  if (running) {
-    docker("restart", running.id);
-    const previousOrigin = running.origin;
-    running.origin = appOrigin(running.id);
-    console.log(`Docker restart origin ${previousOrigin} -> ${running.origin}`);
-    await wait(async () => {
-      try {
-        return (await fetch(`${running.origin}/health/ready`)).status === 200;
-      } catch {
-        return false;
-      }
-    }, "restart readiness");
-    assert.equal(
-      sql(source, query),
-      expected,
-      "persistent database content survives app restart",
-    );
-  }
+  phase = "application-source";
+  const prepared = await prepareSource(source, password);
+  Object.assign(receipt, prepared.evidence);
+  phase = "backup-failure-suite";
+  const backupSuiteStarted = Date.now();
   run("--network-alias", "object-store", storage);
   const helper = run(
     "--entrypoint",
@@ -504,6 +509,11 @@ try {
     "retry cannot overwrite completed backup",
   );
   const restoreStart = Date.now();
+  receipt.scenarios.backupFailureSuite = {
+    outcome: "passed",
+    durationSeconds: (Date.now() - backupSuiteStarted) / 1000,
+  };
+  phase = "real-archive-restore";
   execute(
     "aws",
     "--endpoint-url",
@@ -526,6 +536,7 @@ try {
     execute(
       "env",
       "PGHOST=target-db",
+      `PGPASSWORD=${targetPassword}`,
       "RESTORE_TARGET_ACK=isolated-empty-target",
       "AGE_IDENTITY_FILE=/proof/identity",
       "sh",
@@ -534,12 +545,7 @@ try {
       "/proof/backup.sha256",
     ),
   );
-  assert.equal(
-    sql(target, query),
-    expected,
-    "restored ownership, text, UTC instant and calendar dates match independently read source rows",
-  );
-  if (app) await startApp("target-db");
+  await prepared.verifyTarget(target, targetPassword);
   const restoreSeconds = (Date.now() - restoreStart) / 1000;
   assert.ok(
     restoreSeconds < 3600,
@@ -552,6 +558,7 @@ try {
       helper,
       "env",
       "PGHOST=target-db",
+      `PGPASSWORD=${targetPassword}`,
       "RESTORE_TARGET_ACK=isolated-empty-target",
       "AGE_IDENTITY_FILE=/proof/identity",
       "sh",
@@ -584,6 +591,7 @@ try {
       helper,
       "env",
       "PGHOST=target-db",
+      `PGPASSWORD=${targetPassword}`,
       "PGDATABASE=viewonly",
       "RESTORE_TARGET_ACK=isolated-empty-target",
       "AGE_IDENTITY_FILE=/proof/identity",
@@ -604,6 +612,7 @@ try {
       helper,
       "env",
       "PGHOST=target-db",
+      `PGPASSWORD=${targetPassword}`,
       "RESTORE_TARGET_ACK=isolated-empty-target",
       "AGE_IDENTITY_FILE=/proof/identity",
       "sh",
@@ -615,27 +624,78 @@ try {
   );
   assert.notEqual(corrupt.status, 0);
   assert.match(corrupt.stderr, /checksum mismatch/);
-  const result = {
-    appImage: app ?? null,
-    storage: "isolated Moto S3 simulator, not Railway storage",
-    backup,
-    restore,
-    restoreIncludingDownloadAndAppReadinessSeconds: restoreSeconds,
-    storedDates: ["2025-12-31", "2025-12-29"],
-    nonemptyRefused: true,
-    viewOnlyTargetRefused: true,
-    corruptRefused: true,
-    partialUploadCannotAnnounceSuccess: true,
-    retryPreservedCompletedBackup: true,
-    authentication:
-      "No actual Clerk or email verification; production image has no fixture issuer or signing keys",
-  };
-  await writeFile(
-    resolve(directory, "result.json"),
-    JSON.stringify(result, null, 2),
-  );
-  console.log(JSON.stringify(result, null, 2));
+  for (const code of [
+    "nonemptyTargetRefused",
+    "viewOnlyTargetRefused",
+    "incorrectChecksumRefused",
+    "partialUploadCannotAnnounceSuccess",
+    "failedCompletionPreservesExpiredBackup",
+    "retryPreservesCompletedBackup",
+    "invalidBackupDeadline",
+    "stalledDumpBounded",
+    "stalledUploadBounded",
+    "stalledRetentionLeavesCompletedTriplet",
+  ])
+    receipt.scenarios[code] = { outcome: "passed" };
+  phase = "restore-failure-suite";
+  await proveRestoreFailures({
+    source,
+    target,
+    sql,
+    execute,
+    helper,
+    targetPassword,
+    objectsQuery,
+    scenarios: receipt.scenarios,
+    setPhase: (code) => {
+      phase = code;
+    },
+  });
+  receipt.storage = "isolated-Moto-simulator";
+  receipt.backup = backup;
+
+  receipt.restore = restore;
+  receipt.restoreIncludingDownloadAndAppReadinessSeconds = restoreSeconds;
+  receipt.providerProof = "Clerk-and-email-not-executed";
+  receipt.outcome = "passed";
+} catch {
+  receipt.failureCode = phase;
+  receipt.scenarios[phase] = { outcome: "failed" };
+  process.exitCode = 1;
 } finally {
-  for (const id of containers.reverse()) spawnSync("docker", ["rm", "-f", id]);
-  spawnSync("docker", ["network", "rm", network]);
+  const cleanup = [];
+  for (const id of containers.reverse())
+    cleanup.push(
+      spawnSync("docker", ["rm", "-f", id], { timeout: 30_000, stdio: "pipe" })
+        .status === 0,
+    );
+  if (network)
+    cleanup.push(
+      spawnSync("docker", ["network", "rm", network], {
+        timeout: 30_000,
+        stdio: "pipe",
+      }).status === 0,
+    );
+  try {
+    for (const path of ["identity", "wrong-identity", "authority"])
+      await rm(resolve(directory, path), { recursive: true, force: true });
+  } catch {
+    cleanup.push(false);
+  }
+  receipt.cleanup = {
+    createdContainers: containers.length,
+    createdNetwork: Boolean(network),
+    outcome: cleanup.every(Boolean) ? "passed" : "failed",
+  };
+  if (receipt.cleanup.outcome === "failed") {
+    receipt.outcome = "failed";
+    receipt.failureCode = "cleanup";
+    process.exitCode = 1;
+  }
+  receipt.completedAt = new Date().toISOString();
+  receipt.durationSeconds = (Date.now() - startedAt.getTime()) / 1000;
+  const json = JSON.stringify(receipt, null, 2);
+  await writeFile(resolve(directory, "receipt.json"), json);
+  await writeFile(resolve(directory, "result.json"), json);
+  console.log(json);
 }
