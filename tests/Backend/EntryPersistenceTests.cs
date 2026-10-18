@@ -200,24 +200,14 @@ public class EntryPersistenceTests
         if (existing)
             await Save(habit, Day, EntryResult.Rest, Instant);
         var before = await Read(habit.Id, Day);
-        await Execute("""
-            CREATE FUNCTION reject_entry_write() RETURNS trigger LANGUAGE plpgsql AS $$
-            BEGIN RAISE EXCEPTION 'test-owned entry failure'; END; $$;
-            """);
-        var operation = existing ? "UPDATE" : "INSERT";
-        await Execute(atCommit
-            ? $"CREATE CONSTRAINT TRIGGER reject_entry_write AFTER {operation} ON \"DailyEntries\" DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION reject_entry_write()"
-            : $"CREATE TRIGGER reject_entry_write BEFORE {operation} ON \"DailyEntries\" FOR EACH ROW EXECUTE FUNCTION reject_entry_write()");
-        try
+        await using (var installedFailure = await EntryWriteFailure.Install(Execute,
+            existing ? EntryWriteOperation.Update : EntryWriteOperation.Insert,
+            atCommit ? EntryFailureTiming.AtCommit : EntryFailureTiming.BeforeWrite))
         {
             var failure = Assert.ThrowsAsync<PostgresException>(async () =>
                 await Save(habit, Day, EntryResult.Best, Instant.AddTicks(1)));
             Assert.That(failure!.MessageText, Is.EqualTo("test-owned entry failure"));
             Assert.That(await Read(habit.Id, Day), Is.EqualTo(before));
-        }
-        finally
-        {
-            await Execute("DROP TRIGGER reject_entry_write ON \"DailyEntries\"; DROP FUNCTION reject_entry_write()");
         }
     }
 
@@ -262,11 +252,11 @@ public class EntryPersistenceTests
         Task<Entry>? second = null;
         try
         {
-            first = EntryStore.Save(firstDb, habit, Day, winnerFirst ? winnerResult : loserResult,
-                winnerFirst ? winnerTime : Instant, timeout.Token);
+            first = EntryStore.Save(firstDb, habit, new EntryEdit(Day, winnerFirst ? winnerResult : loserResult,
+                winnerFirst ? winnerTime : Instant), timeout.Token);
             await AssertBlockedBy(firstPid, gatePid);
-            second = EntryStore.Save(secondDb, habit, Day, winnerFirst ? loserResult : winnerResult,
-                winnerFirst ? Instant : winnerTime, timeout.Token);
+            second = EntryStore.Save(secondDb, habit, new EntryEdit(Day, winnerFirst ? loserResult : winnerResult,
+                winnerFirst ? Instant : winnerTime), timeout.Token);
             await AssertBlockedBy(secondPid, firstPid);
             Assert.Multiple(() =>
             {
@@ -340,7 +330,7 @@ public class EntryPersistenceTests
     private async Task<Entry> Save(Habit habit, DateOnly date, EntryResult result, DateTimeOffset editedAt)
     {
         await using var db = new HabitsDb(options);
-        return await EntryStore.Save(db, habit, date, result, editedAt, CancellationToken.None);
+        return await EntryStore.Save(db, habit, new EntryEdit(date, result, editedAt), CancellationToken.None);
     }
 
     private async Task Execute(string sql)

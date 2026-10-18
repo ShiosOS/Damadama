@@ -113,24 +113,14 @@ public class EntryApiTests
     [TestCase(true)]
     public async Task A_failed_entry_insert_or_commit_cannot_acknowledge_a_save(bool atCommit)
     {
-        await DatabaseFixture.Execute("""
-            CREATE FUNCTION reject_entry_api() RETURNS trigger LANGUAGE plpgsql AS $$
-            BEGIN RAISE EXCEPTION 'test-owned entry failure'; END; $$;
-            """);
-        await DatabaseFixture.Execute(atCommit
-            ? "CREATE CONSTRAINT TRIGGER reject_entry_api AFTER INSERT ON \"DailyEntries\" DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION reject_entry_api()"
-            : "CREATE TRIGGER reject_entry_api BEFORE INSERT ON \"DailyEntries\" FOR EACH ROW EXECUTE FUNCTION reject_entry_api()");
-        try
+        await using (var failure = await EntryWriteFailure.Install(DatabaseFixture.Execute, EntryWriteOperation.Insert,
+            atCommit ? EntryFailureTiming.AtCommit : EntryFailureTiming.BeforeWrite))
         {
             using var failed = await client.PutAsJsonAsync(Path(), EntrySteps.Change());
             Assert.That(failed.StatusCode, Is.EqualTo(HttpStatusCode.ServiceUnavailable));
             var problem = await failed.Content.ReadFromJsonAsync<JsonElement>();
             Assert.That(problem.GetProperty("traceId").GetString(), Is.Not.Empty);
             Assert.That(await DatabaseFixture.Count("DailyEntries"), Is.Zero);
-        }
-        finally
-        {
-            await DatabaseFixture.Execute("DROP TRIGGER reject_entry_api ON \"DailyEntries\"; DROP FUNCTION reject_entry_api()");
         }
         using var retry = await client.PutAsJsonAsync(Path(), EntrySteps.Change());
         Assert.That(retry.StatusCode, Is.EqualTo(HttpStatusCode.OK));

@@ -1,20 +1,16 @@
 <script setup lang="ts">
 import { nextTick, reactive, ref, watch } from "vue";
-import {
-  ApiError,
-  habitsApi,
-  weekdays,
-  type Habit,
-  type NewHabit,
-} from "./habits";
+import { ApiError, habitsApi, weekdays } from "./habits";
+import type { Habit, NewHabit } from "./habits.schema";
 import HabitDetails from "./HabitDetails.vue";
 import CheckeredD from "./CheckeredD.vue";
 import TodayView from "./TodayView.vue";
 
-const props = defineProps<{
+type Props = {
   accountId: string | null;
   getToken: () => Promise<string | null>;
-}>();
+};
+const props = defineProps<Props>();
 const api = habitsApi(() => props.getToken());
 const habits = ref<Habit[]>([]);
 type Activity =
@@ -36,7 +32,7 @@ const blank = (): Omit<NewHabit, "timeZone"> => ({
 const form = reactive(blank());
 let generation = 0;
 
-function showError(error: unknown) {
+function showError(error: unknown): void {
   let message =
     "Could not reach the service. Check your connection and try again.";
   if (error instanceof ApiError && error.status === 401) {
@@ -75,22 +71,22 @@ watch(
   { immediate: true },
 );
 
-function setDay(day: number, selected: boolean) {
+function setDay(day: number, selected: boolean): void {
   form.weekdays = selected
     ? [...form.weekdays, day]
     : form.weekdays.filter((value) => value !== day);
 }
 
-function clearError() {
+function clearError(): void {
   if (activity.value.kind === "error") activity.value = { kind: "idle" };
 }
 
-function focusName(event: Event) {
+function focusName(event: Event): void {
   event.preventDefault();
   document.getElementById("name")?.focus();
 }
 
-async function save() {
+async function save(): Promise<void> {
   const current = generation;
   activity.value = { kind: "saving" };
   try {

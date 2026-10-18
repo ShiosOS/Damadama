@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { z } from "zod";
-import { habitSchema } from "../../web/src/habits";
+import { habitSchema } from "../../web/src/habits.schema";
 
 const instant = new Date("2026-01-05T00:30:00Z");
 const travelInstant = new Date("2026-01-12T00:30:00Z");
