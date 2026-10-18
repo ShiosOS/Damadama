@@ -18,3 +18,5 @@ The follow-up requires every Vue `<script>` block to use `lang="ts"` and invento
 | `bun run check` | Type gate passed, then stopped at `docker info` because the Docker Desktop Linux engine pipe is unavailable. Backend, PostgreSQL, and browser runtime checks did not run locally. |
 
 The type probes removed their temporary files and index entries. No `type-probe` files remain.
+
+An independent follow-up found that a standalone TypeScript scanner loses template and regular-expression context. Comment detection now uses the pinned TypeScript ESLint parser's comment collection. Probes accept directive text inside interpolated templates and regular expressions. They reject real comments at end of file, inside interpolation and JSX, and after interpolation where a suppression otherwise lets an incompatible assignment pass both the compiler and typed lint.

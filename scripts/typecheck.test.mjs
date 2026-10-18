@@ -139,12 +139,15 @@ export const result = first + double(parsed);
   );
 });
 
-test("coverage accepts directive names in string literals", async () => {
+test("coverage accepts directive names in strings, templates, and regular expressions", async () => {
   const typed = resolve(root, "web/src/type-probe-literals.ts");
   const vue = resolve(root, "web/src/type-probe-literals.vue");
   await withProbes(
     [
-      [typed, 'export const text = "@ts-ignore eslint-disable";\n'],
+      [
+        typed,
+        'export const text = "@ts-ignore eslint-disable";\nexport const template = `prefix ${1} // @ts-ignore`;\nexport const pattern = /[/*] @ts-ignore/;\n',
+      ],
       [
         vue,
         '<script setup lang="ts">\nconst text = "@vue-ignore @vue-expect-error";\n</script>\n<template><span>{{ text }}</span></template>\n',
@@ -163,14 +166,23 @@ test("coverage accepts directive names in string literals", async () => {
 
 test("coverage rejects real TypeScript and Vue suppression comments", async () => {
   const typed = resolve(root, "web/src/type-probe-directives.ts");
+  const trailing = resolve(root, "web/src/type-probe-trailing.ts");
+  const interpolation = resolve(root, "web/src/type-probe-interpolation.ts");
+  const jsx = resolve(root, "web/src/type-probe-jsx.tsx");
   const ignored = resolve(root, "web/src/type-probe-ignored.vue");
   const expected = resolve(root, "web/src/type-probe-expected.vue");
   await withProbes(
     [
       [
         typed,
-        "// @ts-ignore\n// eslint-disable-next-line\nexport const value = 1;\n",
+        'export const label = `value ${Math.random()}`;\n// @ts-expect-error: incompatible assignment\nexport const value: number = "invalid";\n',
       ],
+      [trailing, "export const value = 1; // eslint-disable"],
+      [
+        interpolation,
+        "export const value = `prefix ${ /* eslint-disable */ 1 }`;\n",
+      ],
+      [jsx, "export const value = <>{/* eslint-disable */}</>;\n"],
       [
         ignored,
         '<script setup lang="ts">\ndefineProps<{ count: number }>();\n</script>\n<template><span><!-- @vue-ignore -->{{ count.toUpperCase() }}</span></template>\n',
@@ -191,6 +203,9 @@ test("coverage rejects real TypeScript and Vue suppression comments", async () =
         [],
         [
           /web\/src\/type-probe-directives\.ts: type or lint suppression is forbidden/,
+          /web\/src\/type-probe-trailing\.ts: type or lint suppression is forbidden/,
+          /web\/src\/type-probe-interpolation\.ts: type or lint suppression is forbidden/,
+          /web\/src\/type-probe-jsx\.tsx: type or lint suppression is forbidden/,
           /web\/src\/type-probe-ignored\.vue: type or lint suppression is forbidden/,
           /web\/src\/type-probe-expected\.vue: type or lint suppression is forbidden/,
         ],

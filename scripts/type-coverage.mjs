@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { resolve, relative, dirname, extname } from "node:path";
 import { ESLint } from "eslint";
+import tsParser from "@typescript-eslint/parser";
 import { parse } from "@vue/compiler-sfc";
 import ts from "typescript";
 
@@ -72,26 +73,13 @@ const failures = [];
 const suppression =
   /(?:@ts-(?:ignore|expect-error|nocheck)|@vue-(?:ignore|expect-error|skip)|eslint-disable)\b/;
 
-function hasScriptSuppression(source) {
-  const scanner = ts.createScanner(
-    ts.ScriptTarget.Latest,
-    false,
-    ts.LanguageVariant.Standard,
-    source,
-  );
-  for (
-    let token = scanner.scan();
-    token !== ts.SyntaxKind.EndOfFileToken;
-    token = scanner.scan()
-  ) {
-    if (
-      (token === ts.SyntaxKind.SingleLineCommentTrivia ||
-        token === ts.SyntaxKind.MultiLineCommentTrivia) &&
-      suppression.test(scanner.getTokenText())
-    )
-      return true;
-  }
-  return false;
+function hasScriptSuppression(source, file = "script.ts") {
+  const parsed = tsParser.parse(source, {
+    comment: true,
+    filePath: file,
+    ecmaFeatures: { jsx: file.endsWith(".tsx") },
+  });
+  return parsed.comments.some((comment) => suppression.test(comment.value));
 }
 
 function hasTemplateSuppression(nodes) {
@@ -124,7 +112,7 @@ for (const file of maintained) {
     )
       failures.push(`${name}: every Vue script must use lang="ts"`);
   }
-  let suppressed = hasScriptSuppression(source);
+  let suppressed;
   if (extname(file) === ".vue") {
     const descriptor = parse(source).descriptor;
     suppressed =
@@ -133,7 +121,7 @@ for (const file of maintained) {
       ) ||
       (descriptor.template &&
         hasTemplateSuppression(descriptor.template.ast.children));
-  }
+  } else suppressed = hasScriptSuppression(source, file);
   if (suppressed) {
     failures.push(`${name}: type or lint suppression is forbidden`);
   }
