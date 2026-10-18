@@ -110,7 +110,7 @@ const preflightProof = {
       steps: [
         {
           id: "checkout",
-          uses: "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+          uses: "actions/checkout",
           with: {
             ref: "${{ github.sha }}",
             path: "controls",
@@ -119,7 +119,7 @@ const preflightProof = {
         },
         {
           id: "node",
-          uses: "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+          uses: "actions/setup-node",
           with: { "node-version": 24, "package-manager-cache": false },
         },
         {
@@ -152,7 +152,7 @@ const preflightProof = {
           },
         },
         {
-          uses: "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+          uses: "actions/upload-artifact",
           if: "always()",
           with: {
             name: "preflight-proof-${{ github.run_id }}-${{ github.run_attempt }}",
@@ -168,14 +168,26 @@ const preflightProof = {
 
 function preflightProofErrors(workflow) {
   const observed = structuredClone(workflow);
-  for (const step of observed?.jobs?.["preflight-proof"]?.steps ?? []) {
+  const errors = [];
+  for (const [index, step] of (
+    observed?.jobs?.["preflight-proof"]?.steps ?? []
+  ).entries()) {
+    if (typeof step.uses === "string") {
+      const action = step.uses.match(
+        /^(actions\/(?:checkout|setup-node|upload-artifact))@[a-fA-F0-9]{40}$/,
+      );
+      if (action && action[0] === step.uses) step.uses = action[1];
+      else
+        errors.push(
+          `release-preflight-proof.yml.jobs.preflight-proof.steps.${index}.uses: must match an approved action with a full immutable SHA`,
+        );
+    }
     if (
       ["preflight", "evidence"].includes(step.id) &&
       typeof step.run === "string"
     )
       step.run = createHash("sha256").update(step.run).digest("hex");
   }
-  const errors = [];
   function compare(expected, actual, path) {
     if (expected !== null && typeof expected === "object") {
       if (
