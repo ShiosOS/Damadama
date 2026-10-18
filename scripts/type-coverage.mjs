@@ -71,7 +71,7 @@ for (const project of projects) {
 const eslint = new ESLint();
 const failures = [];
 const suppression =
-  /(?:@ts-(?:ignore|expect-error|nocheck)|@vue-(?:ignore|expect-error|skip)|eslint-disable)\b/;
+  /(?:@ts-(?:ignore|expect-error|nocheck)|@vue-(?:ignore|expect-error|skip))\b|\beslint(?:-disable\b|\s)/;
 
 function hasScriptSuppression(source, file = "script.ts") {
   const parsed = tsParser.parse(source, {
@@ -96,25 +96,19 @@ for (const file of maintained) {
   const config = await eslint.calculateConfigForFile(file);
   if (
     config?.languageOptions?.parserOptions?.projectService !== true ||
+    config.linterOptions?.noInlineConfig !== true ||
     config.rules?.["@typescript-eslint/no-unsafe-assignment"]?.[0] !== 2 ||
     config.rules?.["@typescript-eslint/explicit-function-return-type"]?.[0] !==
       2
   )
     failures.push(`${name}: outside typed ESLint coverage`);
   const source = await readFile(file, "utf8");
-  if (extname(file) === ".vue") {
-    const scripts = [...source.matchAll(/<script\b([^>]*)>/g)];
-    if (
-      scripts.length === 0 ||
-      scripts.some(
-        ([, attributes]) => !/\blang=["']ts["']/.test(attributes ?? ""),
-      )
-    )
-      failures.push(`${name}: every Vue script must use lang="ts"`);
-  }
   let suppressed;
   if (extname(file) === ".vue") {
     const descriptor = parse(source).descriptor;
+    const scripts = [descriptor.script, descriptor.scriptSetup].filter(Boolean);
+    if (scripts.length === 0 || scripts.some((script) => script.lang !== "ts"))
+      failures.push(`${name}: every Vue script must use lang="ts"`);
     suppressed =
       [descriptor.script, descriptor.scriptSetup].some(
         (script) => script && hasScriptSuppression(script.content),

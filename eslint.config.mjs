@@ -25,6 +25,7 @@ export default [
     ],
   },
   {
+    linterOptions: { noInlineConfig: true },
     files: ["**/*.{js,mjs,cjs,ts,tsx,mts,cts,vue}"],
     languageOptions: { parser: tsParser },
     rules: { "no-restricted-syntax": ["error", nestedConditional] },
