@@ -9,3 +9,8 @@ public sealed record EntryResponse(Guid HabitId, string HabitName, DateOnly Cale
         entry.Result.ToString(), entry.EditedAt, entry.OriginalLevels.Good, entry.OriginalLevels.Better,
         entry.OriginalLevels.Best);
 }
+
+public sealed class EntryConflictProblem : Microsoft.AspNetCore.Mvc.ProblemDetails
+{
+    public required EntryResponse Current { get; init; }
+}

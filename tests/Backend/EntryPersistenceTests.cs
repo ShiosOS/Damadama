@@ -248,8 +248,8 @@ public class EntryPersistenceTests
         await secondDb.Database.OpenConnectionAsync(timeout.Token);
         var firstPid = await firstDb.Database.SqlQuery<int>($"SELECT pg_backend_pid() AS \"Value\"").SingleAsync(timeout.Token);
         var secondPid = await secondDb.Database.SqlQuery<int>($"SELECT pg_backend_pid() AS \"Value\"").SingleAsync(timeout.Token);
-        Task<Entry>? first = null;
-        Task<Entry>? second = null;
+        Task<EntrySaveOutcome>? first = null;
+        Task<EntrySaveOutcome>? second = null;
         try
         {
             first = EntryStore.Save(firstDb, habit, new EntryEdit(Day, winnerFirst ? winnerResult : loserResult,
@@ -282,9 +282,9 @@ public class EntryPersistenceTests
         }
         Assert.Multiple(() =>
         {
-            Assert.That(first!.Result.Result, Is.EqualTo(winnerFirst ? winnerResult : loserResult));
-            Assert.That(second!.Result.Result, Is.EqualTo(winnerResult));
-            Assert.That(second.Result.EditedAt, Is.EqualTo(winnerTime));
+            Assert.That(first!.Result.Entry.Result, Is.EqualTo(winnerFirst ? winnerResult : loserResult));
+            Assert.That(second!.Result.Entry.Result, Is.EqualTo(winnerResult));
+            Assert.That(second.Result.Entry.EditedAt, Is.EqualTo(winnerTime));
         });
         var persisted = await Read(habit.Id, Day);
         Assert.Multiple(() =>
@@ -330,7 +330,7 @@ public class EntryPersistenceTests
     private async Task<Entry> Save(Habit habit, DateOnly date, EntryResult result, DateTimeOffset editedAt)
     {
         await using var db = new HabitsDb(options);
-        return await EntryStore.Save(db, habit, new EntryEdit(date, result, editedAt), CancellationToken.None);
+        return (await EntryStore.Save(db, habit, new EntryEdit(date, result, editedAt), CancellationToken.None)).Entry;
     }
 
     private async Task Execute(string sql)

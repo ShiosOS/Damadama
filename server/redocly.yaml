@@ -1,0 +1,116 @@
+extends: []
+rules:
+  struct: error
+  no-unresolved-refs: error
+  operation-operationId: error
+  operation-operationId-unique: error
+  path-parameters-defined: error
+  path-not-include-query: error
+  path-declaration-must-exist: error
+  no-ambiguous-paths: error
+  operation-2xx-response: error
+  operation-4xx-response: error
+  security-defined: error
+  paths-kebab-case: error
+  no-http-verbs-in-paths: error
+  path-segment-plural:
+    severity: error
+    ignoreLastPathSegment: false
+    exceptions: [api, config]
+  request-mime-type:
+    severity: error
+    allowedValues: [application/json]
+  response-mime-type:
+    severity: error
+    allowedValues: [application/json, application/problem+json]
+  rule/get-no-body:
+    subject:
+      type: Operation
+      filterInParentKeys: [get]
+      property: requestBody
+    assertions:
+      defined: false
+  rule/collection-methods:
+    subject:
+      type: PathItem
+      matchParentKeys: "^/api/(habits|entries)$"
+    assertions:
+      disallowed: [put, patch, delete, head, options, trace]
+  rule/member-methods:
+    subject:
+      type: PathItem
+      matchParentKeys: '\}$'
+    assertions:
+      disallowed: [post, patch, delete, head, options, trace]
+  rule/config-singleton:
+    subject:
+      type: PathItem
+      filterInParentKeys: [/api/config]
+    assertions:
+      disallowed: [post, put, patch, delete, head, options, trace]
+  rule/resource-paths:
+    subject:
+      type: Paths
+    assertions:
+      pattern: '^/api/(config|habits(/\{id\}(/entries/\{date\})?)?|entries)$'
+  rule/created-location:
+    subject:
+      type: Response
+      filterInParentKeys: ["201"]
+      property: headers
+    assertions:
+      schema:
+        type: object
+        required: [Location]
+  rule/cache-header:
+    subject:
+      type: Response
+      property: headers
+    assertions:
+      schema:
+        type: object
+        required: [Cache-Control]
+  rule/response-schema:
+    subject:
+      type: MediaType
+      property: schema
+    assertions:
+      defined: true
+  rule/private-security:
+    where:
+      - subject:
+          type: PathItem
+          matchParentKeys: "^/api/(habits|entries)"
+        assertions:
+          defined: true
+    subject:
+      type: Operation
+      property: security
+    assertions:
+      defined: true
+      schema:
+        type: array
+        minItems: 1
+        maxItems: 1
+        items:
+          type: object
+          required: [Bearer]
+          additionalProperties: false
+          properties:
+            Bearer:
+              type: array
+              maxItems: 0
+  rule/private-unauthorized:
+    where:
+      - subject:
+          type: PathItem
+          matchParentKeys: "^/api/(habits|entries)"
+        assertions:
+          defined: true
+    subject:
+      type: Operation
+      property: responses
+    assertions:
+      schema:
+        type: object
+        required: ["401"]

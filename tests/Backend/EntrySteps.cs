@@ -46,7 +46,7 @@ public sealed class EntrySteps
     [Then("Good is acknowledged with its original definitions after commit")]
     public async Task Committed()
     {
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         AssertEntry(await response.Content.ReadFromJsonAsync<JsonElement>());
         await using var connection = new NpgsqlConnection(DatabaseFixture.Database.GetConnectionString());
         await connection.OpenAsync();

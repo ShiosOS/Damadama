@@ -51,8 +51,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
     };
 });
 builder.Services.AddAuthorization();
+builder.Services.AddApiContract();
 builder.Services.AddHealthChecks().AddCheck<DatabaseReadiness>("database", tags: ["ready"]);
 var app = builder.Build();
+app.UseRouting();
+app.UseApiProtocol();
 app.UseExceptionHandler();
 app.UseStatusCodePages(async context => await Results.Problem(statusCode: context.HttpContext.Response.StatusCode,
     title: context.HttpContext.Response.StatusCode == 400 ? "Check the request fields and their types." : "Habit not found.")
@@ -61,35 +64,22 @@ using (var scope = app.Services.CreateScope())
     await scope.ServiceProvider.GetRequiredService<HabitsDb>().Database.MigrateAsync();
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapHealthChecks("/health/live", new() { Predicate = _ => false });
-app.MapHealthChecks("/health/ready", new() { Predicate = check => check.Tags.Contains("ready") });
-app.MapGet("/api/config", (IConfiguration configuration) => new { clerkPublishableKey = configuration["Clerk:PublishableKey"] });
-app.MapGet("/sw.js", WorkerRetirement.Respond);
+app.MapHealthChecks("/health/live", new() { Predicate = _ => false }).WithName("health-live").ExcludeFromDescription();
+app.MapHealthChecks("/health/ready", new() { Predicate = check => check.Tags.Contains("ready") }).WithName("health-ready").ExcludeFromDescription();
+app.MapGet("/api/config", (IConfiguration configuration) => TypedResults.Ok(new ApplicationConfig(configuration["Clerk:PublishableKey"])))
+    .WithName("application-config").WithTags("Configuration").WithSummary("Read public application configuration")
+    .ProducesProblem(400);
+app.MapGet("/sw.js", WorkerRetirement.Respond).WithName("worker-retirement").ExcludeFromDescription();
+if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
+    app.MapOpenApi().WithName("openapi-document");
 app.UseDefaultFiles();
 app.UseStaticFiles();
-app.MapPost("/api/habits", async (CreateHabit input, System.Security.Claims.ClaimsPrincipal user,
-    HabitsDb db, TimeProvider clock, ILogger<HabitsDb> logger, CancellationToken cancellationToken) =>
-{
-    var habit = await db.Create(input, user.FindFirst("sub")!.Value, clock, cancellationToken);
-    logger.LogInformation("Habit {HabitId} committed for account {OwnerId}", habit.Id, habit.OwnerId);
-    return Results.Created($"/api/habits/{habit.Id}", HabitResponse.From(habit));
-}).RequireAuthorization();
-app.MapGet("/api/habits", async (System.Security.Claims.ClaimsPrincipal user, HabitsDb db, CancellationToken cancellationToken) =>
-    (await db.Habits.AsNoTracking().Include(h => h.Schedule).Where(h => h.OwnerId == user.FindFirst("sub")!.Value)
-        .OrderBy(h => h.CreatedAt).ThenBy(h => h.Id)
-        .ToListAsync(cancellationToken)).Select(HabitResponse.From)).RequireAuthorization();
-app.MapGet("/api/habits/{id:guid}", async (Guid id, System.Security.Claims.ClaimsPrincipal user, HabitsDb db, CancellationToken cancellationToken) =>
-{
-    var habit = await db.Habits.AsNoTracking().Include(h => h.Schedule)
-        .SingleOrDefaultAsync(h => h.Id == id && h.OwnerId == user.FindFirst("sub")!.Value, cancellationToken);
-    return habit is null ? Results.NotFound() : Results.Ok(HabitResponse.From(habit));
-}).RequireAuthorization();
-app.MapScheduledHabits();
+app.MapHabits();
 app.MapEntries();
-app.Map("/api/{**path}", () => Results.Problem(statusCode: 404, title: "API route not found."));
-app.MapFallbackToFile("index.html");
+app.MapFallbackToFile("index.html").WithName("application-shell");
 app.Run();
 public partial class Program;
+public sealed record ApplicationConfig(string? ClerkPublishableKey);
 
 public sealed record HabitResponse(Guid Id, string Name, string Good, string Better, string Best,
     DateTimeOffset CreatedAt, InitialSchedule Schedule)
