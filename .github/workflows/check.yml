@@ -70,5 +70,5 @@ jobs:
             .audit/accessibility-*.json
             .audit/accessibility-*.png
             test-results
-            playwright-report
+            tests/Browser/playwright-report
           retention-days: 3

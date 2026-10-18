@@ -1,0 +1,156 @@
+{
+  "schema": 1,
+  "scope": "hosted-staging-backup-to-isolated-local-docker",
+  "sourceRevision": "efa288e56512da90675b3e791246c36f664f406c",
+  "stagingRun": "https://github.com/ShiosOS/Damadama/actions/runs/38696036769",
+  "appImage": "ghcr.io/shiosos/damadama@sha256:9ea9937c8d328bab8e66bf95f91bf74a0b81931ea6cdb7e78f8222caf7237004",
+  "appArchiveSha256": "cb329dae84d370ba5c9274726c0d6e36f4183d9d52ca7b9498070017e3ac9263",
+  "backupJobImage": "ghcr.io/shiosos/damadama-recovery@sha256:6981306ff1a7cc6095620a72af03b867381a2d1342d5f9846877e197c3088c75",
+  "backupDeploymentId": "a2cacf03-7b4d-436b-b455-3e0b2e20bbed",
+  "backupExecution": {
+    "endedAt": "2026-10-15T07:21:57.768Z",
+    "trigger": "Run now on existing approved deployment",
+    "startedAt": "2026-10-15T07:21:51.915Z"
+  },
+  "backup": {
+    "startedAt": "2026-10-15T07:23:09.0303217Z",
+    "downloadedAt": "2026-10-15T07:23:16.1954865Z",
+    "manifest": {
+      "environment": "staging",
+      "backup": "damadama/staging/20261015T072152Z-4b922f50098353d3.dump.age",
+      "completedAt": "2026-10-15T07:21:54Z",
+      "retentionDays": 7,
+      "durationSeconds": 2
+    },
+    "encryptedSha256": "0019a9ff3e07cdac62234db3d175b38657f2e0e837218438f6c4c094e1786b97",
+    "bytes": 5511,
+    "checksumVerified": true
+  },
+  "localRestoreTool": {
+    "restoreScriptSha256": "26ed9aa344b5c85ff188dcdf4736e5e09efbbee2d101564ce5806a309fbbad51",
+    "sourceRevision": "efa288e56512da90675b3e791246c36f664f406c",
+    "backupScriptSha256": "a3f4732619f84a1ab10dd07d310b23736d75c71fbf89f2c2c82bdd13b1999713"
+  },
+  "target": {
+    "databasePortPublished": false,
+    "appBoundToLoopback": true,
+    "emptyBeforeRestore": true,
+    "sourceDatabaseCredentialsUsed": false,
+    "postgresVersion": "17.7"
+  },
+  "schemaBeforeApp": {
+    "userRelations": 7,
+    "habitsTable": true,
+    "schedulesTable": true,
+    "migrationHistory": true
+  },
+  "schemaAfterApp": {
+    "habitCount": 1,
+    "scheduleCount": 1,
+    "migrationCount": 2
+  },
+  "migrations": [
+    "20261011071109_InitialHabits",
+    "20261012210223_GroupHabitLevels"
+  ],
+  "sampleAssertions": {
+    "habitCount": 1,
+    "scheduleCount": 1,
+    "knownSampleMatches": 1,
+    "timing": "after app startup; schema presence was checked before startup"
+  },
+  "authenticatedRead": {
+    "observedAt": "2026-10-15T07:27:22.374Z",
+    "ordinaryStagingClerkSessions": 2,
+    "ownerListStatus": 200,
+    "ownerDetailStatus": 200,
+    "otherAccountDetailStatus": 404,
+    "otherAccountCannotListSample": true,
+    "restoredEqualsHostedSample": true,
+    "definitionsEqual": true,
+    "scheduleEqual": true,
+    "creationInstantAndCalendarDatesEqual": true,
+    "databaseWritesRequested": 0,
+    "privateKeyPersisted": false,
+    "sessionCleanup": "sign-out attempted; revocation not independently confirmed; temporary browser closed"
+  },
+  "recovery": {
+    "simulatedFailureAt": "2026-10-15T07:23:08.8156192Z",
+    "rpoMet": true,
+    "rtoLimitSeconds": 3600,
+    "snapshotAgeAtVerificationSeconds": 330.374,
+    "potentialLossSeconds": 76.816,
+    "conservativeSnapshotBound": "2026-10-15T07:21:52.0000000+00:00",
+    "excludedFromFinalClock": [
+      "initial access investigation",
+      "image acquisition and local recovery image build",
+      "rejected preapplication backup trial"
+    ],
+    "rpoLimitSeconds": 86400,
+    "restoreProcessSeconds": 1.558,
+    "downloadThroughAuthenticatedReadSeconds": 253.558,
+    "authenticatedVerificationAt": "2026-10-15T07:27:22.374Z",
+    "rtoMetForThisSample": true,
+    "actualLoss": false,
+    "downloadThroughReadinessSeconds": 15.775
+  },
+  "rejectedBackup": {
+    "bytes": 1101,
+    "userRelationsBeforeApp": 0,
+    "encryptedSha256": "ee1d1e23b6314d75e26da8373c85284c4d358dd5793df70f3dc034824010c2ad",
+    "decryptionAndRestoreSucceeded": true,
+    "applicationRecoveryVerified": false,
+    "key": "damadama/staging/20261015T044528Z-b3385025d1fb44e2.dump.age"
+  },
+  "preservation": {
+    "sourceObjectsDeleted": 0,
+    "retentionDays": 7,
+    "existingCompletedTripletPreserved": true,
+    "expiredObjectsBeforeRun": 0,
+    "sharedDatabaseWritesRequested": 0,
+    "newPaidResources": 0,
+    "newCompletedTripletPresent": true,
+    "preRunRetentionAssessment": "operator observation; no independently retained pre-run raw census"
+  },
+  "limitations": [
+    "new backup deadline image hosted rollout unverified",
+    "previous production image compatibility unknown",
+    "no daily-entry tables in this application slice",
+    "no real inbox delivery proof",
+    "no production or Railway restore/cutover",
+    "no seven-day elapsed retention proof",
+    "single small staged sample; not a capacity benchmark"
+  ],
+  "migrationComparison": {
+    "archiveMigrationIds": [
+      "20261011071109_InitialHabits",
+      "20261012210223_GroupHabitLevels"
+    ],
+    "unchangedAfterAppStartup": true
+  },
+  "cleanup": {
+    "checkedAt": "2026-10-15T07:33:58.9573164Z",
+    "disposableContainersRemoved": true,
+    "disposableNetworkRemoved": true,
+    "temporaryPlaintextIdentityRemoved": true,
+    "sourceBackupsDeleted": 0
+  },
+  "sourceObjectInventory": {
+    "beforeRun": {
+      "provenance": "operator observation of initial AWS listing before Run now; original local listing was later overwritten",
+      "keys": [
+        "damadama/staging/20261015T044528Z-b3385025d1fb44e2.dump.age",
+        "damadama/staging/20261015T044528Z-b3385025d1fb44e2.dump.age.json",
+        "damadama/staging/20261015T044528Z-b3385025d1fb44e2.dump.age.sha256"
+      ]
+    },
+    "afterRun": [
+      "damadama/staging/20261015T044528Z-b3385025d1fb44e2.dump.age",
+      "damadama/staging/20261015T044528Z-b3385025d1fb44e2.dump.age.json",
+      "damadama/staging/20261015T044528Z-b3385025d1fb44e2.dump.age.sha256",
+      "damadama/staging/20261015T072152Z-4b922f50098353d3.dump.age",
+      "damadama/staging/20261015T072152Z-4b922f50098353d3.dump.age.json",
+      "damadama/staging/20261015T072152Z-4b922f50098353d3.dump.age.sha256"
+    ]
+  }
+}
