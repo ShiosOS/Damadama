@@ -3,12 +3,12 @@ import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import { z } from "zod";
 import {
   ApiError,
-  type Habit,
   type HabitsApi,
   type EntryEditor,
   type RecordedEntry,
   type ScheduledHabit,
 } from "./habits";
+import type { Habit } from "./habits.schema";
 import HabitDetails from "./HabitDetails.vue";
 import HabitLevels from "./HabitLevels.vue";
 import EntryControls from "./EntryControls.vue";
