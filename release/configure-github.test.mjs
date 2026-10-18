@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { spawnSync } from "node:child_process";
 import {
   configure,
   environmentPlan,
@@ -97,6 +98,112 @@ test("readback rejects an extra environment approver", () => {
     reviewer: { id: 456 },
   });
   assert.throws(() => assertConfigured(plan, observed), /reviewer/);
+});
+
+function provider(drift = false) {
+  const writes = [];
+  const requests = [];
+  const ruleset = { ...mainRules(), id: 45 };
+  const request = async (path, options = {}) => {
+    requests.push({ path, method: options.method ?? "GET" });
+    if (options.method) {
+      writes.push({ path, method: options.method });
+      if (path.endsWith("/rulesets/45")) return ruleset;
+      return {};
+    }
+    if (path.endsWith("/rulesets?per_page=100"))
+      return [{ name: ruleset.name, id: 45 }];
+    if (path.endsWith("/rulesets/45")) {
+      const read = structuredClone(ruleset);
+      if (
+        drift &&
+        writes.some((write) => write.path.endsWith("/rulesets/45"))
+      ) {
+        read.rules.find(
+          (rule) => rule.type === "required_status_checks",
+        ).parameters.required_status_checks = [];
+      }
+      return read;
+    }
+    if (path.endsWith("/deployment-branch-policies?per_page=100")) {
+      return { branch_policies: [{ name: "main", type: "branch" }] };
+    }
+    const name = path.endsWith("/staging") ? "staging" : "production";
+    const settings = environmentPlan(123, name === "staging");
+    return {
+      ...settings,
+      protection_rules:
+        name === "staging"
+          ? []
+          : [
+              {
+                type: "required_reviewers",
+                reviewers: [{ type: "User", reviewer: { id: 123 } }],
+              },
+            ],
+    };
+  };
+  return { request, requests, writes };
+}
+
+test("apply rejects a stale write echo when fresh ruleset readback drifts", async () => {
+  const api = provider(true);
+  await assert.rejects(
+    configure("apply", { reviewerId: 123, request: api.request }),
+    /required_status_checks/,
+  );
+  assert.deepEqual(
+    api.requests
+      .filter((item) => item.path.endsWith("/rulesets/45"))
+      .map((item) => item.method),
+    ["GET", "PUT", "GET"],
+  );
+});
+
+test("apply accepts a fresh ruleset readback", async () => {
+  const api = provider();
+  const result = await configure("apply", {
+    reviewerId: 123,
+    request: api.request,
+  });
+  assert.equal(result.observed.ruleset.id, 45);
+  assert.equal(
+    api.writes.filter((item) => item.path.endsWith("/rulesets/45")).length,
+    1,
+  );
+});
+
+test("inspect verifies readback without writing", async () => {
+  const api = provider();
+  const result = await configure("inspect", {
+    reviewerId: 123,
+    request: api.request,
+    verify: true,
+  });
+  assert.equal(result.observed.ruleset.id, 45);
+  assert.deepEqual(api.writes, []);
+});
+
+test("CLI rejects invalid verification options before contacting GitHub", () => {
+  for (const args of [
+    ["apply", "123", "--verify"],
+    ["inspect", "123", "--unknown"],
+    ["inspect", "123", "--verify", "extra"],
+  ]) {
+    const result = spawnSync(
+      process.execPath,
+      ["release/configure-github.mjs", ...args],
+      { encoding: "utf8" },
+    );
+    assert.equal(result.status, 1);
+    assert.match(
+      result.stderr,
+      args[0] === "apply"
+        ? /--verify requires inspect/
+        : /Unknown configure option/,
+    );
+    assert.doesNotMatch(result.stderr, /HTTP|gh|fetch failed/);
+  }
 });
 for (const [field, staleValue] of [
   ["required_approving_review_count", 1],

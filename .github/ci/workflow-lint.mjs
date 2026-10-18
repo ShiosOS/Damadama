@@ -2,12 +2,14 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, rename } from "node:fs/promises";
 import { arch, platform } from "node:process";
 import { join, resolve } from "node:path";
-import { queueErrors } from "./workflow-policy.mjs";
+import { gateGraphErrors, queueErrors } from "./workflow-policy.mjs";
 
 const root = resolve(import.meta.dir, "../..");
 const toolsDirectory = join(root, ".audit", "workflow-tools");
 const fixturesDirectory = join(import.meta.dir, "fixtures");
 const platformKey = `${platform}-${arch}`;
+const actionlintSelfRepositoryCompatibility =
+  'reusable workflow call "\\$/\\.github/workflows/(release-runtime-check|recovery-check|pr-evidence)\\.yml" at "uses" is not following the format';
 const releases = {
   actionlint: {
     version: "1.7.12",
@@ -153,8 +155,128 @@ async function selfTest(actionlint, zizmor) {
       `Invalid queue/cancel expression passed: ${invalidExpression.join("\n")}`,
     );
   }
+  const workflows = await loadWorkflows();
+  const validGraph = gateGraphErrors(workflows);
+  if (validGraph.length)
+    throw new Error(`Real gate graph failed: ${validGraph.join("\n")}`);
+  for (const filename of ["check.yml", "release-controls.yml"]) {
+    for (const filter of [
+      "branches",
+      "branches-ignore",
+      "paths",
+      "paths-ignore",
+    ]) {
+      const changed = structuredClone(workflows);
+      changed[filename].on.pull_request ??= {};
+      changed[filename].on.pull_request[filter] = ["main"];
+      if (
+        !gateGraphErrors(changed).some(
+          (error) =>
+            error ===
+            `${filename}: pull_request must cover every branch and path`,
+        )
+      ) {
+        throw new Error(`${filename} ${filter} passed gate graph validation`);
+      }
+    }
+  }
+  for (const [label, mutate, pattern] of [
+    [
+      "missing edge",
+      (graph) => graph["check.yml"].jobs.check.needs.pop(),
+      /needs must be exactly/,
+    ],
+    [
+      "missing always",
+      (graph) =>
+        delete graph["release-controls.yml"].jobs["release-controls"].if,
+      /if must be always/,
+    ],
+    [
+      "renamed check",
+      (graph) => (graph["check.yml"].jobs.check.name = "other-check"),
+      /check-run name must be check/,
+    ],
+    [
+      "continue-on-error",
+      (graph) =>
+        (graph["release-controls.yml"].jobs.recovery["continue-on-error"] =
+          true),
+      /continue-on-error is forbidden/,
+    ],
+    [
+      "filtered check trigger",
+      (graph) => (graph["check.yml"].on.pull_request = { paths: ["web/**"] }),
+      /pull_request must cover every branch and path/,
+    ],
+    [
+      "conditional suite",
+      (graph) =>
+        (graph["release-runtime-check.yml"].jobs["runtime-policy"].steps.find(
+          (step) => step.run === "node --test release/*.test.mjs",
+        ).if = "false"),
+      /required node --test release\/\*\.test\.mjs step must run once without bypass/,
+    ],
+    [
+      "wrong callable",
+      (graph) =>
+        (graph["release-controls.yml"].jobs.evidence.uses =
+          "$/.github/workflows/unknown.yml"),
+      /wrong callable workflow/,
+    ],
+    [
+      "ref suffix",
+      (graph) => (graph["release-controls.yml"].jobs.evidence.uses += "@main"),
+      /wrong callable workflow/,
+    ],
+    [
+      "unreviewed callable inputs",
+      (graph) =>
+        (graph["release-controls.yml"].jobs.evidence.with = { changed: true }),
+      /callable contract has no inputs or secrets/,
+    ],
+  ]) {
+    const changed = structuredClone(workflows);
+    mutate(changed);
+    if (!gateGraphErrors(changed).some((error) => pattern.test(error))) {
+      throw new Error(`${label} passed gate graph validation`);
+    }
+  }
+  expectFailure(
+    "pinned actionlint self-repository compatibility",
+    run(actionlint, [
+      "-oneline",
+      join(root, ".github", "workflows", "release-controls.yml"),
+    ]),
+    /reusable workflow call "\$\/\.github\/workflows\//,
+  );
+  expectFailure(
+    "actionlint still rejects unrelated syntax with compatibility ignore",
+    run(actionlint, [
+      "-oneline",
+      "-ignore",
+      actionlintSelfRepositoryCompatibility,
+      fixture("invalid-actionlint"),
+    ]),
+    /unexpected key "bogus".*\[syntax-check\]/,
+  );
   console.log(
-    "Workflow lint self-test passed: actionlint, zizmor, and queue policy rejected their negative fixtures.",
+    "Workflow lint self-test passed: actionlint, zizmor, queue policy, and gate graph rejected their negative fixtures.",
+  );
+}
+
+async function loadWorkflows() {
+  const directory = join(root, ".github", "workflows");
+  const entries = await readdir(directory);
+  return Object.fromEntries(
+    await Promise.all(
+      entries
+        .filter((file) => /\.ya?ml$/.test(file))
+        .map(async (file) => [
+          file,
+          Bun.YAML.parse(await readFile(join(directory, file), "utf8")),
+        ]),
+    ),
   );
 }
 
@@ -169,9 +291,17 @@ if (process.argv[2] === "--self-test") {
   const files = (await readdir(directory))
     .filter((file) => /\.ya?ml$/.test(file))
     .map((file) => join(directory, file));
-  const actionlintResult = run(actionlint, ["-oneline", ...files]);
+  const actionlintResult = run(actionlint, [
+    "-oneline",
+    "-ignore",
+    actionlintSelfRepositoryCompatibility,
+    ...files,
+  ]);
   const zizmorResult = run(zizmor, ["--no-online-audits", directory]);
-  const policyErrors = await queueErrors(files);
+  const policyErrors = [
+    ...(await queueErrors(files)),
+    ...gateGraphErrors(await loadWorkflows()),
+  ];
   if (
     actionlintResult.code !== 0 ||
     zizmorResult.code !== 0 ||

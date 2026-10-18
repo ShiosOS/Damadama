@@ -78,10 +78,15 @@ if (command === "prepare") {
     new URL(`../workflows/${workflow}.yml`, import.meta.url),
     "utf8",
   );
-  const policy = Bun.YAML.parse(source).jobs.check.steps.find(
-    (step) => step.id === "failure-reports",
+  const uploads = Object.values(Bun.YAML.parse(source).jobs)
+    .flatMap((job) => job.steps ?? [])
+    .filter((step) => step.id === "failure-reports");
+  assert.equal(
+    uploads.length,
+    1,
+    `${workflow} must have one failure-reports upload step`,
   );
-  assert(policy, `${workflow} must have a failure-reports upload step`);
+  const [policy] = uploads;
   assert.equal(policy.uses, uploadAction, "Pin the diagnostic upload action");
   assert.equal(
     policy.with["include-hidden-files"],

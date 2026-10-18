@@ -17,7 +17,10 @@ export function environmentPlan(reviewerId, automatic = false) {
   };
 }
 
-export async function configure(operation, { reviewerId }) {
+export async function configure(
+  operation,
+  { reviewerId, request = github, verify = false },
+) {
   const plan = {
     ruleset: mainRules(),
     environments: Object.fromEntries(
@@ -30,16 +33,16 @@ export async function configure(operation, { reviewerId }) {
   if (operation === "plan") return plan;
   if (!["inspect", "apply"].includes(operation))
     throw new Error("use plan, inspect, apply, or probe");
-  const rulesets = await github(`repos/${repository}/rulesets?per_page=100`);
+  const rulesets = await request(`repos/${repository}/rulesets?per_page=100`);
   const matches = rulesets.filter((rule) => rule.name === plan.ruleset.name);
   if (matches.length > 1)
     throw new Error("duplicate Damadama main rulesets require reconciliation");
   let existing = matches[0]
-    ? await github(`repos/${repository}/rulesets/${matches[0].id}`)
+    ? await request(`repos/${repository}/rulesets/${matches[0].id}`)
     : null;
   if (operation === "apply") {
     for (const [name, body] of Object.entries(plan.environments)) {
-      const policies = await github(
+      const policies = await request(
         `repos/${repository}/environments/${name}/deployment-branch-policies?per_page=100`,
         { missing: true },
       );
@@ -51,35 +54,38 @@ export async function configure(operation, { reviewerId }) {
         throw new Error(
           `unexpected ${name} branch policy; reconcile before apply`,
         );
-      await github(`repos/${repository}/environments/${name}`, {
+      await request(`repos/${repository}/environments/${name}`, {
         method: "PUT",
         body,
       });
       if (!policies?.branch_policies.length)
-        await github(
+        await request(
           `repos/${repository}/environments/${name}/deployment-branch-policies`,
           { method: "POST", body: { name: "main", type: "branch" } },
         );
     }
-    existing = await github(
+    const saved = await request(
       `repos/${repository}/rulesets${existing ? `/${existing.id}` : ""}`,
       { method: existing ? "PUT" : "POST", body: plan.ruleset },
     );
+    if (!Number.isSafeInteger(saved?.id) || saved.id < 1)
+      throw new Error("ruleset write did not return an ID");
+    existing = await request(`repos/${repository}/rulesets/${saved.id}`);
   }
   const environments = {};
   for (const name of Object.keys(plan.environments)) {
     environments[name] = {
-      settings: await github(`repos/${repository}/environments/${name}`, {
+      settings: await request(`repos/${repository}/environments/${name}`, {
         missing: true,
       }),
-      policies: await github(
+      policies: await request(
         `repos/${repository}/environments/${name}/deployment-branch-policies?per_page=100`,
         { missing: true },
       ),
     };
   }
   const observed = { ruleset: existing, environments };
-  if (operation === "apply") assertConfigured(plan, observed);
+  if (operation === "apply" || verify) assertConfigured(plan, observed);
   return { plan, observed };
 }
 
@@ -141,12 +147,18 @@ if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
-  const [operation, id] = process.argv.slice(2);
-  console.log(
-    JSON.stringify(
-      await configure(operation, { reviewerId: Number(id) }),
-      null,
-      2,
-    ),
-  );
+  const [operation, id, flag, ...extra] = process.argv.slice(2);
+  const verify = flag === "--verify";
+  if ((flag && !verify) || extra.length)
+    throw new Error("Unknown configure option");
+  if (verify && operation !== "inspect")
+    throw new Error("--verify requires inspect");
+  const result = await configure(operation, {
+    reviewerId: Number(id),
+    verify: false,
+  });
+  console.log(JSON.stringify(result, null, 2));
+  if (verify) {
+    assertConfigured(result.plan, result.observed);
+  }
 }

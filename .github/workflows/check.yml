@@ -19,7 +19,7 @@ jobs:
           bun-version: 1.3.14
       - run: bun .github/ci/workflow-lint.mjs
       - run: bun .github/ci/workflow-lint.mjs --self-test
-  check:
+  application:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -132,3 +132,18 @@ jobs:
       - run: bun .github/diagnostics/artifact-policy.mjs verify "${WORKFLOW}" "${RUNNER_TEMP}/diagnostics/download"
         env:
           WORKFLOW: ${{ matrix.workflow }}
+  check:
+    needs: [application, diagnostics-policy, workflow-lint]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - run: node .github/ci/required-jobs.mjs check
+        env:
+          REQUIRED_JOBS: ${{ toJSON(needs) }}
