@@ -58,10 +58,10 @@ jobs:
         run: node node_modules/@playwright/test/cli.js install --with-deps chromium
       - if: steps.application.outputs.state == 'application'
         run: bun run check
-      - if: failure() && steps.application.outputs.state == 'application'
+      - if: always() && steps.application.outputs.state == 'application'
         uses: actions/upload-artifact@v4
         with:
-          name: failure-reports-${{ github.run_attempt }}
+          name: verification-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
           path: |
             .audit/TestResults
             .audit/performance-assets.json
@@ -69,6 +69,12 @@ jobs:
             .audit/performance-saved.png
             .audit/accessibility-*.json
             .audit/accessibility-*.png
+            .audit/today-*.png
+            .audit/today-*.webm
             test-results
             tests/Browser/playwright-report
-          retention-days: 3
+            !**/fixture.json
+            !**/.env*
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 7

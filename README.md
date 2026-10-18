@@ -32,8 +32,7 @@ The command checks locked dependencies, TypeScript and Vue types, typed lint, bu
 Run `bun run check:types` for the TypeScript gate without Docker. It covers the web app, Vite configs, browser fixture and tests, and Bun scripts. The gate inventories every maintained `.ts`, `.tsx`, `.mts`, `.cts`, and `.vue` file and rejects files outside a checked project, Vue scripts without `lang="ts"`, and type or lint suppressions. Compiler and lint rejection probes run against the same configs.
 Keep Vue props, emits, state unions, and view-only types next to their component. Derive wire types from the Zod schemas in ordinary TypeScript modules; parse external data at the request boundary. Explicitly type function inputs and returns and state contracts, while letting local values with clear initializers infer their types.
 An unavailable Docker engine fails the command. Testcontainers databases are separate from your persistent local database.
-Pull request checks cache dependencies, cancel superseded runs, and retain failed reports for three days.
-The [REST application contract](docs/rest-contract.md) describes Siren discovery, entry write outcomes, protocol enforcement, and what CI can establish.
+Pull request checks cache dependencies, cancel superseded runs, and retain verification artifacts from successful and failed runs for seven days.
 The [browser performance checks](docs/browser-performance.md) document fixed production-asset, layout, and request budgets, the baseline, and fixture limits.
 The [browser accessibility checks](docs/browser-accessibility.md) cover WCAG scans, keyboard creation, API refusal, mobile layout, and CSS zoom, with explicit provider limits.
 Browser tests use optimized assets and exclude authentication tokens from reports.
