@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, rename } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rename } from "node:fs/promises";
 import { arch, platform } from "node:process";
 import { join, resolve } from "node:path";
 import { gateGraphErrors, queueErrors } from "./workflow-policy.mjs";
@@ -266,6 +266,16 @@ async function selfTest(actionlint, zizmor) {
       );
     }
   }
+  for (const { workflow, kind } of Object.values(releaseCallables)) {
+    if (kind !== "security") continue;
+    rejectMutation(
+      `${workflow}: duplicate PR trigger`,
+      (graph) => {
+        graph[workflow].on.pull_request = {};
+      },
+      /PR execution must use release-controls/,
+    );
+  }
   for (const filename of ["check.yml", "release-controls.yml"]) {
     for (const filter of [
       "branches",
@@ -367,6 +377,30 @@ async function selfTest(actionlint, zizmor) {
     ]),
     /unexpected key "bogus".*\[syntax-check\]/,
   );
+  const compatibilityDirectory = await mkdtemp(
+    join(toolsDirectory, "compatibility-"),
+  );
+  for (const [index, target] of [
+    "unknown.yml",
+    "security-codeql-extra.yml",
+    "security-codeql.yaml",
+  ].entries()) {
+    const filename = join(compatibilityDirectory, `${index}.yml`);
+    await Bun.write(
+      filename,
+      `name: Invalid local call\non: pull_request\npermissions:\n  contents: read\njobs:\n  call:\n    uses: $/.github/workflows/${target}\n`,
+    );
+    expectFailure(
+      `actionlint rejects unregistered target ${target}`,
+      run(actionlint, [
+        "-oneline",
+        "-ignore",
+        actionlintSelfRepositoryCompatibility,
+        filename,
+      ]),
+      /reusable workflow call.*not following the format/,
+    );
+  }
   console.log(
     "Workflow lint self-test passed: actionlint, zizmor, queue policy, and gate graph rejected their negative fixtures.",
   );

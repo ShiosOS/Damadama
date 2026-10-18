@@ -215,7 +215,13 @@ export function gateGraphErrors(workflows) {
         leaf?.on?.workflow_call?.outputs === undefined,
       `${filename}: workflow_call contract has no inputs, secrets or outputs`,
     );
-    if (kind !== "core-leaf") continue;
+    if (kind === "security") {
+      expect(
+        !Object.hasOwn(leaf?.on ?? {}, "pull_request"),
+        `${filename}: PR execution must use release-controls`,
+      );
+      continue;
+    }
     expect(
       Object.keys(leaf?.on ?? {}).length === 1,
       `${filename}: must be workflow_call only`,

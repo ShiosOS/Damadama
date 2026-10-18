@@ -2,7 +2,6 @@ name: Security fixtures
 
 on:
   workflow_call:
-  pull_request:
   workflow_dispatch:
 
 permissions:
