@@ -123,6 +123,9 @@ jobs:
         language: [csharp, javascript-typescript, actions]
     permissions:
       contents: read
+    env:
+      # Generated examples are outside the pull request diff.
+      CODEQL_ACTION_DIFF_INFORMED_QUERIES: "false"
     steps:
       - if: matrix.language == 'csharp'
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
@@ -137,7 +140,7 @@ jobs:
           import { mkdir, writeFile } from 'node:fs/promises';
           import { join } from 'node:path';
 
-          const root = join(process.env.GITHUB_WORKSPACE, 'fixture-codeql', process.env.LANGUAGE);
+          const root = process.env.GITHUB_WORKSPACE;
           const write = async (file, content) => {
             const path = join(root, file);
             await mkdir(join(path, '..'), { recursive: true });
@@ -146,6 +149,7 @@ jobs:
           if (process.env.LANGUAGE === 'csharp') {
             await write('Fixture.csproj', '<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Library</OutputType></PropertyGroup></Project>');
             await write('Bad.cs', `using System.IO;
+          using Microsoft.AspNetCore.Builder;
           using Microsoft.AspNetCore.Http;
           using Microsoft.AspNetCore.Routing;
           public static class Bad {
@@ -154,6 +158,7 @@ jobs:
             }
           }`);
             await write('Safe.cs', `using System.IO;
+          using Microsoft.AspNetCore.Builder;
           using Microsoft.AspNetCore.Routing;
           public static class Safe {
             public static void Map(IEndpointRouteBuilder routes) {
@@ -166,21 +171,24 @@ jobs:
             await write('Safe.js', `const app = require('express')();
           app.get('/safe/:id', (_req, res) => res.send('Unknown user'));`);
           } else {
+            const commentBody = '$' + '{{ github.event.comment.body }}';
             await write('.github/workflows/Bad.yml', `name: Unsafe example
-          on: workflow_dispatch
+          on: issue_comment
           jobs:
             example:
               runs-on: ubuntu-latest
               steps:
-                - uses: example/action@main
+                - run: echo '${commentBody}'
           `);
             await write('.github/workflows/Safe.yml', `name: Safe example
-          on: workflow_dispatch
+          on: issue_comment
           jobs:
             example:
               runs-on: ubuntu-latest
               steps:
-                - uses: example/action@0123456789abcdef0123456789abcdef01234567
+                - env:
+                    BODY: ${commentBody}
+                  run: echo "$BODY"
           `);
           }
           NODE
@@ -188,11 +196,8 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.language == 'csharp' && 'manual' || 'none' }}
-          queries: security-extended
-          source-root: fixture-codeql/${{ matrix.language }}
           db-location: ${{ runner.temp }}/fixture-codeql-db
       - if: matrix.language == 'csharp'
-        working-directory: fixture-codeql/csharp
         run: dotnet build Fixture.csproj
       - uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4
         with:
@@ -213,7 +218,7 @@ jobs:
           const expected = {
             csharp: 'cs/path-injection',
             'javascript-typescript': 'js/reflected-xss',
-            actions: 'actions/unpinned-tag',
+            actions: 'actions/code-injection/critical',
           }[process.env.LANGUAGE];
           const files = (await readdir(process.env.SARIF_DIR)).filter(file => file.endsWith('.sarif'));
           assert.ok(files.length > 0, 'CodeQL produced no SARIF file');
