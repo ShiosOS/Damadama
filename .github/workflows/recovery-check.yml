@@ -1,12 +1,8 @@
 name: Recovery checks
 on:
-  pull_request:
-    branches: [main]
+  workflow_call:
 permissions:
   contents: read
-concurrency:
-  group: recovery-check-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
 jobs:
   recovery:
     runs-on: ubuntu-latest
@@ -27,4 +23,9 @@ jobs:
           path: |
             recovery-check.log
             .audit/recovery-proof-*/result.json
+            !**/*token*
+            !**/.env*
+            !**/storage-state*.json
+            !**/.auth/**
+          include-hidden-files: true
           retention-days: 3
