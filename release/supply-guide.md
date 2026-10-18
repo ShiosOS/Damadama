@@ -76,7 +76,17 @@ The prior schema 2 push at dcc2a09 passed build, paired and application scans, a
 
 The proof workflow retains actual application archives for three days. Reports, proof bundles, and the tiny synthetic fixture archives remain available for 90 days. Application scan output also contains an image mirror. The original build artifact remains the authority for build membership and expires after three days. This does not establish a 90-day rollback support window. Artifact membership checks also refuse once producer build artifacts expire after three days. Future release integration must retain accessible exact bytes and authenticated evidence for every supported rollback candidate.
 
-Production integration now composes the existing approval, current-main, source, digest, and recovery controllers. Native package authorization, production OCI signatures, bounded registry compatibility, and cold preflight feasibility remain unproved. The shared CI graph changes await composition with the landed CI policy. The separate proof workflow cannot establish production acceptance.
+Production integration now composes the existing approval, current-main, source, digest, and recovery controllers. Native package authorization, production OCI signatures, bounded registry compatibility, and cold preflight feasibility remain unproved. The shared CI graph includes the landed CI policy. The separate proof workflow cannot establish production acceptance.
+
+## Read-only preflight timing proof
+
+`release-preflight-proof.yml` implements one manual read-only job using the canonical `operate.mjs preflight` operation. It has no production job, environment, provider secret, write permission, or restored cache. The existing controller requires current main and attempt 1. Source implementation does not approve a dispatch. Root must first accept actual postmerge Stage evidence and then explicitly release the proof run.
+
+Use a proof version such as `v0.0.0-preflight-proof`, clear proof notes, and truthful recovery metadata such as `{"purpose":"read-only cold admission proof","productionReadiness":"not attested"}`. These plan inputs do not attest production recovery readiness. The distinct job and artifact names prevent this proof from serving as an ordinary promotion plan. The separate workflow adds no job to Main staging.
+
+The five-minute job budget includes checkout, Node setup, verifier installation, complete admission, and evidence upload. Use the native job's `started_at` and `completed_at` timestamps for total duration. Command timing is supplementary. The `preflight-proof-<run-id>-<attempt>` artifact retains only safe timing, command exit, step outcomes, and source/run binding for seven days. An always step records normal install or command failures, including absent or not-reached command evidence. A hard timeout or cancellation can prevent final upload. Retain the native timeout result and job logs when that happens.
+
+Repeated fresh read-only runs repeat full admission, including original artifacts, native signatures, registry comparison, and the current database. They do not reuse an accepted result. Actual postmerge Stage job and operation intervals supply the staging execution bound. Individual callback costs remain unmeasured. These observations do not establish production deployment behavior.
 
 ## Local commands
 

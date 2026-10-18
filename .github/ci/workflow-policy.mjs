@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { gates, releaseCallables } from "./required-jobs.mjs";
 import {
@@ -73,8 +74,139 @@ const recipes = [
   ],
 ];
 
-export function gateGraphErrors(workflows) {
+const preflightProof = {
+  name: "Read-only release preflight proof",
+  on: {
+    workflow_dispatch: {
+      inputs: {
+        staging_run_id: {
+          description: "Successful trusted staging run ID",
+          type: "string",
+          required: true,
+        },
+        version: {
+          description: "Proof version such as v0.0.0-preflight-proof",
+          type: "string",
+          required: true,
+        },
+        notes: {
+          description: "Short proof notes",
+          type: "string",
+          required: true,
+        },
+        recovery: {
+          description: "Recovery evidence JSON from the release runbook",
+          type: "string",
+          required: true,
+        },
+      },
+    },
+  },
+  permissions: { contents: "read", actions: "read", packages: "read" },
+  jobs: {
+    "preflight-proof": {
+      "runs-on": "ubuntu-latest",
+      "timeout-minutes": 5,
+      steps: [
+        {
+          id: "checkout",
+          uses: "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+          with: {
+            ref: "${{ github.sha }}",
+            path: "controls",
+            "persist-credentials": false,
+          },
+        },
+        {
+          id: "node",
+          uses: "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+          with: { "node-version": 24, "package-manager-cache": false },
+        },
+        {
+          id: "install",
+          run: "node controls/release/supply-install.mjs verifier",
+        },
+        {
+          id: "preflight",
+          shell: "bash",
+          run: "a4d060bc7368c62be6d7d63e870f5a2a0d31f40fdecb80aee398dabd5085e379",
+          env: {
+            GH_TOKEN: "${{ github.token }}",
+            GITHUB_TOKEN: "${{ github.token }}",
+            STAGING_RUN_ID: "${{ inputs.staging_run_id }}",
+            RELEASE_VERSION: "${{ inputs.version }}",
+            RELEASE_NOTES: "${{ inputs.notes }}",
+            RECOVERY_EVIDENCE: "${{ inputs.recovery }}",
+          },
+        },
+        {
+          id: "evidence",
+          if: "always()",
+          shell: "bash",
+          run: "3ba6955b737bec4285e6fd8069c4132dc68fd6125d723e4639ad951ef1a95786",
+          env: {
+            CHECKOUT_OUTCOME: "${{ steps.checkout.outcome }}",
+            NODE_OUTCOME: "${{ steps.node.outcome }}",
+            INSTALL_OUTCOME: "${{ steps.install.outcome }}",
+            PREFLIGHT_OUTCOME: "${{ steps.preflight.outcome }}",
+          },
+        },
+        {
+          uses: "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+          if: "always()",
+          with: {
+            name: "preflight-proof-${{ github.run_id }}-${{ github.run_attempt }}",
+            path: "preflight-proof.json",
+            "retention-days": 7,
+            "if-no-files-found": "error",
+          },
+        },
+      ],
+    },
+  },
+};
+
+function preflightProofErrors(workflow) {
+  const observed = structuredClone(workflow);
+  for (const step of observed?.jobs?.["preflight-proof"]?.steps ?? []) {
+    if (
+      ["preflight", "evidence"].includes(step.id) &&
+      typeof step.run === "string"
+    )
+      step.run = createHash("sha256").update(step.run).digest("hex");
+  }
   const errors = [];
+  function compare(expected, actual, path) {
+    if (expected !== null && typeof expected === "object") {
+      if (
+        actual === null ||
+        typeof actual !== "object" ||
+        Array.isArray(actual) !== Array.isArray(expected)
+      ) {
+        errors.push(path + ": must match the read-only preflight proof shape");
+        return;
+      }
+      for (const key of new Set([
+        ...Object.keys(expected),
+        ...Object.keys(actual),
+      ])) {
+        if (!Object.hasOwn(expected, key))
+          errors.push(
+            path + "." + key + ": forbidden in read-only preflight proof",
+          );
+        else compare(expected[key], actual[key], path + "." + key);
+      }
+    } else if (actual !== expected)
+      errors.push(
+        path + ": must match the fixed read-only preflight proof contract",
+      );
+  }
+  compare(preflightProof, observed, "release-preflight-proof.yml");
+  return errors;
+}
+
+export function gateGraphErrors(workflows) {
+  const errors = preflightProofErrors(workflows["release-preflight-proof.yml"]);
   try {
     errors.push(...acceptedSecurityErrors(readSecurityContract(workflows)));
   } catch (error) {

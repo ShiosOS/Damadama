@@ -1,0 +1,104 @@
+name: Read-only release preflight proof
+on:
+  workflow_dispatch:
+    inputs:
+      staging_run_id:
+        description: Successful trusted staging run ID
+        type: string
+        required: true
+      version:
+        description: Proof version such as v0.0.0-preflight-proof
+        type: string
+        required: true
+      notes:
+        description: Short proof notes
+        type: string
+        required: true
+      recovery:
+        description: Recovery evidence JSON from the release runbook
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+  packages: read
+jobs:
+  preflight-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - id: checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: controls
+          persist-credentials: false
+      - id: node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - id: install
+        run: node controls/release/supply-install.mjs verifier
+      - id: preflight
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { spawnSync } from 'node:child_process';
+          import { writeFileSync } from 'node:fs';
+          const startedAt = new Date().toISOString();
+          const start = performance.now();
+          const child = spawnSync('node', ['controls/release/operate.mjs', 'preflight'], { stdio: 'inherit' });
+          writeFileSync('preflight-command.json', JSON.stringify({
+            startedAt, completedAt: new Date().toISOString(), elapsedMs: performance.now() - start,
+            exitCode: child.status, signal: child.signal, spawnFailed: Boolean(child.error),
+          }) + '\n');
+          process.exitCode = child.status ?? 1;
+          NODE
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          STAGING_RUN_ID: ${{ inputs.staging_run_id }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_NOTES: ${{ inputs.notes }}
+          RECOVERY_EVIDENCE: ${{ inputs.recovery }}
+      - id: evidence
+        if: always()
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          let command = null;
+          try {
+            command = JSON.parse(readFileSync('preflight-command.json', 'utf8'));
+          } catch (error) {
+            if (error.code !== 'ENOENT') throw error;
+          }
+          const steps = {
+            checkout: process.env.CHECKOUT_OUTCOME, node: process.env.NODE_OUTCOME,
+            install: process.env.INSTALL_OUTCOME, preflight: process.env.PREFLIGHT_OUTCOME,
+          };
+          let commandEvidence = 'recorded';
+          if (command === null) {
+            commandEvidence = steps.preflight === 'skipped' ? 'not-reached' : 'absent';
+          }
+          writeFileSync('preflight-proof.json', JSON.stringify({
+            schema: 1, purpose: 'read-only-preflight-proof', recordedAt: new Date().toISOString(),
+            repository: process.env.GITHUB_REPOSITORY, ref: process.env.GITHUB_REF,
+            sourceSha: process.env.GITHUB_SHA, runId: process.env.GITHUB_RUN_ID,
+            runAttempt: process.env.GITHUB_RUN_ATTEMPT, steps, commandEvidence, command,
+            durationAuthority: 'native-job-started_at-and-completed_at',
+          }) + '\n');
+          NODE
+        env:
+          CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
+          NODE_OUTCOME: ${{ steps.node.outcome }}
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          PREFLIGHT_OUTCOME: ${{ steps.preflight.outcome }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: preflight-proof-${{ github.run_id }}-${{ github.run_attempt }}
+          path: preflight-proof.json
+          retention-days: 7
+          if-no-files-found: error
