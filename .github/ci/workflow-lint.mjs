@@ -1,15 +1,18 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, rename } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rename } from "node:fs/promises";
 import { arch, platform } from "node:process";
 import { join, resolve } from "node:path";
 import { gateGraphErrors, queueErrors } from "./workflow-policy.mjs";
+import { releaseCallables } from "./required-jobs.mjs";
 
 const root = resolve(import.meta.dir, "../..");
 const toolsDirectory = join(root, ".audit", "workflow-tools");
 const fixturesDirectory = join(import.meta.dir, "fixtures");
 const platformKey = `${platform}-${arch}`;
-const actionlintSelfRepositoryCompatibility =
-  'reusable workflow call "\\$/\\.github/workflows/(release-runtime-check|recovery-check|pr-evidence)\\.yml" at "uses" is not following the format';
+const callableFilenames = Object.values(releaseCallables)
+  .map(({ workflow }) => workflow.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+  .join("|");
+const actionlintSelfRepositoryCompatibility = `reusable workflow call "\\$/\\.github/workflows/(${callableFilenames})" at "uses" is not following the format`;
 const releases = {
   actionlint: {
     version: "1.7.12",
@@ -159,6 +162,120 @@ async function selfTest(actionlint, zizmor) {
   const validGraph = gateGraphErrors(workflows);
   if (validGraph.length)
     throw new Error(`Real gate graph failed: ${validGraph.join("\n")}`);
+  function rejectMutation(label, mutate, pattern) {
+    const changed = structuredClone(workflows);
+    mutate(changed);
+    if (!gateGraphErrors(changed).some((error) => pattern.test(error))) {
+      throw new Error(`${label} passed gate graph validation`);
+    }
+  }
+  for (const [name, callable] of Object.entries(releaseCallables)) {
+    const caller = (graph) => graph["release-controls.yml"].jobs[name];
+    for (const [label, mutate, pattern] of [
+      [
+        "missing caller",
+        (graph) => delete graph["release-controls.yml"].jobs[name],
+        /required prerequisite is missing/,
+      ],
+      [
+        "missing edge",
+        (graph) => {
+          const job = graph["release-controls.yml"].jobs["release-controls"];
+          job.needs = job.needs.filter((key) => key !== name);
+        },
+        /needs must be exactly/,
+      ],
+      [
+        "wrong path",
+        (graph) => (caller(graph).uses += "@main"),
+        /wrong callable workflow/,
+      ],
+      [
+        "conditional caller",
+        (graph) => (caller(graph).if = "false"),
+        /prerequisite must run unconditionally/,
+      ],
+      [
+        "caller dependency",
+        (graph) => (caller(graph).needs = "other"),
+        /prerequisite must run unconditionally/,
+      ],
+      [
+        "tolerant caller",
+        (graph) => (caller(graph)["continue-on-error"] = true),
+        /continue-on-error is forbidden/,
+      ],
+      [
+        "matrix caller",
+        (graph) => (caller(graph).strategy = { matrix: { duplicate: [1, 2] } }),
+        /without a matrix/,
+      ],
+      [
+        "caller input",
+        (graph) => (caller(graph).with = { injected: true }),
+        /no inputs or secrets/,
+      ],
+      [
+        "caller secrets",
+        (graph) => (caller(graph).secrets = "inherit"),
+        /no inputs or secrets/,
+      ],
+      [
+        "extra permission",
+        (graph) => (caller(graph).permissions.issues = "write"),
+        /permissions must match/,
+      ],
+      [
+        "permission shorthand",
+        (graph) => (caller(graph).permissions = "read-all"),
+        /permissions must match/,
+      ],
+      [
+        "missing callable event",
+        (graph) => delete graph[callable.workflow].on.workflow_call,
+        /must support workflow_call/,
+      ],
+    ]) {
+      rejectMutation(`${name}: ${label}`, mutate, pattern);
+    }
+    for (const permission of Object.keys(callable.permissions)) {
+      rejectMutation(
+        `${name}: missing ${permission}`,
+        (graph) => {
+          delete caller(graph).permissions[permission];
+        },
+        /permissions must match/,
+      );
+      rejectMutation(
+        `${name}: changed ${permission}`,
+        (graph) => {
+          caller(graph).permissions[permission] = "none";
+        },
+        /permissions must match/,
+      );
+    }
+    for (const field of ["inputs", "secrets", "outputs"]) {
+      rejectMutation(
+        `${name}: declared ${field}`,
+        (graph) => {
+          graph[callable.workflow].on.workflow_call = {
+            [field]: { injected: {} },
+          };
+        },
+        /workflow_call contract has no inputs, secrets or outputs/,
+      );
+    }
+  }
+  for (const { workflow, kind } of Object.values(releaseCallables)) {
+    if (kind !== "security") continue;
+    rejectMutation(
+      `${workflow}: duplicate PR trigger`,
+      (graph) => {
+        graph[workflow].on.pull_request = {};
+      },
+      /PR execution must use release-controls/,
+    );
+  }
   for (const filename of ["check.yml", "release-controls.yml"]) {
     for (const filter of [
       "branches",
@@ -260,6 +377,30 @@ async function selfTest(actionlint, zizmor) {
     ]),
     /unexpected key "bogus".*\[syntax-check\]/,
   );
+  const compatibilityDirectory = await mkdtemp(
+    join(toolsDirectory, "compatibility-"),
+  );
+  for (const [index, target] of [
+    "unknown.yml",
+    "security-codeql-extra.yml",
+    "security-codeql.yaml",
+  ].entries()) {
+    const filename = join(compatibilityDirectory, `${index}.yml`);
+    await Bun.write(
+      filename,
+      `name: Invalid local call\non: pull_request\npermissions:\n  contents: read\njobs:\n  call:\n    uses: $/.github/workflows/${target}\n`,
+    );
+    expectFailure(
+      `actionlint rejects unregistered target ${target}`,
+      run(actionlint, [
+        "-oneline",
+        "-ignore",
+        actionlintSelfRepositoryCompatibility,
+        filename,
+      ]),
+      /reusable workflow call.*not following the format/,
+    );
+  }
   console.log(
     "Workflow lint self-test passed: actionlint, zizmor, queue policy, and gate graph rejected their negative fixtures.",
   );

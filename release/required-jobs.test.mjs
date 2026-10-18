@@ -10,6 +10,17 @@ function run(gate, needs) {
   });
 }
 
+test("release gate includes all six required callable outcomes", () => {
+  assert.deepEqual([...gates["release-controls"].needs].sort(), [
+    "evidence",
+    "recovery",
+    "runtime-policy",
+    "security-codeql",
+    "security-dependencies",
+    "security-fixtures",
+  ]);
+});
+
 for (const [gate, contract] of Object.entries(gates)) {
   const good = Object.fromEntries(
     contract.needs.map((name) => [name, { result: "success" }]),
@@ -19,32 +30,49 @@ for (const [gate, contract] of Object.entries(gates)) {
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /all required jobs succeeded/);
   });
-  test(`${gate} rejects missing and extra prerequisites`, () => {
-    const missing = structuredClone(good);
-    delete missing[contract.needs[0]];
-    assert.match(run(gate, JSON.stringify(missing)).stderr, /missing: /);
-    assert.match(
-      run(gate, JSON.stringify({ ...good, surprise: { result: "success" } }))
-        .stderr,
-      /extra: surprise/,
+  test(`${gate} rejects extra prerequisites`, () => {
+    const result = run(
+      gate,
+      JSON.stringify({ ...good, surprise: { result: "success" } }),
     );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /extra: surprise/);
   });
-  for (const status of ["failure", "cancelled", "skipped", "unknown", null]) {
-    test(`${gate} rejects ${String(status)} prerequisite`, () => {
-      const bad = structuredClone(good);
-      bad[contract.needs[0]].result = status;
-      const result = run(gate, JSON.stringify(bad));
+  for (const name of contract.needs) {
+    test(`${gate} rejects missing ${name}`, () => {
+      const missing = structuredClone(good);
+      delete missing[name];
+      const result = run(gate, JSON.stringify(missing));
       assert.equal(result.status, 1);
-      assert.match(result.stderr, /result must be success/);
+      assert.match(result.stderr, /missing: /);
     });
+    for (const status of [
+      "failure",
+      "cancelled",
+      "skipped",
+      "unknown",
+      null,
+      undefined,
+      0,
+      true,
+    ]) {
+      test(`${gate} rejects ${name} result ${String(status)}`, () => {
+        const bad = structuredClone(good);
+        bad[name].result = status;
+        const result = run(gate, JSON.stringify(bad));
+        assert.equal(result.status, 1);
+        assert.match(result.stderr, /result must be success/);
+      });
+    }
   }
 }
 
 test("gate CLI rejects unknown gate and malformed needs", () => {
   assert.match(run("surprise", "{}").stderr, /Unknown required gate/);
   assert.match(run("check", "{").stderr, /JSON/);
-  assert.match(
-    run("check", "null").stderr,
-    /needs must be a job result object/,
-  );
+  for (const value of [null, [], 1, "success", false]) {
+    const result = run("check", JSON.stringify(value));
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /needs must be a job result object/);
+  }
 });

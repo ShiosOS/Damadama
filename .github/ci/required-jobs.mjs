@@ -1,5 +1,42 @@
 import { pathToFileURL } from "node:url";
 
+export const releaseCallables = {
+  "runtime-policy": {
+    workflow: "release-runtime-check.yml",
+    permissions: { contents: "read" },
+    kind: "core-leaf",
+  },
+  recovery: {
+    workflow: "recovery-check.yml",
+    permissions: { contents: "read" },
+    kind: "core-leaf",
+  },
+  evidence: {
+    workflow: "pr-evidence.yml",
+    permissions: { contents: "read", "pull-requests": "read" },
+    kind: "core-leaf",
+  },
+  "security-codeql": {
+    workflow: "security-codeql.yml",
+    permissions: {
+      contents: "read",
+      actions: "read",
+      "security-events": "write",
+    },
+    kind: "security",
+  },
+  "security-dependencies": {
+    workflow: "security-dependencies.yml",
+    permissions: { contents: "read", "pull-requests": "read" },
+    kind: "security",
+  },
+  "security-fixtures": {
+    workflow: "security-fixtures.yml",
+    permissions: { contents: "read" },
+    kind: "security",
+  },
+};
+
 export const gates = {
   check: {
     workflow: "check.yml",
@@ -7,7 +44,7 @@ export const gates = {
   },
   "release-controls": {
     workflow: "release-controls.yml",
-    needs: ["runtime-policy", "recovery", "evidence"],
+    needs: Object.keys(releaseCallables),
   },
 };
 

@@ -1,11 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { gates } from "./required-jobs.mjs";
-
-const leaves = {
-  "runtime-policy": "release-runtime-check.yml",
-  recovery: "recovery-check.yml",
-  evidence: "pr-evidence.yml",
-};
+import { gates, releaseCallables } from "./required-jobs.mjs";
 const recipes = [
   [
     "check.yml",
@@ -142,13 +136,29 @@ export function gateGraphErrors(workflows) {
         `${filename}:jobs.${name}: steps cannot continue on error`,
       );
       if (gate === "release-controls") {
+        const callable = releaseCallables[name];
         expect(
-          dependency.uses === `$/.github/workflows/${leaves[name]}`,
+          dependency.uses === `$/.github/workflows/${callable.workflow}`,
           `${filename}:jobs.${name}: wrong callable workflow`,
         );
         expect(
           dependency.with === undefined && dependency.secrets === undefined,
           `${filename}:jobs.${name}: callable contract has no inputs or secrets`,
+        );
+        expect(
+          dependency.strategy === undefined,
+          `${filename}:jobs.${name}: callable must run once without a matrix`,
+        );
+        expect(
+          Boolean(dependency.permissions) &&
+            typeof dependency.permissions === "object" &&
+            !Array.isArray(dependency.permissions) &&
+            Object.keys(dependency.permissions).length ===
+              Object.keys(callable.permissions).length &&
+            Object.entries(callable.permissions).every(
+              ([key, value]) => dependency.permissions[key] === value,
+            ),
+          `${filename}:jobs.${name}: permissions must match the callable contract`,
         );
       }
     }
@@ -156,6 +166,15 @@ export function gateGraphErrors(workflows) {
 
   const release = workflows["release-controls.yml"];
   const check = workflows["check.yml"];
+  expect(
+    Object.keys(release?.jobs ?? {}).length ===
+      Object.keys(releaseCallables).length + 1 &&
+      Object.keys(release?.jobs ?? {}).every(
+        (name) =>
+          name === "release-controls" || Object.hasOwn(releaseCallables, name),
+      ),
+    "release-controls.yml: jobs must be exactly the callable prerequisites and native gate",
+  );
   expect(
     Boolean(check?.on && Object.hasOwn(check.on, "pull_request")) &&
       !Object.keys(check.on).some((name) => name !== "pull_request") &&
@@ -179,26 +198,33 @@ export function gateGraphErrors(workflows) {
     "release-controls.yml: pull_request must rerun on edits and head changes",
   );
   expect(
-    release?.jobs?.evidence?.permissions?.["pull-requests"] === "read",
-    "release-controls.yml: evidence needs pull-requests: read",
+    release?.jobs?.["release-controls"]?.permissions?.contents === "read",
+    "release-controls.yml:jobs.release-controls: needs contents: read",
   );
-  for (const name of ["runtime-policy", "recovery", "release-controls"]) {
-    expect(
-      release?.jobs?.[name]?.permissions?.contents === "read",
-      `release-controls.yml:jobs.${name}: needs contents: read`,
-    );
-  }
-  for (const [jobName, filename] of Object.entries(leaves)) {
+  for (const [jobName, { workflow: filename, kind }] of Object.entries(
+    releaseCallables,
+  )) {
     const leaf = workflows[filename];
     expect(
-      Boolean(leaf?.on && Object.hasOwn(leaf.on, "workflow_call")) &&
-        Object.keys(leaf.on).length === 1,
-      `${filename}: must be workflow_call only`,
+      Boolean(leaf?.on && Object.hasOwn(leaf.on, "workflow_call")),
+      `${filename}: must support workflow_call`,
     );
     expect(
       leaf?.on?.workflow_call?.inputs === undefined &&
-        leaf?.on?.workflow_call?.secrets === undefined,
-      `${filename}: workflow_call contract has no inputs or secrets`,
+        leaf?.on?.workflow_call?.secrets === undefined &&
+        leaf?.on?.workflow_call?.outputs === undefined,
+      `${filename}: workflow_call contract has no inputs, secrets or outputs`,
+    );
+    if (kind === "security") {
+      expect(
+        !Object.hasOwn(leaf?.on ?? {}, "pull_request"),
+        `${filename}: PR execution must use release-controls`,
+      );
+      continue;
+    }
+    expect(
+      Object.keys(leaf?.on ?? {}).length === 1,
+      `${filename}: must be workflow_call only`,
     );
     const job = leaf?.jobs?.[jobName];
     expect(
@@ -270,7 +296,7 @@ export function gateGraphErrors(workflows) {
   const prSuiteCount = [
     "check.yml",
     "release-controls.yml",
-    ...Object.values(leaves),
+    ...Object.values(releaseCallables).map((callable) => callable.workflow),
   ]
     .flatMap((filename) => Object.values(workflows[filename]?.jobs ?? {}))
     .flatMap((job) => job.steps ?? [])
