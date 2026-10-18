@@ -1,22 +1,40 @@
 name: Release controls
 on:
   pull_request:
-    branches: [main]
+    types: [opened, reopened, synchronize, edited]
 permissions:
   contents: read
 concurrency:
   group: release-controls-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 jobs:
+  runtime-policy:
+    uses: $/.github/workflows/release-runtime-check.yml
+    permissions:
+      contents: read
+  recovery:
+    uses: $/.github/workflows/recovery-check.yml
+    permissions:
+      contents: read
+  evidence:
+    uses: $/.github/workflows/pr-evidence.yml
+    permissions:
+      contents: read
+      pull-requests: read
   release-controls:
+    needs: [runtime-policy, recovery, evidence]
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 3
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24
-      - run: node --test release/*.test.mjs
+      - run: node .github/ci/required-jobs.mjs release-controls
+        env:
+          REQUIRED_JOBS: ${{ toJSON(needs) }}
