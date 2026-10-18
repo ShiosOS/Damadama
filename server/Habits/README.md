@@ -15,11 +15,11 @@ The browser performs no recurrence calculation.
 
 ## HTTP contract
 
-`GET /api/habits/scheduled?date=2026-10-14` requires an authenticated account.
-The endpoint accepts exactly one `date` value in invariant `YYYY-MM-DD` format.
-Missing, empty, malformed, impossible, timestamp, whitespace-padded, and repeated date values return HTTP `400` with `application/problem+json`.
-The validation title is `Check the requested date.` and the `errors.date` message is `Use one valid calendar date in YYYY-MM-DD format.`
-Signed-out requests return HTTP `401` before date validation.
+`GET /api/habits?scheduledOn=2026-10-14` requires an authenticated account.
+Omitting `scheduledOn` lists all owned habits. When supplied, the filter accepts exactly one value in invariant `YYYY-MM-DD` format.
+Empty, malformed, impossible, timestamp, whitespace-padded, and repeated filter values return HTTP `400` with `application/problem+json`.
+The validation title is `Check the requested date.` and the `errors.scheduledOn` message is `Use one valid calendar date in YYYY-MM-DD format.`
+Signed-out requests return HTTP `401` before filter validation. The former `/api/habits/scheduled` route returns HTTP `404`.
 
 HTTP `200` returns an array of the existing `HabitResponse` objects, ordered by `createdAt`, then `id`.
 Each object retains `id`, `name`, `good`, `better`, `best`, `createdAt`, and `schedule`.
@@ -31,4 +31,4 @@ The SQL query filters by the authenticated subject before materialization. The p
 
 `tests/Backend/ScheduledDateEligibility.feature`, `ScheduleEligibilityTests.cs`, and `ScheduledHabitsTests.cs` cover eligibility and the private read.
 `tests/Browser/today.spec.ts` covers Today, travel, local midnight, and request states.
-Use [Check a change](../README.md#check-a-change) to rerun the repository checks.
+Use [Check a change](../../README.md#check-a-change) to rerun the repository checks.
