@@ -5,7 +5,7 @@ import { ApiError, habitsApi, type Habit } from "./habits";
 import HabitDetails from "./HabitDetails.vue";
 import HabitLevels from "./HabitLevels.vue";
 import EntryControls from "./EntryControls.vue";
-import type { DailyEntry, EntryEdit } from "./entries";
+import type { Entry, EntryEdit } from "./entries";
 
 const props = defineProps<{
   accountId: string | null;
@@ -14,7 +14,7 @@ const props = defineProps<{
 }>();
 type TodayState =
   | { kind: "loading"; date: string }
-  | { kind: "ready"; date: string; habits: Habit[]; entries: DailyEntry[] }
+  | { kind: "ready"; date: string; habits: Habit[]; entries: Entry[] }
   | { kind: "error"; date: string; message: string };
 
 function localCalendarDate() {
@@ -79,7 +79,7 @@ function saveEntry(habitId: string, edit: EntryEdit) {
   });
 }
 
-function acceptEntry(entry: DailyEntry) {
+function acceptEntry(entry: Entry) {
   const current = state.value;
   if (current.kind !== "ready" || current.date !== entry.calendarDate) return;
   state.value = {
@@ -199,7 +199,7 @@ onUnmounted(() => {
 <template>
   <section aria-labelledby="today-heading" class="today-view">
     <h2 id="today-heading" class="page-title">
-      {{ selectedDate ? "Daily entries" : "Today" }}
+      {{ selectedDate ? "Entries" : "Today" }}
     </h2>
     <time :datetime="state.date" class="today-date">{{ dateLabel }}</time>
     <div class="mb-5 flex flex-wrap items-end gap-3">

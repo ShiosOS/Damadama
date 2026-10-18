@@ -1,4 +1,4 @@
-# Online daily entries
+# Online entries
 
 The canonical `bun run check` exited 0 at source revision
 `5acb73c57f117502d73e28458a849b1b9c71f8ff`: **48 browser tests and 171 backend
