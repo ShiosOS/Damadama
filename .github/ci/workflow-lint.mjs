@@ -108,6 +108,13 @@ function expectFailure(label, result, pattern) {
 }
 
 async function selfTest(actionlint, zizmor) {
+  for (const [runtime, args] of [
+    [process.execPath, ["test", "./.github/ci/security-policy.test.mjs"]],
+    ["node", ["--test", ".github/ci/monitor-conformance.test.mjs"]],
+  ]) {
+    const result = run(runtime, args);
+    if (result.code !== 0) throw new Error(result.output);
+  }
   const fixture = (name) => join(fixturesDirectory, `${name}.yml`);
   const valid = fixture("valid-queue");
   const validActionlint = run(actionlint, ["-oneline", valid]);
