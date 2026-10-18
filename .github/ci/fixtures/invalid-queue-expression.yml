@@ -1,0 +1,13 @@
+name: Invalid queue expression
+on: push
+permissions:
+  contents: read
+concurrency:
+  group: validation-${{ github.repository }}
+  queue: max
+  cancel-in-progress: ${{ true }}
+jobs:
+  example:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo invalid

@@ -1,0 +1,13 @@
+name: Invalid queue pairing
+on: push
+permissions:
+  contents: read
+jobs:
+  example:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: validation-${{ github.repository }}
+      queue: max
+      cancel-in-progress: true
+    steps:
+      - run: echo invalid

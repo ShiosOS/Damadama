@@ -1,0 +1,10 @@
+name: Invalid actionlint syntax
+on: push
+permissions:
+  contents: read
+jobs:
+  example:
+    runs-on: ubuntu-latest
+    bogus: true
+    steps:
+      - run: echo invalid
