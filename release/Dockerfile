@@ -9,10 +9,10 @@ RUN bun install --frozen-lockfile --ignore-scripts
 COPY web web
 RUN bun run --cwd web build
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.12@sha256:222759b391a1aaf241166672c8f99b2d4ada452e7b5319f3c6e8f265a37b5ad4 AS publish
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.13@sha256:d5633778c754e89a386882eddf8dbee6942447a8a4b8267c19cf1e1158d0b0ac AS publish
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
-RUN curl -fsSL https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.112/dotnet-sdk-10.0.112-linux-x64.tar.gz -o /tmp/sdk.tar.gz \
-    && echo "1ac949dfd3929855e3a102a5b12f843967a784ad2d911dfcfff6abdf81a2e78bccf25ddc055547de02b36133bf792aaf97fcba8db8aa6b52ac2e018b86935d05  /tmp/sdk.tar.gz" | sha512sum -c - \
+RUN curl -fsSL https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.113/dotnet-sdk-10.0.113-linux-x64.tar.gz -o /tmp/sdk.tar.gz \
+    && echo "1f2746d3684ef782c4308e056e709e9361802e082e401aff3760868125009a8aee2803ff3eeb87587dc60c766e5dc4f9bfd6051c660a85602cc892c31f72256d  /tmp/sdk.tar.gz" | sha512sum -c - \
     && tar -xzf /tmp/sdk.tar.gz -C /usr/share/dotnet && rm /tmp/sdk.tar.gz
 WORKDIR /src
 COPY global.json Directory.Build.props dotnet-tools.json ./
@@ -23,7 +23,7 @@ RUN dotnet restore server/Damadama.csproj --locked-mode \
     && dotnet tool restore \
     && dotnet ef migrations script --idempotent --project server --output /out/migrations.sql
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.12@sha256:222759b391a1aaf241166672c8f99b2d4ada452e7b5319f3c6e8f265a37b5ad4
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.13@sha256:d5633778c754e89a386882eddf8dbee6942447a8a4b8267c19cf1e1158d0b0ac
 WORKDIR /app
 COPY --from=publish /out .
 COPY .damadama-release.json wwwroot/release.json
