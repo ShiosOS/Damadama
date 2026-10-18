@@ -30,10 +30,32 @@ jobs:
             const hasRecording = /https:\/\/[^\s<>()]+/.test(recording);
             const isVisual = files.some(file => file.filename.startsWith("web/") || file.previous_filename?.startsWith("web/"));
             const explained = /Visual evidence does not apply because [^\r\n]+/i.test(evidence);
+            const testedRevision = evidence.match(/^Tested revision:[ \t]+([0-9a-f]{40})[ \t]*\r?$/im)?.[1];
+            const generated = files.find(file => file.status !== "removed" && (
+              /^(?:docs|\.github)\/evidence\/.*\.(?:png|jpg|jpeg|gif|webp|mp4|webm|mov|log|txt|trx|html|zip)$/i.test(file.filename) ||
+              /(?:^|\/)(?:\.audit|test-results|playwright-report)\//i.test(file.filename)
+            ));
+            const mediaLinks = [
+              ...screenshots.matchAll(/!\[[^\]]*\]\((https:\/\/[^\s)]+)\)/g),
+              ...recording.matchAll(/(https:\/\/[^\s<>()]+)/g),
+            ].map(match => match[1]);
+            const repositoryMedia = mediaLinks.some(link => {
+              const url = URL.parse(link);
+              return url && (
+                ["raw.githubusercontent.com", "raw.github.com"].includes(url.hostname) ||
+                (url.hostname === "github.com" && /^\/[^/]+\/[^/]+\/(?:blob|raw)\//i.test(url.pathname))
+              );
+            });
             if (!evidence.trim() || !hasLink) {
               core.setFailed("Add an ## Evidence section with an HTTPS link to actual verification output.");
             } else if (isVisual && (!hasScreenshot || !hasRecording)) {
               core.setFailed("UI changes require an HTTPS Markdown image under ### Screenshots and an HTTPS recording link under ### Screen recording.");
             } else if (!isVisual && !(hasScreenshot && hasRecording) && !explained) {
               core.setFailed("Include screenshots and a recording, or explain 'Visual evidence does not apply because ...' and link actual verification output.");
+            } else if (!testedRevision || testedRevision.toLowerCase() !== context.payload.pull_request.head.sha.toLowerCase()) {
+              core.setFailed("Include 'Tested revision: <full 40-character SHA>' in ## Evidence matching the current PR head. Update it after testing each push.");
+            } else if (generated) {
+              core.setFailed(`Move generated verification output out of Git and link PR attachments or CI artifacts instead: ${generated.filename}`);
+            } else if (repositoryMedia) {
+              core.setFailed("Use PR attachments or CI artifacts for screenshot and recording evidence, not repository blob or raw URLs.");
             }
