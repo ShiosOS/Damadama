@@ -11,14 +11,14 @@ The legacy Codex cloud interface and the Agents API are separate products.
 4. Use existing authorized GitHub access. If GitHub requests a new security grant, have the repository owner approve that grant.
 5. Keep **Who can use** set to **Only me**. Leave network secrets, provider identities, and VPN connections empty.
 
-`main` currently contains release tooling. The application is on the unmerged `feat/create-list-habits` branch in PR11.
-Keep cloud setup changes on their own branch. Select the application branch explicitly for application verification.
+`main` contains the application and release tooling. Select the revision you intend to verify.
+Keep cloud setup changes on their own branch.
 
 ## Prepare and test dependencies
 
 Use Linux x64 with Bash, curl, unzip, tar, xz, Git, and SHA-256 tools.
-The existing cloud VM runs Debian 13.6. Local validation uses Ubuntu 24.04.
-Use the repository install script after this setup PR is available on the selected revision:
+Recorded cloud verification used Debian 13.6. Local verification used Ubuntu 24.04.
+Use the repository install script from the selected revision:
 
 ```bash
 bash .codex/cloud/setup.sh
@@ -34,8 +34,8 @@ The scripts preserve `HOME`, which is read-only in the existing cloud VM.
 They restore locked dependencies and install the lockfile's Playwright Chromium.
 The host must already supply .NET's ICU, OpenSSL, and zlib dependencies, Chromium's native libraries, and `tzdata` for IANA device calendar dates.
 Setup does not install system packages. Preserve vendor diagnostics when a host dependency is missing.
-On a revision with application manifests, it restores Bun dependencies, .NET tools, and NuGet packages.
-On today's `main`, it restores the release package with `npm ci --ignore-scripts` and installs its pinned Chromium.
+On revisions with a root `package.json`, including `main`, setup restores Bun dependencies, .NET tools, and NuGet packages.
+On older revisions without that manifest, it restores the release package with `npm ci --prefix release --ignore-scripts` and installs its pinned Chromium.
 Run setup sequentially within one checkout.
 
 To prepare an older branch without copying setup files into tracked source, retain all three scripts together outside the checkout.
@@ -75,7 +75,7 @@ Verify Chromium launch directly before claiming Playwright support.
 ## Publish and verify a fresh task
 
 1. Review the setup output and saved **Install script**. Set it to run `bash .codex/cloud/setup.sh` where this file exists.
-2. Record the setup instructions for older branches in the environment itself until this PR reaches `main`.
+2. For an older revision without these scripts, record the reviewed helper commit and external-script commands in the environment.
 3. Save the draft, then select **Publish** after reviewing the prepared files and capability results.
 4. Confirm **Environment published** and record the displayed environment name and identifier.
 5. Start a new cloud task from that environment. Select the desired repository branch explicitly.
@@ -84,11 +84,12 @@ Verify Chromium launch directly before claiming Playwright support.
 ```text
 Verify ShiosOS/Damadama in this cloud task. Do not change source, deploy,
 merge, add secrets, or provision infrastructure. Print the remote URL and
-HEAD SHA. Run the saved dependency setup twice, then the capability probe.
-On main, run node --test release/*.test.mjs and state that application code
-is absent. On feat/create-list-habits, run the unchanged bun run check if
-Docker and Chromium work. If a capability is absent, report the command,
-exit status, and affected checks. Never bypass authentication or weaken tests.
+HEAD SHA. Run the saved dependency setup twice, then the saved verification.
+On revisions with a root package.json, including main, run the unchanged
+bun run check when Docker and Chromium work. On older revisions without
+that manifest, run node --test release/*.test.mjs. If a capability is absent,
+report the command, exit status, and affected checks.
+Never bypass authentication or weaken tests.
 Report the environment identifier, task link, revision, and exact results.
 ```
 
@@ -98,7 +99,7 @@ Existing tasks retain their own state, so verify changes in a fresh task.
 
 ## Start the application when supported
 
-Use the application branch's `README.md` and `bun run start` for Aspire startup.
+Use the root `README.md` and `bun run start` for Aspire startup.
 That flow needs Docker, a persistent development PostgreSQL password, and Clerk development configuration.
 Supply development values separately when interactive sign-in is required.
 Do not copy production or provider secrets into cloud development.
@@ -108,9 +109,10 @@ The application's test host uses ephemeral signed tokens through the ordinary JW
 Those tests do not verify Clerk email-code sign-in or email delivery.
 Record interactive Clerk verification separately when the cloud product can support it.
 
-## Current verification record
+## Recorded setup verification
 
-The setup branch is refreshed onto `main` at `5eb0bf5`.
+Re-run the commands above for the revision you select. The results below are historical.
+The setup branch was refreshed onto `main` at `5eb0bf5`.
 The revised scripts passed setup twice, Docker/PostgreSQL, Chromium launch, and all 162 current release tests locally with a read-only home.
 The unchanged application check also passed all 11 browser and 51 backend tests with the new default cache path.
 These are local Ubuntu results. The initial baseline at `465b816` completed dependency setup twice, launched Chromium, queried PostgreSQL 17,
