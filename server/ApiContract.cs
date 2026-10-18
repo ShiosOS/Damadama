@@ -46,8 +46,8 @@ public static class ApiContract
                     response.Headers["Cache-Control"] = new OpenApiHeader
                     {
                         Required = true,
-                        Description = "Account responses cannot be cached.",
-                        Schema = new OpenApiSchema { Type = JsonSchemaType.String, Const = "private, no-store" }
+                        Description = "Must include private and no-store directives. Directive order is insignificant.",
+                        Schema = new OpenApiSchema { Type = JsonSchemaType.String, MinLength = 1 }
                     };
                     if (status == "201") response.Headers["Location"] = new OpenApiHeader
                     {

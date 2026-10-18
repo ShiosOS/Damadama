@@ -128,6 +128,8 @@ public class ApiContractTests
     [TestCase(200, "private, no-store", "response.status")]
     [TestCase(201, "private, no-store", "response.location")]
     [TestCase(201, "public", "response.cache")]
+    [TestCase(201, "no-store", "response.cache")]
+    [TestCase(201, "private", "response.cache")]
     public async Task Actual_bad_responses_fail_the_same_observation_guard(int status, string cache, string diagnostic)
     {
         using var app = new TestApp(DatabaseFixture.Database.GetConnectionString(), endpoints =>
