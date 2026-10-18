@@ -1,0 +1,98 @@
+{
+  "crane": {
+    "version": "0.21.9",
+    "repository": "google/go-containerregistry",
+    "executables": {
+      "linux-x64": {
+        "name": "crane",
+        "sha256": "b0bb9155edd97f42f1f9438860b71e8d68177c5ca11536fe755e6b11aefa5f4d",
+        "asset": "go-containerregistry_Linux_x86_64.tar.gz",
+        "archiveSha256": "5c16d8ddb971cb1d5e6ed8b1e743da8224414eeba2c2762d8f1a61b2f095699e",
+        "member": "crane"
+      },
+      "win32-x64": {
+        "name": "crane.exe",
+        "sha256": "c461ed4b18ebbe2893d3e0047d143d26f38609f40e4722d7e7b49cb641de6e79",
+        "asset": "go-containerregistry_Windows_x86_64.tar.gz",
+        "archiveSha256": "2309f41ce9a31b6096fd590a57b00b0fd1d6dc41d315dc820795f64be070fe03",
+        "member": "crane.exe"
+      }
+    }
+  },
+  "syft": {
+    "version": "1.54.1",
+    "repository": "anchore/syft",
+    "executables": {
+      "linux-x64": {
+        "name": "syft",
+        "sha256": "dbf75864e7a7ff9e1fbf00552c31483f693188632a9f68f343cd7653dac513d6",
+        "asset": "syft_1.54.1_linux_amd64.tar.gz",
+        "archiveSha256": "c069905b391cc4c20a5ba65ad5c10be2a7ba074f8ea6ad203e24d14e303dad47",
+        "member": "syft"
+      },
+      "win32-x64": {
+        "name": "syft.exe",
+        "sha256": "b7e78564e72dc550301ff221c9e034d9ece77d16f8e5cc0f7782caa302addbc6",
+        "asset": "syft_1.54.1_windows_amd64.zip",
+        "archiveSha256": "8b56e8285e295e0bbed26eeea9b16ed51c493be97ccdf42dae6326c84fe8e19f",
+        "member": "syft.exe"
+      }
+    }
+  },
+  "grype": {
+    "version": "0.120.1",
+    "repository": "anchore/grype",
+    "executables": {
+      "linux-x64": {
+        "name": "grype",
+        "sha256": "d6e3248b0e788b4da7450a9e03d1e72811771cf97de3640a18e6517bf6507eb7",
+        "asset": "grype_0.120.1_linux_amd64.tar.gz",
+        "archiveSha256": "0a9ee97ef5ae2ee953b0a80098105052e846cdbe319a57d808b519c33cd1343d",
+        "member": "grype"
+      },
+      "win32-x64": {
+        "name": "grype.exe",
+        "sha256": "96373670a07b8b6cbcfff4331c8b3d8ffb70d570f072450f8548d04bbe2db537",
+        "asset": "grype_0.120.1_windows_amd64.zip",
+        "archiveSha256": "32e3c811f31822d17592908bafdc6288aaaca3d52583c479167a8dc8399ed65d",
+        "member": "grype.exe"
+      }
+    }
+  },
+  "gh": {
+    "version": "2.102.0",
+    "repository": "cli/cli",
+    "executables": {
+      "linux-x64": {
+        "name": "gh",
+        "sha256": "7469124f706944133d6a169691dd1c6c3511b12e85878d255e044e2948df4c9b",
+        "asset": "gh_2.102.0_linux_amd64.tar.gz",
+        "archiveSha256": "bb766f710eef8ede859c18578c72c327597cd4c8a85b06001b1f3843c6019386",
+        "member": "gh_2.102.0_linux_amd64/bin/gh"
+      },
+      "win32-x64": {
+        "name": "gh.exe",
+        "sha256": "756724853cc579510b58e65e7a7429ad6b1af29cf99ef19b3a95f3b701c5c580",
+        "asset": "gh_2.102.0_windows_amd64.zip",
+        "archiveSha256": "ae64e556ecc240b200f7eba60d550e4bb60d78e860e69dd88c449405b86067f4",
+        "member": "bin/gh.exe"
+      }
+    }
+  },
+  "cosign": {
+    "version": "3.1.3",
+    "repository": "sigstore/cosign",
+    "executables": {
+      "linux-x64": {
+        "name": "cosign",
+        "sha256": "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71",
+        "asset": "cosign-linux-amd64"
+      },
+      "win32-x64": {
+        "name": "cosign.exe",
+        "sha256": "9fe59be0eca1271873ce019061335eb1ac419b7059202e797828467ddabe33be",
+        "asset": "cosign-windows-amd64.exe"
+      }
+    }
+  }
+}

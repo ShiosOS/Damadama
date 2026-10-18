@@ -1,6 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { createReadStream, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -62,9 +61,9 @@ export async function prepareArchive(
     throw new Error("image version differs from build record");
   const controller = { ...authority };
   const expectedArchiveSha256 = build.archiveSha256;
-  const archiveSha256 = createHash("sha256")
-    .update(await readFile(archivePath))
-    .digest("hex");
+  const digest = createHash("sha256");
+  for await (const bytes of createReadStream(archivePath)) digest.update(bytes);
+  const archiveSha256 = digest.digest("hex");
   if (expectedArchiveSha256 !== archiveSha256)
     throw new Error("image archive differs from build record");
   return {
