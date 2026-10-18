@@ -6,11 +6,15 @@
   "scripts": {
     "start": "bun scripts/start.ts",
     "check": "bun scripts/check.ts",
+    "doctor": "bun scripts/doctor.ts",
     "check:types": "node scripts/type-coverage.mjs && vue-tsc -p web/tsconfig.json --noEmit && tsc -p tests/Browser/tsconfig.json --noEmit && vue-tsc -p tests/Browser/tsconfig.json --noEmit && tsc -p scripts/tsconfig.json --noEmit && eslint . && node --test scripts/typecheck.test.mjs",
     "lint": "eslint .",
-    "test:web": "vite --config tests/Browser/vite.config.ts",
+    "serve:browser-fixture": "vite --config tests/Browser/vite.config.ts",
+    "test:backend": "bun scripts/developer.ts test:backend",
+    "test:browser": "bun scripts/developer.ts test:browser",
     "check:performance": "node --test scripts/performance-budget.test.mjs && node scripts/performance-budget.mjs",
-    "format": "prettier --write web tests/Browser scripts package.json tsconfig.base.json eslint.config.mjs .github README.md AGENTS.md dev/Properties/launchSettings.json"
+    "format": "bun scripts/developer.ts format",
+    "format:check": "bun scripts/developer.ts format:check"
   },
   "workspaces": [
     "web"
