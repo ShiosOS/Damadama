@@ -16,7 +16,7 @@ jobs:
         env:
           POSTGRES_DB: telemetry_proof
           POSTGRES_USER: telemetry_proof
-          POSTGRES_PASSWORD: ephemeral-proof-only
+          POSTGRES_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
         ports:
           - 5432:5432
         options: >-
@@ -36,4 +36,4 @@ jobs:
       - run: dotnet format tests/TelemetryProof/TelemetryProof.csproj --no-restore --verify-no-changes
       - run: dotnet run --project tests/TelemetryProof/TelemetryProof.csproj --no-restore
         env:
-          TELEMETRY_POSTGRES: Host=localhost;Port=5432;Database=telemetry_proof;Username=telemetry_proof;Password=ephemeral-proof-only
+          TELEMETRY_POSTGRES: Host=localhost;Port=5432;Database=telemetry_proof;Username=telemetry_proof;Password=${{ github.run_id }}-${{ github.run_attempt }}
