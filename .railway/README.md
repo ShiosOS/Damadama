@@ -13,6 +13,8 @@ npm run check --prefix .railway
 
 The checks evaluate the real Railway SDK definition and reject missing resources, trusted source ownership, secret replacement, database exposure, removed backup schedules, copied preview data and missing caps. These are offline checks. They do not establish a live no-change plan or a working preview.
 
+The root frozen Bun install supplies the same pinned SDK for `bun run check:railway`. The required `bun run check` runs that suite and includes the authoring file in TypeScript coverage and compilation.
+
 The SDK is pinned to `railway` 3.16.0 in its own lock. Railway CLI 5.70.0 is required separately. Use a private installation of the [official release](https://github.com/railwayapp/cli/releases/tag/v5.70.0), leaving global runtimes unchanged. Verify the archive SHA256 before extraction.
 
 | Archive                                           | SHA256                                                             |

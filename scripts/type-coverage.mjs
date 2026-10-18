@@ -7,7 +7,7 @@ import { parse } from "@vue/compiler-sfc";
 import ts from "typescript";
 
 const root = resolve(import.meta.dirname, "..");
-const projects = ["web", "tests/Browser", "scripts"];
+const projects = ["web", "tests/Browser", "scripts", ".railway"];
 const maintained = [
   ...new Set(
     execFileSync(
