@@ -2,6 +2,7 @@
 !package.json
 !bun.lock
 !bunfig.toml
+!tsconfig.base.json
 !global.json
 !Directory.Build.props
 !dotnet-tools.json

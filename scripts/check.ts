@@ -11,6 +11,17 @@ const commands = [
   ["bun", "install", "--frozen-lockfile"],
   ["bun", "run", "check:types"],
   ["docker", "info", "--format", "{{.ServerVersion}}"],
+  [
+    "docker",
+    "build",
+    "--platform",
+    "linux/amd64",
+    "--target",
+    "web",
+    "--file",
+    "release/Dockerfile",
+    ".",
+  ],
   ["dotnet", "tool", "restore"],
   ["dotnet", "restore", "--locked-mode"],
   [
