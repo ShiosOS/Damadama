@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { writeFile, rm } from "node:fs/promises";
-import { resolve } from "node:path";
+import { mkdir, writeFile, rm } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 
@@ -30,6 +30,7 @@ async function withProbes(files, check) {
   const created = [];
   try {
     for (const [path, source] of files) {
+      await mkdir(dirname(path), { recursive: true });
       await writeFile(path, source, { flag: "wx" });
       created.push(path);
     }
@@ -150,7 +151,7 @@ test("coverage accepts directive names in strings, templates, and regular expres
       ],
       [
         vue,
-        '<script setup lang="ts">\nconst text = "@vue-ignore @vue-expect-error";\n</script>\n<template><span>{{ text }}</span></template>\n',
+        '<script setup data-note=">" lang="ts">\nconst text = "@vue-ignore @vue-expect-error";\n</script>\n<template><span>{{ text }}</span></template>\n',
       ],
     ],
     () => {
@@ -291,6 +292,32 @@ test("typed ESLint requires return types for exported object methods and const a
         "node_modules/eslint/bin/eslint.js",
         [arrow],
         [/@typescript-eslint\/explicit-function-return-type/],
+      );
+    },
+  );
+});
+
+test("inline ESLint configuration cannot disable explicit function contracts", async () => {
+  const path = resolve(root, "scripts/type-probe-inline.ts");
+  await withProbes(
+    [
+      [
+        path,
+        '/* eslint @typescript-eslint/explicit-function-return-type: "off" */\nexport function value(input: string) { return input.length; }\n',
+      ],
+    ],
+    () => {
+      rejects(
+        "node_modules/eslint/bin/eslint.js",
+        [path],
+        [/@typescript-eslint\/explicit-function-return-type/],
+      );
+      rejects(
+        "scripts/type-coverage.mjs",
+        [],
+        [
+          /scripts\/type-probe-inline\.ts: type or lint suppression is forbidden/,
+        ],
       );
     },
   );
