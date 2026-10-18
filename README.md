@@ -28,7 +28,9 @@ Clerk's built-in Vue sign-in component follows these instance settings.
 ## Check a change
 
 Run `bun run check`. The first run downloads Chromium, which subsequent runs reuse.
-The command checks locked dependencies, builds, formatting, nested conditional lint rules, Vue types, domain rules, Reqnroll API examples, PostgreSQL integration, and browser flows.
+The command checks locked dependencies, TypeScript and Vue types, typed lint, builds, formatting, domain rules, Reqnroll API examples, PostgreSQL integration, and browser flows.
+Run `bun run check:types` for the TypeScript gate without Docker. It covers the web app, Vite configs, browser fixture and tests, and Bun scripts. The gate inventories every maintained `.ts`, `.tsx`, `.mts`, `.cts`, and `.vue` file and rejects files outside a checked project, Vue scripts without `lang="ts"`, and type or lint suppressions. Compiler and lint rejection probes run against the same configs.
+Keep Vue props, emits, state unions, and view-only types next to their component. Derive wire types from the Zod schemas in ordinary TypeScript modules; parse external data at the request boundary. Explicitly type function inputs and returns and state contracts, while letting local values with clear initializers infer their types.
 An unavailable Docker engine fails the command. Testcontainers databases are separate from your persistent local database.
 Pull request checks cache dependencies, cancel superseded runs, and retain verification artifacts from successful and failed runs for seven days.
 The [browser performance checks](docs/browser-performance.md) document fixed production-asset, layout, and request budgets, the baseline, and fixture limits.

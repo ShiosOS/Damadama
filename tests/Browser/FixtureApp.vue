@@ -9,10 +9,14 @@ const tokens = z
 const account = ref<string | null>(
   new URLSearchParams(location.search).get("account") ?? "owner",
 );
-const getToken = async () =>
+const getToken = async (): Promise<string | null> =>
   account.value ? (tokens[account.value] ?? null) : null;
-const otherAccount = () => (account.value = "other");
-const signOut = () => (account.value = null);
+const otherAccount = (): void => {
+  account.value = "other";
+};
+const signOut = (): void => {
+  account.value = null;
+};
 onMounted(() => {
   window.addEventListener("fixture:other-account", otherAccount);
   window.addEventListener("fixture:sign-out", signOut);

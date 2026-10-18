@@ -1,8 +1,8 @@
 import { defineConfig } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../../", import.meta.url));
-const browserOrigin = `http://127.0.0.1:${process.env.DAMADAMA_BROWSER_PORT ?? "5174"}`;
-const apiOrigin = `http://localhost:${process.env.DAMADAMA_API_PORT ?? "5055"}`;
+const browserOrigin = `http://127.0.0.1:${process.env["DAMADAMA_BROWSER_PORT"] ?? "5174"}`;
+const apiOrigin = `http://localhost:${process.env["DAMADAMA_API_PORT"] ?? "5055"}`;
 
 export default defineConfig({
   testDir: ".",

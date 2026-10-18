@@ -3,8 +3,8 @@ import vue from "@vitejs/plugin-vue";
 import ui from "@nuxt/ui/vite";
 import { resolve } from "node:path";
 
-const browserPort = Number(process.env.DAMADAMA_BROWSER_PORT ?? "5174");
-const apiOrigin = `http://localhost:${process.env.DAMADAMA_API_PORT ?? "5055"}`;
+const browserPort = Number(process.env["DAMADAMA_BROWSER_PORT"] ?? "5174");
+const apiOrigin = `http://localhost:${process.env["DAMADAMA_API_PORT"] ?? "5055"}`;
 
 export default defineConfig({
   root: "tests/Browser",

@@ -6,7 +6,10 @@ import "./style.css";
 import { z } from "zod";
 
 const schema = z.object({ clerkPublishableKey: z.string().nullable() });
-async function loadConfiguration() {
+async function loadConfiguration(): Promise<{
+  key: string | null;
+  message: string | null;
+}> {
   try {
     const response = await fetch("/api/config");
     if (!response.ok) throw new Error("Configuration request failed.");

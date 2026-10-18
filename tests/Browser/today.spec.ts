@@ -1,17 +1,17 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { z } from "zod";
-import { habitSchema } from "../../web/src/habits.schema";
+import { habitSchema, type Habit } from "../../web/src/habits.schema";
 
 const instant = new Date("2026-01-05T00:30:00Z");
 const travelInstant = new Date("2026-01-12T00:30:00Z");
 const scheduledPath = "**/api/habits/scheduled?date=*";
-const today = (page: Page) =>
+const today = (page: Page): Locator =>
   page.getByRole("region", { name: "Today", exact: true });
-const walking = (page: Page) =>
+const walking = (page: Page): Locator =>
   today(page).getByRole("heading", { name: "Walking", exact: true });
 const browserErrors = new Map<Page, string[]>();
 
-function observeErrors(page: Page) {
+function observeErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
@@ -34,7 +34,7 @@ test.afterEach(({ page }) => {
   browserErrors.delete(page);
 });
 
-async function tokenFor(page: Page, account: string) {
+async function tokenFor(page: Page, account: string): Promise<string> {
   const tokens = z
     .record(z.string(), z.string())
     .parse(await (await page.request.get("/fixture.json")).json());
@@ -48,7 +48,7 @@ async function seed(
   account: string,
   weekdays = [7],
   repeatEveryWeeks = 1,
-) {
+): Promise<Habit> {
   const response = await page.request.post("/api/habits", {
     headers: { Authorization: `Bearer ${await tokenFor(page, account)}` },
     data: {
@@ -65,7 +65,11 @@ async function seed(
   return habitSchema.parse(await response.json());
 }
 
-async function create(page: Page, name: string, weekday: string) {
+async function create(
+  page: Page,
+  name: string,
+  weekday: string,
+): Promise<void> {
   await page.getByRole("button", { name: "Add habit", exact: true }).click();
   const panel = page.getByRole("dialog", { name: "Create a habit" });
   await panel.getByLabel("Name", { exact: true }).fill(name);
@@ -77,11 +81,11 @@ async function create(page: Page, name: string, weekday: string) {
   await expect(panel).toHaveCount(0);
 }
 
-async function focus(page: Page) {
+async function focus(page: Page): Promise<void> {
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
 }
 
-async function rendered(page: Page) {
+async function rendered(page: Page): Promise<void> {
   await page.evaluate(
     () =>
       new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
@@ -345,7 +349,9 @@ test("travel updates Today both directions in the same page while stored schedul
   browser,
 }, testInfo) => {
   const context = await browser.newContext({
-    baseURL: testInfo.project.use.baseURL,
+    ...(testInfo.project.use.baseURL
+      ? { baseURL: testInfo.project.use.baseURL }
+      : {}),
     timezoneId: "",
     viewport: { width: 1100, height: 900 },
     recordVideo: {
