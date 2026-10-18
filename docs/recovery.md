@@ -66,15 +66,66 @@ Do not expose restored production data to staging accounts or public browser ori
 sh /opt/recovery/restore.sh /recovery/backup.dump.age /recovery/backup.dump.age.sha256
 ```
 
-8. Start the retained app image against the restored database. Inspect readiness, migration history, representative habits/entries, ownership, definitions, and exact saved calendar dates.
-9. Use the appropriate account authority in the private recovery environment to confirm authenticated reads. Do not substitute test authentication in the production image.
-10. Record elapsed time through downloads, decryption, restore, app readiness, and data inspection. Compare it with the one-hour target.
-11. Obtain a separate recovery/cutover approval before changing production traffic or database references.
+8. Before starting the app, assert the expected application tables, migration history, and known sample values in PostgreSQL. Save sanitized assertions. An empty dump can restore successfully, and app startup can create the missing schema. Neither result proves saved-data recovery.
+9. Start the retained app image against the restored database. Inspect readiness, migration history, representative habits/entries, ownership, definitions, and exact saved calendar dates. Compare migration history before and after startup.
+10. Use the appropriate account authority in the private recovery environment to confirm authenticated reads. Do not substitute test authentication in the production image.
+11. Record elapsed time through downloads, target creation, decryption, restore, app readiness, and authenticated data inspection. Compare it with the one-hour target. State which access and image-acquisition steps occurred before the clock started.
+12. Obtain a separate recovery/cutover approval before changing production traffic or database references.
 
 The script checks the encrypted checksum before decrypting. It rejects any existing user relations, routines, types, or extra schemas.
 It restores without ownership/ACL commands, `--clean`, or EF downgrade and uses one transaction with errors fatal.
 An existing target is never cleared automatically. PostgreSQL startup applies only the committed forward migrations.
 The first one-hour rehearsal is a local sample; measure the hosted exercise with realistic backup sizes after setup.
+
+### Check hosted backup contents
+
+Use the existing environment's bucket credentials and matching age identity through the approved secret store. Keep them out of command arguments, logs, screenshots, and committed evidence. Pass credentials into a recovery container by environment-variable name. Mount the identity and downloaded files read-only for restoration.
+
+List the environment prefix first. Select a completion record, download it and its exact archive/checksum siblings, and validate its environment, object key, and retention setting. For example, with the approved recovery image and bucket settings already loaded:
+
+```text
+aws --endpoint-url "$AWS_ENDPOINT_URL" s3api list-objects-v2 --bucket "$S3_BUCKET" --prefix damadama/staging/ --output json
+aws --endpoint-url "$AWS_ENDPOINT_URL" s3 cp "s3://$S3_BUCKET/$BACKUP_KEY.json" /recovery/completion.json --only-show-errors
+aws --endpoint-url "$AWS_ENDPOINT_URL" s3 cp "s3://$S3_BUCKET/$BACKUP_KEY" /recovery/backup.dump.age --only-show-errors
+aws --endpoint-url "$AWS_ENDPOINT_URL" s3 cp "s3://$S3_BUCKET/$BACKUP_KEY.sha256" /recovery/backup.dump.age.sha256 --only-show-errors
+```
+
+Run these commands inside the credential-bearing container. Use a new local PostgreSQL 17 container on its own Docker network with temporary storage and a generated password. Publish only the restored app's port on `127.0.0.1`; publish no database port. Source database credentials never enter the restore container. Run `restore.sh` as described above.
+
+Before app startup, run this SQL against the disposable target:
+
+```sql
+SELECT json_build_object(
+    'habitsTable', to_regclass('public."Habits"') IS NOT NULL,
+    'schedulesTable', to_regclass('public."InitialSchedules"') IS NOT NULL,
+    'migrationHistory', to_regclass('public."__EFMigrationsHistory"') IS NOT NULL
+);
+```
+
+All three values must be true for the current habit slice. Inspect the restored migration IDs and assert a known staged sample's owner, definitions, weekdays, repeat interval, timezone, creation instant, `CreationDate`, and `FirstWeekMonday`. Emit booleans and counts rather than account IDs or row dumps. Missing future daily-entry tables are not evidence of a recovery failure before that feature exists.
+
+For the current reference sample, supply `sample_name` and the approved `sample_owner` privately as psql variables and require `knownSampleMatches` to equal one:
+
+```sql
+SELECT json_build_object('knownSampleMatches', count(*))
+FROM "Habits" h JOIN "InitialSchedules" s ON h."Id" = s."HabitId"
+WHERE h."Name" = :'sample_name' AND h."OwnerId" = :'sample_owner'
+  AND h."Good" = 'five minutes' AND h."Better" = 'fifteen minutes'
+  AND h."Best" = 'thirty minutes' AND s."Weekdays" = ARRAY[1,7]
+  AND s."RepeatEveryWeeks" = 2 AND s."TimeZone" = 'America/New_York'
+  AND s."CreationDate" = DATE '2026-10-15'
+  AND s."FirstWeekMonday" = DATE '2026-10-12';
+```
+
+This predicate is specific to the October 15 staged sample. Use independently known values for another backup. Compare the complete authenticated response as well to cover its creation instant.
+
+For staging-only rehearsals, obtain ordinary sessions for the two approved staging test accounts using the existing Clerk ticket flow in `release/smoke.mjs`. Use only its session setup and GET requests; its complete staging check creates a habit. Compare the owner's restored list and detail responses with the previously saved sample. Confirm the other account gets 404 for that detail and cannot list it. Keep tokens in memory and sign out the exercise sessions afterward. An unauthenticated 401 verifies refusal, not an application data read.
+
+Use the timestamp in the object key as a conservative snapshot-start bound. `completedAt` occurs after the dump and cannot represent the last recovered write. Record the potential loss interval from that bound to the declared simulated failure time. A new backup taken after an actual loss cannot repair that incident's lost interval.
+
+Record the backup job's actual deployed immutable image and execution separately from the restore tooling. A successful backup from an older image does not prove the merged deadline rolled out. Preserve source objects and seven-day retention. Remove only the disposable containers and network captured for this exercise.
+
+The [October 15 hosted rehearsal](recovery-evidence.md#hosted-staging-rehearsal-on-october-15) records both a rejected empty application backup and the successful saved-data recovery.
 
 ## Recover after a spending hard stop
 
@@ -93,7 +144,7 @@ Preserve the database volumes, completed backups, and the hard limit. A spending
 
 Railway [tries to restart resources at the next billing cycle](https://docs.railway.com/pricing/cost-control#usage-limits-faq).
 Do not assume that a reset, manual redeployment, or unchanged service settings proves a private image pull or a healthy application.
-Record what actually restarted and what remains offline. As of 2026-10-15, both hosted backup jobs have completed and their encrypted archive checksums have been verified. Both applications remain undeployed; real sign-in, saved-data reads, decryption, and hosted restore remain unverified.
+Record what actually restarted and what remains offline. The [October 15 evidence](recovery-evidence.md#hosted-staging-rehearsal-on-october-15) verifies staging backup decryption and restoration into local Docker, followed by real Clerk reads through the verified app image. This does not prove automatic recovery after a spending stop, restoration on Railway, or production recovery.
 
 A missed backup can leave the latest recoverable copy older than 24 hours. A later successful backup does not fill the missing recovery interval.
 If a restore is necessary, state the backup time and lost-write window before requesting restore and cutover approval.
