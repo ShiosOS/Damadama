@@ -4,6 +4,7 @@ Create and list private habits with Good, Better, and Best definitions and a wee
 Planning and the system design live in the [Damadama Notion home](https://app.notion.com/p/3f69c0510118817188ebdee8acecaef5).
 
 Use the [Codex Cloud setup guide](.codex/cloud/README.md) for cloud development.
+Use the [local setup and contribution guide](dev/README.md) for Windows and Linux prerequisites, doctor, focused checks, formatting, and PR evidence.
 
 ## Start locally
 

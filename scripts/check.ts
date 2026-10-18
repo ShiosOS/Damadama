@@ -1,5 +1,6 @@
 import { spawn } from "bun";
 import { rm } from "node:fs/promises";
+import { prettierCommand } from "./developer";
 
 await Promise.all([
   rm(".audit/api-contract/openapi.json", { force: true }),
@@ -10,6 +11,8 @@ const commands = [
   ["node", "--test", "scripts/pr-evidence.test.mjs"],
   ["bun", "install", "--frozen-lockfile"],
   ["bun", "run", "check:types"],
+  ["bun", "test", "scripts/doctor.test.ts", "scripts/developer.test.ts"],
+  ["bun", "run", "doctor", "backend"],
   ["docker", "info", "--format", "{{.ServerVersion}}"],
   [
     "docker",
@@ -34,23 +37,7 @@ const commands = [
   ["dotnet", "build", "--no-restore", "--artifacts-path", ".audit/check-build"],
   ["dotnet", "format", "--no-restore", "--verify-no-changes"],
   ["bun", "test", "tests/Browser/rest-client.test.ts"],
-  [
-    "bun",
-    "x",
-    "--no-install",
-    "prettier",
-    "--check",
-    "web",
-    "tests/Browser",
-    "scripts",
-    "package.json",
-    "tsconfig.base.json",
-    "eslint.config.mjs",
-    ".github",
-    "README.md",
-    "AGENTS.md",
-    "dev/Properties/launchSettings.json",
-  ],
+  prettierCommand(false),
   ["bun", "run", "--cwd", "web", "build"],
   ["bun", "run", "check:performance"],
   [
