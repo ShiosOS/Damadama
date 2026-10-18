@@ -12,6 +12,9 @@ const uploadAction =
   "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02";
 const reports = [
   ".audit/TestResults/backend/results.trx",
+  ".audit/api-contract/openapi.json",
+  ".audit/api-contract/responses.json",
+  ".audit/api-contract/negative-controls/struct.json",
   ".audit/performance-assets.json",
   ".audit/performance-browser.json",
   ".audit/performance-saved.png",
@@ -32,6 +35,9 @@ const reports = [
 ];
 const excluded = [
   ".audit/tokens.json",
+  ".audit/api-contract/token.json",
+  ".audit/api-contract/unintended.json",
+  ".audit/api-contract/negative-controls/access-token.json",
   ".audit/unintended.json",
   ".audit/accessibility-token.json",
   ".audit/accessibility-token.png",

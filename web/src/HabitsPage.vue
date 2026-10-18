@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick, reactive, ref, watch } from "vue";
-import { ApiError, habitsApi, weekdays } from "./habits";
-import type { Habit, NewHabit } from "./habits.schema";
+import { ApiError, habitsApi } from "./habits";
+import { weekdays, type Habit, type NewHabit } from "./habits.schema";
 import HabitDetails from "./HabitDetails.vue";
 import CheckeredD from "./CheckeredD.vue";
 import TodayView from "./TodayView.vue";

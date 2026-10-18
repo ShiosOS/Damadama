@@ -69,7 +69,7 @@ test("the committed result appears before any reload", async ({ page }) => {
       response.url().includes("/entries/2026-01-04"),
   );
   await controls.getByRole("button", { name: "Good", exact: true }).click();
-  expect((await saved).status()).toBe(200);
+  expect((await saved).status()).toBe(201);
   await expect(
     controls.getByRole("button", { name: "Good", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -89,6 +89,7 @@ async function choose(
   controls: Locator,
   result: string,
   seconds: number,
+  expectedStatus: 200 | 201 | 409 = 201,
 ): Promise<Entry> {
   await page.clock.setFixedTime(
     new Date(Date.parse("2026-01-05T00:30:00Z") + seconds * 1000),
@@ -100,8 +101,12 @@ async function choose(
   );
   await controls.getByRole("button", { name: result, exact: true }).click();
   const response = await acknowledged;
-  expect(response.status()).toBe(200);
-  const saved = entrySchema.parse(await response.json());
+  expect(response.status()).toBe(expectedStatus);
+  const body: unknown = await response.json();
+  const saved =
+    expectedStatus === 409
+      ? z.object({ current: entrySchema }).parse(body).current
+      : entrySchema.parse(body);
   await expect(
     controls.getByRole("button", { name: saved.result, exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -144,7 +149,13 @@ test("all five outcomes stay distinct after reload", async ({ page }) => {
   await expect(controls).toBeVisible();
   let seconds = 1;
   for (const result of ["Good", "Better", "Best", "Rest", "Clear"]) {
-    const saved = await choose(page, controls, result, seconds++);
+    const saved = await choose(
+      page,
+      controls,
+      result,
+      seconds++,
+      result === "Good" ? 201 : 200,
+    );
     expect(saved.result).toBe(result);
     expect(saved.calendarDate).toBe("2026-01-04");
   }
@@ -169,7 +180,7 @@ test("a committed write stays unconfirmed while its acknowledgment is held", asy
   const release = Promise.withResolvers<void>();
   await page.route("**/api/habits/*/entries/*", async (route) => {
     const response = await route.fetch();
-    expect(response.status()).toBe(200);
+    expect(response.status()).toBe(201);
     committed.resolve();
     await release.promise;
     await route.fulfill({ response });
@@ -217,7 +228,7 @@ test("retry after a lost acknowledgment preserves the exact edit", async ({
     writes.push(requestSchema.parse(route.request().postDataJSON()));
     if (writes.length > 1) return route.continue();
     const committed = await route.fetch();
-    expect(committed.status()).toBe(200);
+    expect(committed.status()).toBe(201);
     await route.fulfill({
       status: 503,
       contentType: "application/problem+json",
@@ -248,7 +259,7 @@ test("creating another habit preserves an entry awaiting acknowledgment", async 
   const release = Promise.withResolvers<void>();
   await page.route("**/api/habits/*/entries/*", async (route) => {
     const response = await route.fetch();
-    expect(response.status()).toBe(200);
+    expect(response.status()).toBe(201);
     committed.resolve();
     await release.promise;
     await route.fulfill({ response });
@@ -308,8 +319,8 @@ test("the browser displays the server winner when its own edit loses", async ({
       },
     },
   );
-  expect(otherDevice.status()).toBe(200);
-  const winner = await choose(page, controls, "Good", 1);
+  expect(otherDevice.status()).toBe(201);
+  const winner = await choose(page, controls, "Good", 1, 409);
   expect(winner.result).toBe("Best");
   await expect(controls.getByRole("status")).toHaveText("Best is saved.");
   await expect(
@@ -332,7 +343,7 @@ for (const destination of ["other account", "sign out"]) {
     const release = Promise.withResolvers<void>();
     await page.route("**/api/habits/*/entries/*", async (route) => {
       const response = await route.fetch();
-      expect(response.status()).toBe(200);
+      expect(response.status()).toBe(201);
       committed.resolve();
       await release.promise;
       await route.fulfill({ response });
@@ -350,7 +361,7 @@ for (const destination of ["other account", "sign out"]) {
     } finally {
       release.resolve();
     }
-    await (await acknowledgment).finished();
+    entrySchema.parse(await (await acknowledgment).json());
     await expect(
       page.getByRole("heading", { name: "Entry private", exact: true }),
     ).toHaveCount(0);
@@ -385,7 +396,7 @@ test("date changes discard a delayed acknowledgment and refetch its original dat
   } finally {
     release.resolve();
   }
-  await (await acknowledgment).finished();
+  entrySchema.parse(await (await acknowledgment).json());
   await expect(page.getByText("Good is saved.", { exact: true })).toHaveCount(
     0,
   );
@@ -401,7 +412,7 @@ test("a delayed save error stays hidden after sign-out", async ({ page }) => {
   const release = Promise.withResolvers<void>();
   await page.route("**/api/habits/*/entries/*", async (route) => {
     const response = await route.fetch();
-    expect(response.status()).toBe(200);
+    expect(response.status()).toBe(201);
     committed.resolve();
     await release.promise;
     await route.fulfill({
@@ -459,7 +470,7 @@ test("retained unscheduled history stays visible and keeps original definitions"
   await expect(today).not.toContainText("new good");
   const controls = controlsFor(page, "Retained walking");
   await expect(controls.getByRole("status")).toHaveText("Good is saved.");
-  await choose(page, controls, "Better", 1);
+  await choose(page, controls, "Better", 1, 200);
   await page.reload();
   await expect(controls.getByRole("status")).toHaveText("Better is saved.");
   await expect(today).toContainText("Good: 5 minutes");
@@ -494,7 +505,7 @@ test.describe("entry calendar dates during travel", () => {
     await expect(controls.getByRole("status")).toHaveText("No entry recorded.");
     await page.getByLabel("Calendar date", { exact: true }).fill("2026-01-04");
     await expect(controls.getByRole("status")).toHaveText("Better is saved.");
-    const saved = await choose(page, controls, "Rest", 2);
+    const saved = await choose(page, controls, "Rest", 2, 200);
     expect(saved.calendarDate).toBe("2026-01-04");
     await capture(page, ".audit/entries-past.png");
     await page.reload();

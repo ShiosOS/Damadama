@@ -1,4 +1,10 @@
 import { spawn } from "bun";
+import { rm } from "node:fs/promises";
+
+await Promise.all([
+  rm(".audit/api-contract/openapi.json", { force: true }),
+  rm(".audit/api-contract/responses.json", { force: true }),
+]);
 
 const commands = [
   ["node", "--test", "scripts/pr-evidence.test.mjs"],
@@ -16,6 +22,7 @@ const commands = [
   ],
   ["dotnet", "build", "--no-restore", "--artifacts-path", ".audit/check-build"],
   ["dotnet", "format", "--no-restore", "--verify-no-changes"],
+  ["bun", "test", "tests/Browser/rest-client.test.ts"],
   [
     "bun",
     "x",
@@ -44,14 +51,6 @@ const commands = [
     "--config",
     "tests/Browser/vite.config.ts",
   ],
-  ["node", "node_modules/@playwright/test/cli.js", "install", "chromium"],
-  [
-    "node",
-    "node_modules/@playwright/test/cli.js",
-    "test",
-    "--config",
-    "tests/Browser/playwright.config.ts",
-  ],
   [
     "dotnet",
     "test",
@@ -63,6 +62,16 @@ const commands = [
     "trx",
     "--results-directory",
     ".audit/TestResults",
+  ],
+
+  ["node", "scripts/api-contract.mjs"],
+  ["node", "node_modules/@playwright/test/cli.js", "install", "chromium"],
+  [
+    "node",
+    "node_modules/@playwright/test/cli.js",
+    "test",
+    "--config",
+    "tests/Browser/playwright.config.ts",
   ],
 ];
 for (const command of commands) {
