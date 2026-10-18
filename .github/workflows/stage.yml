@@ -88,14 +88,35 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
       - run: node node_modules/@playwright/test/cli.js install --with-deps chromium
       - run: bun run check
-      - uses: actions/upload-artifact@v4
+      - id: failure-reports
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: failure()
         with:
           name: failure-reports-${{ github.run_attempt }}
           path: |
-            .audit/TestResults
-            test-results
+            .audit/TestResults/**/*.trx
+            .audit/api-contract/openapi.json
+            .audit/api-contract/responses.json
+            .audit/api-contract/negative-controls/*.json
+            .audit/performance-assets.json
+            .audit/performance-browser.json
+            .audit/performance-saved.png
+            .audit/accessibility-*.json
+            .audit/accessibility-*.png
+            .audit/today-*.png
+            .audit/today-*.webm
+            .audit/entries-*.png
+            .audit/entries-*.webm
+            test-results/**/*.png
+            test-results/**/error-context.md
             tests/Browser/playwright-report
+            !**/fixture.json
+            !**/*token*
+            !**/.env*
+            !**/storage-state*.json
+            !**/.auth/**
+            !**/*.zip
+          include-hidden-files: true
           retention-days: 3
   build:
     needs: [source, release-controls, check]
