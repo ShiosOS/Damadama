@@ -1,6 +1,6 @@
 # Repository checks
 
-Use [README.md](README.md) for local commands and [Notion](https://app.notion.com/p/3f69c051011881e1bc4ec68e47231420) for planning and system design.
+Use [README.md](README.md) for local commands and the [Damadama Notion home](https://app.notion.com/p/3f69c0510118817188ebdee8acecaef5) for planning and system design.
 Run `bun run check` before handing off a code change. CI runs the same command.
 
 ## Evidence

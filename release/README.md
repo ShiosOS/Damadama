@@ -6,7 +6,7 @@ Production uses `https://prod.damadama.app`. Preserve the existing apex site at 
 ## Prepare the two hosting environments
 
 Apply infrastructure changes only within the operator-approved scope.
-Review [the cost estimate](hosting-cost.md) first. No setup script provisions paid resources.
+Review [the spending limit and cost response](cost.md) first. No setup script provisions paid resources.
 
 1. Create one Railway project with separate staging and production environments. Do not duplicate database data or environment secrets.
 2. Create an empty app service and a PostgreSQL 17 service in each environment. Give each database a separate volume, database name, role, and password.

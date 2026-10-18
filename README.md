@@ -1,9 +1,9 @@
 # Damadama
 
 Create and list private habits with Good, Better, and Best definitions and a weekday schedule.
-Planning and the system design live in [Notion](https://app.notion.com/p/3f69c051011881e1bc4ec68e47231420).
+Planning and the system design live in the [Damadama Notion home](https://app.notion.com/p/3f69c0510118817188ebdee8acecaef5).
 
-Use the [Codex Cloud setup guide](docs/codex-cloud.md) for cloud development.
+Use the [Codex Cloud setup guide](.codex/cloud/README.md) for cloud development.
 
 ## Start locally
 
@@ -34,8 +34,8 @@ Run `bun run check:types` for the TypeScript gate without Docker. It covers the 
 Keep Vue props, emits, state unions, and view-only types next to their component. Derive wire types from the Zod schemas in ordinary TypeScript modules; parse external data at the request boundary. Explicitly type function inputs and returns and state contracts, while letting local values with clear initializers infer their types.
 An unavailable Docker engine fails the command. Testcontainers databases are separate from your persistent local database.
 Pull request checks cache dependencies, cancel superseded runs, and retain verification artifacts from successful and failed runs for seven days.
-The [browser performance checks](docs/browser-performance.md) document fixed production-asset, layout, and request budgets, the baseline, and fixture limits.
-The [browser accessibility checks](docs/browser-accessibility.md) cover WCAG scans, keyboard creation, API refusal, mobile layout, and CSS zoom, with explicit provider limits.
+The [browser performance checks](tests/Browser/performance.md) document fixed production-asset, layout, and request budgets, the baseline, and fixture limits.
+The [browser accessibility checks](tests/Browser/accessibility.md) cover WCAG scans, keyboard creation, API refusal, mobile layout, and CSS zoom, with explicit provider limits.
 Browser tests use optimized assets and exclude authentication tokens from reports.
 
 Acceptance examples use ephemeral RSA-signed tokens through the ordinary JWT middleware configured by the test host.
@@ -61,5 +61,4 @@ It derives the calendar date from the server's UTC creation instant in the devic
 
 ## Release
 
-Release setup starts with the [PR checks and release environment setup](docs/release-gate.md).
-The [release design](docs/release-design.md) describes source identity and deployment trust.
+Release setup starts with the [PR checks and release environment setup](release/setup.md). Use the [release runbook](release/README.md), [cost response](release/cost.md), and [recovery procedure](ops/recovery/README.md) for operations. The [release design](https://app.notion.com/p/3f69c05101188143930adb65df71cec0) describes source identity and deployment trust.

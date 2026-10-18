@@ -12,7 +12,7 @@ Both independent refresh reviews passed. See [correctness and security](performa
 
 The application baseline is PR11 at `9c8437e1e4a46965513b53f60d7fa569c0fd18ea`. This layer targets `feat/create-list-habits` because main does not contain the application. Merge PR11 first. Application markup, styles, authentication, and release workflows have no diff in this layer.
 
-The unchanged production build totals 313,242 gzip bytes in seven assets. Five fresh-context browser runs used optimized actual habit components, the real API, ordinary JWT middleware, and ephemeral PostgreSQL. Every run saved a habit and verified persistence after reload, with 15 requests and zero recorded errors. Full conditions and fixed limits are in [the performance reference](../../../docs/browser-performance.md).
+The unchanged production build totals 313,242 gzip bytes in seven assets. Five fresh-context browser runs used optimized actual habit components, the real API, ordinary JWT middleware, and ephemeral PostgreSQL. Every run saved a habit and verified persistence after reload, with 15 requests and zero recorded errors. Full conditions and fixed limits are in [the performance reference](../../../tests/Browser/performance.md).
 
 ## Verification
 

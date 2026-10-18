@@ -20,4 +20,4 @@ Verified on 2026-10-12. This evidence covers release controls, not a deployed ap
 
 The full App-bound staging requirement is prepared but not activated. The verifier App and hosting credentials do not exist in this setup yet.
 No infrastructure, staging deployment, actual Clerk login, inbox delivery, or production promotion ran.
-Local negative predicates do not establish live missing/stale staging enforcement. Complete the exercise in `release-gate.md` after activation.
+Local negative predicates do not establish live missing/stale staging enforcement. Complete the live exercise after the [release setup](setup.md) is active.
