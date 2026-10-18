@@ -37,7 +37,7 @@ jobs:
           ref: bbea506b64653820f3a941ebb2e7ec043865af3f
           path: .audit/runtime-supply-tools
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: 24.22.0
       - run: node .audit/runtime-supply-tools/release/supply-install.mjs
