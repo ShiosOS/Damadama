@@ -12,6 +12,8 @@
     "serve:browser-fixture": "vite --config tests/Browser/vite.config.ts",
     "test:backend": "bun scripts/developer.ts test:backend",
     "test:browser": "bun scripts/developer.ts test:browser",
+    "browser:compatibility:capture": "bun tests/Browser/compatibility-run.ts capture",
+    "browser:compatibility:verify": "bun tests/Browser/compatibility-run.ts verify",
     "check:performance": "node --test scripts/performance-budget.test.mjs && node scripts/performance-budget.mjs",
     "format": "bun scripts/developer.ts format",
     "format:check": "bun scripts/developer.ts format:check"

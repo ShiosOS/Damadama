@@ -97,6 +97,11 @@ bun run test:browser
 bun run check
 ```
 
+| Browser compatibility command                                                | Required preparation and platform                                                                                                               |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`bun run browser:compatibility:capture`](../tests/Browser/compatibility.md) | Ubuntu 24.04, locked Bun and NuGet dependencies, a built backend and compatibility Vite entry, installed Playwright browsers, and Linux Docker. |
+| [`bun run browser:compatibility:verify`](../tests/Browser/compatibility.md)  | The same Ubuntu 24.04 setup, plus reviewed PNGs and `manifest.json` in `tests/Browser/baselines/`.                                              |
+
 `format:check` verifies C# with `dotnet format` and frontend, scripts, selected docs, and configuration with Prettier.
 `bun run format` writes the same scope. Both commands install locked Bun dependencies and run `dotnet restore --locked-mode` before formatting.
 No Docker daemon is needed for formatting or type checks. Review the resulting diff before committing.
