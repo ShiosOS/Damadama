@@ -58,17 +58,57 @@ jobs:
         run: node node_modules/@playwright/test/cli.js install --with-deps chromium
       - if: steps.application.outputs.state == 'application'
         run: bun run check
-      - if: failure() && steps.application.outputs.state == 'application'
-        uses: actions/upload-artifact@v4
+      - id: failure-reports
+        if: failure() && steps.application.outputs.state == 'application'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: failure-reports-${{ github.run_attempt }}
           path: |
-            .audit/TestResults
+            .audit/TestResults/**/*.trx
             .audit/performance-assets.json
             .audit/performance-browser.json
             .audit/performance-saved.png
             .audit/accessibility-*.json
             .audit/accessibility-*.png
-            test-results
+            test-results/**/*.png
+            test-results/**/error-context.md
             tests/Browser/playwright-report
+            !**/fixture.json
+            !**/*token*
+            !**/.env*
+            !**/storage-state*.json
+            !**/.auth/**
+            !**/*.zip
+          include-hidden-files: true
           retention-days: 3
+  diagnostics-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        workflow: [check, stage]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      - id: policy
+        run: bun .github/diagnostics/artifact-policy.mjs prepare "${WORKFLOW}" "${RUNNER_TEMP}/diagnostics/source"
+        env:
+          WORKFLOW: ${{ matrix.workflow }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: diagnostics-policy-${{ matrix.workflow }}-${{ github.run_attempt }}
+          path: ${{ steps.policy.outputs.path }}
+          include-hidden-files: ${{ steps.policy.outputs.include_hidden_files }}
+          retention-days: ${{ steps.policy.outputs.retention_days }}
+          if-no-files-found: error
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: diagnostics-policy-${{ matrix.workflow }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/diagnostics/download
+      - run: bun .github/diagnostics/artifact-policy.mjs verify "${WORKFLOW}" "${RUNNER_TEMP}/diagnostics/download"
+        env:
+          WORKFLOW: ${{ matrix.workflow }}
