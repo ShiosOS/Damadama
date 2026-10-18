@@ -14,10 +14,10 @@ export default defineConfig({
   ],
   cacheDir: "../.audit/vite-web",
   server: {
-    port: Number(process.env.PORT ?? 5173),
+    port: Number(process.env["PORT"] ?? 5173),
     strictPort: true,
     proxy: {
-      "/api": { target: process.env.API_URL ?? "http://localhost:5050" },
+      "/api": { target: process.env["API_URL"] ?? "http://localhost:5050" },
     },
     fs: { deny: ["**/tests/**", "**/.env*", "**/.git/**"] },
   },

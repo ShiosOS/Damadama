@@ -1,12 +1,16 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { AxeBuilder } from "@axe-core/playwright";
 import { z } from "zod";
-import { habitSchema } from "../../web/src/habits.schema";
-import { entrySchema, entryResultSchema } from "../../web/src/entries.schema";
+import { habitSchema, type Habit } from "../../web/src/habits.schema";
+import {
+  entrySchema,
+  entryResultSchema,
+  type Entry,
+} from "../../web/src/entries.schema";
 
 test.use({ viewport: { width: 1280, height: 800 }, video: "on" });
 
-async function capture(page: Page, path: string) {
+async function capture(page: Page, path: string): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
   await page.waitForFunction(() =>
     document.getAnimations().every((animation) => {
@@ -17,7 +21,11 @@ async function capture(page: Page, path: string) {
   await page.screenshot({ path, fullPage: true });
 }
 
-async function openDailyHabit(page: Page, account: string, name: string) {
+async function openDailyHabit(
+  page: Page,
+  account: string,
+  name: string,
+): Promise<{ habit: Habit; token: string }> {
   await page.clock.setFixedTime(new Date("2026-01-05T00:30:00Z"));
   const tokens = z
     .record(z.string(), z.string())
@@ -73,7 +81,7 @@ test("the committed result appears before any reload", async ({ page }) => {
   expect(scan.violations).toEqual([]);
 });
 
-const controlsFor = (page: Page, name: string) =>
+const controlsFor = (page: Page, name: string): Locator =>
   page.getByRole("group", { name: `Result for ${name}`, exact: true });
 
 async function choose(
@@ -81,7 +89,7 @@ async function choose(
   controls: Locator,
   result: string,
   seconds: number,
-) {
+): Promise<Entry> {
   await page.clock.setFixedTime(
     new Date(Date.parse("2026-01-05T00:30:00Z") + seconds * 1000),
   );
