@@ -9,12 +9,16 @@ public static class EntryEndpoints
 {
     public static void MapEntries(this WebApplication app)
     {
-        app.MapPut("/api/habits/{id:guid}/entries/{date}", SaveEntry).RequireAuthorization();
-        app.MapGet("/api/entries", ReadEntries).RequireAuthorization();
+        app.MapPut("/api/habits/{id:guid}/entries/{date}", SaveEntry).WithName("replace-entry")
+            .WithMetadata(new ApiContractMetadata("resource")).RequireAuthorization();
+        app.MapMethods("/api/habits/{id:guid}/entries/{date}", ["GET", "HEAD"], ReadEntry).WithName("read-entry")
+            .WithMetadata(new ApiContractMetadata("resource")).RequireAuthorization();
+        app.MapMethods("/api/entries", ["GET", "HEAD"], ReadEntries).WithName("entries-by-date")
+            .WithMetadata(new ApiContractMetadata("resource")).RequireAuthorization();
     }
 
     private static async Task<IResult> SaveEntry(Guid id, string date, WriteEntry input,
-        ClaimsPrincipal user, HabitsDb db, TimeProvider clock, CancellationToken cancellationToken)
+        ClaimsPrincipal user, HabitsDb db, TimeProvider clock, ApiRepresentations representations, HttpResponse response, CancellationToken cancellationToken)
     {
         var owner = user.FindFirst("sub")!.Value;
         var habit = await db.Habits.AsNoTracking().Include(h => h.Schedule)
@@ -29,10 +33,18 @@ public static class EntryEndpoints
             throw new ArgumentException("This habit was not scheduled on that date.", nameof(date));
 
         var saved = await EntryStore.Save(db, habit, edit, cancellationToken);
-        return Results.Ok(EntryResponse.From(saved, habit.Name));
+        var representation = representations.Entry(saved.Entry, habit.Name);
+        return saved switch
+        {
+            EntrySaveOutcome.Created => ApiRepresentations.Created(representation, response),
+            EntrySaveOutcome.Accepted => ApiRepresentations.Ok(representation),
+            EntrySaveOutcome.Superseded => Results.Problem(statusCode: 409, title: "A newer entry is saved.",
+                detail: "Adopt the current entry; this edit was superseded.", extensions: new Dictionary<string, object?> { ["current"] = representation }),
+            _ => throw new System.Diagnostics.UnreachableException()
+        };
     }
 
-    private static async Task<IEnumerable<EntryResponse>> ReadEntries(string date, ClaimsPrincipal user, HabitsDb db,
+    private static async Task<IResult> ReadEntries(string date, ClaimsPrincipal user, HabitsDb db, ApiRepresentations representations,
         CancellationToken cancellationToken)
     {
         var calendarDate = ParseDate(date, nameof(date));
@@ -42,7 +54,20 @@ public static class EntryEndpoints
                              where habit.OwnerId == owner && entry.CalendarDate == calendarDate
                              orderby entry.HabitId
                              select new { Entry = entry, HabitName = habit.Name }).ToListAsync(cancellationToken);
-        return entries.Select(row => EntryResponse.From(row.Entry, row.HabitName));
+        return ApiRepresentations.Ok(representations.Collection("entries", "entries-by-date",
+            entries.Select(row => representations.Entry(row.Entry, row.HabitName)), new { date }));
+    }
+
+    private static async Task<IResult> ReadEntry(Guid id, string date, ClaimsPrincipal user, HabitsDb db,
+        ApiRepresentations representations, CancellationToken cancellationToken)
+    {
+        var habit = await db.Habits.AsNoTracking().SingleOrDefaultAsync(
+            habit => habit.Id == id && habit.OwnerId == user.FindFirst("sub")!.Value, cancellationToken);
+        if (habit is null) return Results.NotFound();
+        var calendarDate = ParseDate(date, nameof(date));
+        var entry = await db.Entries.AsNoTracking().SingleOrDefaultAsync(
+            entry => entry.HabitId == id && entry.CalendarDate == calendarDate, cancellationToken);
+        return entry is null ? Results.NotFound() : ApiRepresentations.Ok(representations.Entry(entry, habit.Name));
     }
 
     private static DateOnly ParseDate(string? value, string field)

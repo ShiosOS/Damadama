@@ -51,8 +51,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
     };
 });
 builder.Services.AddAuthorization();
+builder.Services.AddSingleton<ApiRepresentations>();
 builder.Services.AddHealthChecks().AddCheck<DatabaseReadiness>("database", tags: ["ready"]);
 var app = builder.Build();
+app.UseRouting();
+app.UseApiProtocol();
 app.UseExceptionHandler();
 app.UseStatusCodePages(async context => await Results.Problem(statusCode: context.HttpContext.Response.StatusCode,
     title: context.HttpContext.Response.StatusCode == 400 ? "Check the request fields and their types." : "Habit not found.")
@@ -61,32 +64,44 @@ using (var scope = app.Services.CreateScope())
     await scope.ServiceProvider.GetRequiredService<HabitsDb>().Database.MigrateAsync();
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapHealthChecks("/health/live", new() { Predicate = _ => false });
-app.MapHealthChecks("/health/ready", new() { Predicate = check => check.Tags.Contains("ready") });
-app.MapGet("/api/config", (IConfiguration configuration) => new { clerkPublishableKey = configuration["Clerk:PublishableKey"] });
+app.UseApiNegotiation();
+app.MapHealthChecks("/health/live", new() { Predicate = _ => false }).WithName("health-live").WithMetadata(new ApiContractMetadata("control-plane"));
+app.MapHealthChecks("/health/ready", new() { Predicate = check => check.Tags.Contains("ready") }).WithName("health-ready").WithMetadata(new ApiContractMetadata("control-plane"));
+app.MapMethods("/api/config", ["GET", "HEAD"], (IConfiguration configuration, ApiRepresentations representations) =>
+    ApiRepresentations.Ok(representations.Bootstrap(configuration["Clerk:PublishableKey"])))
+    .WithName("application-config").WithMetadata(new ApiContractMetadata("bootstrap"));
+app.MapMethods("/api/profile", ["GET", "HEAD"], (ApiRepresentations representations) => ApiRepresentations.Ok(representations.Profile()))
+    .WithName("application-profile").WithMetadata(new ApiContractMetadata("profile"));
 app.MapGet("/sw.js", WorkerRetirement.Respond);
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapPost("/api/habits", async (CreateHabit input, System.Security.Claims.ClaimsPrincipal user,
-    HabitsDb db, TimeProvider clock, ILogger<HabitsDb> logger, CancellationToken cancellationToken) =>
+    HabitsDb db, TimeProvider clock, ILogger<HabitsDb> logger, ApiRepresentations representations, HttpResponse response, CancellationToken cancellationToken) =>
 {
     var habit = await db.Create(input, user.FindFirst("sub")!.Value, clock, cancellationToken);
     logger.LogInformation("Habit {HabitId} committed for account {OwnerId}", habit.Id, habit.OwnerId);
-    return Results.Created($"/api/habits/{habit.Id}", HabitResponse.From(habit));
-}).RequireAuthorization();
-app.MapGet("/api/habits", async (System.Security.Claims.ClaimsPrincipal user, HabitsDb db, CancellationToken cancellationToken) =>
-    (await db.Habits.AsNoTracking().Include(h => h.Schedule).Where(h => h.OwnerId == user.FindFirst("sub")!.Value)
+    return ApiRepresentations.Created(representations.Habit(habit), response);
+}).WithName("create-habit").WithMetadata(new ApiContractMetadata("resource")).RequireAuthorization();
+app.MapMethods("/api/habits", ["GET", "HEAD"], async (System.Security.Claims.ClaimsPrincipal user, HabitsDb db, ApiRepresentations representations, CancellationToken cancellationToken) =>
+    ApiRepresentations.Ok(representations.Collection("habits", "list-habits", (await db.Habits.AsNoTracking().Include(h => h.Schedule).Where(h => h.OwnerId == user.FindFirst("sub")!.Value)
         .OrderBy(h => h.CreatedAt).ThenBy(h => h.Id)
-        .ToListAsync(cancellationToken)).Select(HabitResponse.From)).RequireAuthorization();
-app.MapGet("/api/habits/{id:guid}", async (Guid id, System.Security.Claims.ClaimsPrincipal user, HabitsDb db, CancellationToken cancellationToken) =>
+        .ToListAsync(cancellationToken)).Select(habit => representations.Habit(habit)))))
+    .WithName("list-habits").WithMetadata(new ApiContractMetadata("resource")).RequireAuthorization();
+app.MapMethods("/api/habits/{id:guid}", ["GET", "HEAD"], async (Guid id, System.Security.Claims.ClaimsPrincipal user, HabitsDb db, ApiRepresentations representations, CancellationToken cancellationToken) =>
 {
     var habit = await db.Habits.AsNoTracking().Include(h => h.Schedule)
         .SingleOrDefaultAsync(h => h.Id == id && h.OwnerId == user.FindFirst("sub")!.Value, cancellationToken);
-    return habit is null ? Results.NotFound() : Results.Ok(HabitResponse.From(habit));
-}).RequireAuthorization();
+    return habit is null ? Results.NotFound() : ApiRepresentations.Ok(representations.Habit(habit));
+}).WithName("read-habit").WithMetadata(new ApiContractMetadata("resource")).RequireAuthorization();
 app.MapScheduledHabits();
 app.MapEntries();
-app.Map("/api/{**path}", () => Results.Problem(statusCode: 404, title: "API route not found."));
+app.MapApiOptions("/api/config", "options-application-config", ["GET", "HEAD", "OPTIONS"], false);
+app.MapApiOptions("/api/profile", "options-application-profile", ["GET", "HEAD", "OPTIONS"], false);
+app.MapApiOptions("/api/habits", "options-list-habits", ["GET", "HEAD", "POST", "OPTIONS"], true);
+app.MapApiOptions("/api/habits/{id:guid}", "options-read-habit", ["GET", "HEAD", "OPTIONS"], true);
+app.MapApiOptions("/api/habits/scheduled", "options-scheduled-habits", ["GET", "HEAD", "OPTIONS"], true);
+app.MapApiOptions("/api/entries", "options-entries-by-date", ["GET", "HEAD", "OPTIONS"], true);
+app.MapApiOptions("/api/habits/{id:guid}/entries/{date}", "options-read-entry", ["GET", "HEAD", "PUT", "OPTIONS"], true);
 app.MapFallbackToFile("index.html");
 app.Run();
 public partial class Program;

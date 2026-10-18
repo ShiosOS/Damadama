@@ -27,14 +27,14 @@ public class ScheduledHabitsTests
 
         using var ownerResponse = await client.GetAsync("/api/habits/scheduled?date=2026-10-14");
         Assert.That(ownerResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var ownerList = await ownerResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var ownerList = await ownerResponse.Content.ReadSirenItems("scheduled-habits", "habit");
         Assert.That(ownerList.GetArrayLength(), Is.EqualTo(1));
         AssertWalking(ownerList[0], habit.Id);
 
         using var other = app.SignedIn("another-account");
         using var otherResponse = await other.GetAsync("/api/habits/scheduled?date=2026-10-14");
         Assert.That(otherResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var otherList = await otherResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var otherList = await otherResponse.Content.ReadSirenItems("scheduled-habits", "habit");
         Assert.That(otherList.GetArrayLength(), Is.Zero);
     }
 
@@ -47,7 +47,7 @@ public class ScheduledHabitsTests
         {
             using var response = await client.GetAsync($"/api/habits/scheduled?date={date}");
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            var list = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var list = await response.Content.ReadSirenItems("scheduled-habits", "habit");
             Assert.That(list.GetArrayLength(), Is.EqualTo(1), date);
             AssertWalking(list[0], habit.Id);
         }
@@ -56,13 +56,13 @@ public class ScheduledHabitsTests
         {
             using var response = await client.GetAsync($"/api/habits/scheduled?date={date}");
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            var list = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var list = await response.Content.ReadSirenItems("scheduled-habits", "habit");
             Assert.That(list.GetArrayLength(), Is.Zero, date);
         }
 
         using var readResponse = await client.GetAsync($"/api/habits/{habit.Id}");
         Assert.That(readResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        AssertWalking(await readResponse.Content.ReadFromJsonAsync<JsonElement>(), habit.Id);
+        AssertWalking(await readResponse.Content.ReadSirenProperties("habit"), habit.Id);
     }
 
     [Test]
@@ -77,7 +77,7 @@ public class ScheduledHabitsTests
 
         using var response = await client.GetAsync("/api/habits/scheduled?date=2026-10-14");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var list = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var list = await response.Content.ReadSirenItems("scheduled-habits", "habit");
         var tiedIds = new[] { firstTie.Id, secondTie.Id }.Order().ToArray();
         Assert.That(list.EnumerateArray().Select(item => item.GetProperty("id").GetGuid()),
             Is.EqualTo(new[] { tiedIds[0], tiedIds[1], later.Id }));
@@ -119,7 +119,7 @@ public class ScheduledHabitsTests
     {
         await Save(HabitTests.Walking with { Weekdays = [1, 3, 7] });
         using var ownerResponse = await client.GetAsync("/api/habits/scheduled?date=2026-10-14");
-        var ownerList = await ownerResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var ownerList = await ownerResponse.Content.ReadSirenItems("scheduled-habits", "habit");
         Assert.That(ownerResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(ownerList.GetArrayLength(), Is.EqualTo(1));
 

@@ -8,8 +8,8 @@ public static class ScheduledHabitsEndpoint
 {
     public static void MapScheduledHabits(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/api/habits/scheduled", async (HttpRequest request, ClaimsPrincipal user,
-            HabitsDb db, CancellationToken cancellationToken) =>
+        endpoints.MapMethods("/api/habits/scheduled", ["GET", "HEAD"], async (HttpRequest request, ClaimsPrincipal user,
+            HabitsDb db, ApiRepresentations representations, CancellationToken cancellationToken) =>
         {
             if (!request.Query.TryGetValue("date", out var values) || values.Count != 1 ||
                 !DateOnly.TryParseExact(values[0], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
@@ -22,8 +22,8 @@ public static class ScheduledHabitsEndpoint
                 .Where(habit => habit.OwnerId == user.FindFirst("sub")!.Value)
                 .OrderBy(habit => habit.CreatedAt).ThenBy(habit => habit.Id)
                 .ToListAsync(cancellationToken);
-            return Results.Ok(habits.Where(habit => ScheduleEligibility.IsScheduled(habit.Schedule, date))
-                .Select(HabitResponse.From));
-        }).RequireAuthorization();
+            return ApiRepresentations.Ok(representations.Collection("scheduled-habits", "scheduled-habits", habits.Where(habit => ScheduleEligibility.IsScheduled(habit.Schedule, date))
+                .Select(habit => representations.Habit(habit, date)), new { date = date.ToString("yyyy-MM-dd") }));
+        }).WithName("scheduled-habits").WithMetadata(new ApiContractMetadata("resource")).RequireAuthorization();
     }
 }
