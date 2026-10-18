@@ -100,6 +100,8 @@ jobs:
             .audit/performance-saved.png
             .audit/accessibility-*.json
             .audit/accessibility-*.png
+            .audit/today-*.png
+            .audit/today-*.webm
             test-results/**/*.png
             test-results/**/error-context.md
             tests/Browser/playwright-report

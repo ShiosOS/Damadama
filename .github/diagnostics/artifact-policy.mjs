@@ -17,6 +17,10 @@ const reports = [
   ".audit/performance-saved.png",
   ".audit/accessibility-creation-panel.json",
   ".audit/accessibility-creation-panel.png",
+  ".audit/today-populated.png",
+  ".audit/today-mobile.png",
+  ".audit/today-empty.png",
+  ".audit/today-flow.webm",
   "test-results/habit-creation/failure.png",
   "test-results/habit-creation/error-context.md",
   "tests/Browser/playwright-report/index.html",
@@ -27,6 +31,8 @@ const excluded = [
   ".audit/unintended.json",
   ".audit/accessibility-token.json",
   ".audit/accessibility-token.png",
+  ".audit/today-token.png",
+  ".audit/today-token.webm",
   ".audit/browser-build/fixture.json",
   ".audit/TestResults/token.json",
   ".audit/TestResults/token.trx",
@@ -72,8 +78,8 @@ if (command === "prepare") {
   );
   assert.equal(
     policy.with["retention-days"],
-    3,
-    "Keep diagnostics for three days",
+    { check: 7, stage: 3 }[workflow],
+    "Preserve short workflow-specific diagnostic retention",
   );
   assert.equal(typeof policy.with.path, "string", "Define diagnostic paths");
   const paths = policy.with.path.trim().split(/\r?\n/).filter(Boolean);

@@ -30,7 +30,7 @@ Clerk's built-in Vue sign-in component follows these instance settings.
 Run `bun run check`. The first run downloads Chromium, which subsequent runs reuse.
 The command checks locked dependencies, builds, formatting, nested conditional lint rules, Vue types, domain rules, Reqnroll API examples, PostgreSQL integration, and browser flows.
 An unavailable Docker engine fails the command. Testcontainers databases are separate from your persistent local database.
-Pull request checks cache dependencies, cancel superseded runs, and retain failed reports for three days.
+Pull request checks cache dependencies, cancel superseded runs, and retain verification artifacts from successful and failed runs for seven days.
 The [browser performance checks](docs/browser-performance.md) document fixed production-asset, layout, and request budgets, the baseline, and fixture limits.
 The [browser accessibility checks](docs/browser-accessibility.md) cover WCAG scans, keyboard creation, API refusal, mobile layout, and CSS zoom, with explicit provider limits.
 Browser tests use optimized assets and exclude authentication tokens from reports.

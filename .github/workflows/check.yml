@@ -59,10 +59,10 @@ jobs:
       - if: steps.application.outputs.state == 'application'
         run: bun run check
       - id: failure-reports
-        if: failure() && steps.application.outputs.state == 'application'
+        if: always() && steps.application.outputs.state == 'application'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: failure-reports-${{ github.run_attempt }}
+          name: verification-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
           path: |
             .audit/TestResults/**/*.trx
             .audit/performance-assets.json
@@ -70,6 +70,8 @@ jobs:
             .audit/performance-saved.png
             .audit/accessibility-*.json
             .audit/accessibility-*.png
+            .audit/today-*.png
+            .audit/today-*.webm
             test-results/**/*.png
             test-results/**/error-context.md
             tests/Browser/playwright-report
@@ -80,7 +82,8 @@ jobs:
             !**/.auth/**
             !**/*.zip
           include-hidden-files: true
-          retention-days: 3
+          if-no-files-found: error
+          retention-days: 7
   diagnostics-policy:
     runs-on: ubuntu-latest
     timeout-minutes: 5
