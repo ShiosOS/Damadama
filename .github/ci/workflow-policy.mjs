@@ -69,7 +69,7 @@ const recipes = [
     "evidence",
     [
       {
-        uses: "actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553",
+        uses: "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
       },
     ],
   ],
