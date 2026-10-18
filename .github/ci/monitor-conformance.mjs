@@ -412,10 +412,12 @@ function verifyMutations(workflow) {
   return mutations.length;
 }
 
-async function child(command, root, environment, preload) {
+async function child(command, root, environment, preload, scenario) {
   const [runtime, ...args] = command.split(" ");
   assert.equal(runtime, "node", "monitor command runtime");
-  const child = spawn("node", ["--import", preload, ...args], {
+  const argv = ["node", "--import", preload, ...args];
+  const started = performance.now();
+  const child = spawn(argv[0], argv.slice(1), {
     cwd: root,
     env: Object.fromEntries(
       Object.entries({
@@ -432,7 +434,28 @@ async function child(command, root, environment, preload) {
   let stderr = "";
   child.stdout.setEncoding("utf8").on("data", (value) => (stdout += value));
   child.stderr.setEncoding("utf8").on("data", (value) => (stderr += value));
-  const [exit, signal] = await once(child, "close");
+  function diagnostic(failure) {
+    console.error(
+      JSON.stringify({
+        scenario,
+        argv,
+        pid: child.pid ?? null,
+        elapsedMs: Math.round(performance.now() - started),
+        ...failure,
+        stdout: stdout.slice(-4096),
+        stderr: stderr.slice(-4096),
+      }),
+    );
+  }
+  let exit;
+  let signal;
+  try {
+    [exit, signal] = await once(child, "close");
+  } catch (error) {
+    diagnostic({ error: error.code ?? error.name });
+    throw error;
+  }
+  if (signal !== null) diagnostic({ signal });
   assert.equal(signal, null, "monitor child terminated normally");
   return { exit, stdout, stderr };
 }
@@ -445,6 +468,7 @@ async function verifyCommands(workflow, root) {
     root,
     {},
     version,
+    "parsed fixture command",
   );
   console.log(JSON.stringify({ label: "parsed fixture command", ...fixture }));
   assert.equal(fixture.exit, 0, fixture.stdout + fixture.stderr);
@@ -583,6 +607,7 @@ async function verifyCommands(workflow, root) {
           root,
           env,
           preload,
+          `${event} ${label}`,
         );
         children++;
         const attempted = JSON.parse(await readFile(attempts, "utf8"));
@@ -641,6 +666,72 @@ async function verifyCommands(workflow, root) {
     await rm(directory, { recursive: true, force: true });
   }
   return children;
+}
+
+export async function verifyMonitorChildFailure(root) {
+  const preload =
+    "data:text/javascript," +
+    encodeURIComponent(
+      "process.stdout.write('x'.repeat(5000) + '\\n::error::stdout-sentinel\\n'); process.stderr.write('y'.repeat(5000) + '\\n::error::stderr-sentinel\\n'); process.kill(process.pid, 'SIGTERM');",
+    );
+  const diagnostics = [];
+  const previous = console.error;
+  console.error = (value) => diagnostics.push(value);
+  try {
+    await assert.rejects(
+      child(
+        "node --eval 0",
+        join(root, "missing-monitor-test-directory"),
+        { PRIVATE_TEST_ENV: "never-print-this" },
+        preload,
+        "controlled spawn error",
+      ),
+      { code: "ENOENT" },
+    );
+    if (process.platform !== "win32") {
+      await assert.rejects(
+        child(
+          "node --eval 0",
+          root,
+          { PRIVATE_TEST_ENV: "never-print-this" },
+          preload,
+          "controlled immediate signal",
+        ),
+        /monitor child terminated normally/,
+      );
+    }
+  } finally {
+    console.error = previous;
+  }
+  const failedSpawn = JSON.parse(diagnostics[0]);
+  assert.equal(failedSpawn.scenario, "controlled spawn error");
+  assert.equal(failedSpawn.error, "ENOENT");
+  assert.equal(failedSpawn.pid, null);
+  assert.equal(failedSpawn.stdout, "");
+  assert.equal(failedSpawn.stderr, "");
+  for (const line of diagnostics) {
+    assert.ok(!line.includes("\n"), "diagnostic must JSON-escape child lines");
+    assert.ok(
+      !line.includes("never-print-this"),
+      "diagnostic excludes environment",
+    );
+    const actual = JSON.parse(line);
+    assert.deepEqual(actual.argv, ["node", "--import", preload, "--eval", "0"]);
+    assert.ok(Number.isInteger(actual.elapsedMs) && actual.elapsedMs >= 0);
+  }
+  if (process.platform === "win32") {
+    assert.equal(diagnostics.length, 1);
+    return;
+  }
+  assert.equal(diagnostics.length, 2);
+  const actual = JSON.parse(diagnostics[1]);
+  assert.equal(actual.scenario, "controlled immediate signal");
+  assert.ok(Number.isInteger(actual.pid) && actual.pid > 0);
+  assert.equal(actual.signal, "SIGTERM");
+  assert.equal(actual.stdout.length, 4096);
+  assert.equal(actual.stderr.length, 4096);
+  assert.match(actual.stdout, /stdout-sentinel/);
+  assert.match(actual.stderr, /stderr-sentinel/);
 }
 
 export async function verifyMonitorWorkflow(workflow, root) {

@@ -110,6 +110,7 @@ function expectFailure(label, result, pattern) {
 async function selfTest(actionlint, zizmor) {
   for (const [runtime, args] of [
     [process.execPath, ["test", "./.github/ci/security-policy.test.mjs"]],
+    ["node", ["--test", ".github/ci/monitor-conformance.test.mjs"]],
   ]) {
     const result = run(runtime, args);
     if (result.code !== 0) throw new Error(result.output);
