@@ -1,6 +1,6 @@
 import { spawn } from "bun";
 
-async function run(command: string[]) {
+async function run(command: string[]): Promise<void> {
   const result = await spawn(command, {
     stdin: "inherit",
     stdout: "inherit",
@@ -10,9 +10,9 @@ async function run(command: string[]) {
 }
 
 const settings = [
-  Bun.env.Clerk__Issuer,
-  Bun.env.Clerk__PublishableKey,
-  Bun.env.Parameters__postgresPassword,
+  Bun.env["Clerk__Issuer"],
+  Bun.env["Clerk__PublishableKey"],
+  Bun.env["Parameters__postgresPassword"],
 ];
 if (
   settings.some(

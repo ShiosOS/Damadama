@@ -1,23 +1,23 @@
 import { z } from "zod";
+import { entrySchema, type Entry, type EntryEdit } from "./entries.schema";
+import { habitSchema, type Habit, type NewHabit } from "./habits.schema";
 
-export const habitSchema = z.object({
-  id: z.uuid(),
-  name: z.string(),
-  good: z.string(),
-  better: z.string(),
-  best: z.string(),
-  createdAt: z.iso.datetime({ offset: true }),
-  schedule: z.object({
-    weekdays: z.array(z.number().int().min(1).max(7)).nonempty(),
-    repeatEveryWeeks: z.number().int().positive(),
-    timeZone: z.string(),
-    creationDate: z.iso.date(),
-    firstWeekMonday: z.iso.date(),
-  }),
-});
-export type Habit = z.infer<typeof habitSchema>;
-export type NewHabit = Pick<Habit, "name" | "good" | "better" | "best"> &
-  Pick<Habit["schedule"], "weekdays" | "repeatEveryWeeks" | "timeZone">;
+export type WriteEntryInput = EntryEdit & {
+  deviceToday: string;
+  timeZone: string;
+};
+
+export interface HabitsApi {
+  entries(date: string): Promise<Entry[]>;
+  saveEntry(
+    habitId: string,
+    date: string,
+    input: WriteEntryInput,
+  ): Promise<Entry>;
+  list(): Promise<Habit[]>;
+  scheduled(date: string): Promise<Habit[]>;
+  create(input: NewHabit): Promise<Habit>;
+}
 const problemSchema = z.object({
   title: z.string(),
   detail: z.string().optional(),
@@ -33,7 +33,7 @@ export class ApiError extends Error {
   }
 }
 
-export function habitsApi(getToken: () => Promise<string | null>) {
+export function habitsApi(getToken: () => Promise<string | null>): HabitsApi {
   async function request<T>(
     path: string,
     schema: z.ZodType<T>,
@@ -66,13 +66,31 @@ export function habitsApi(getToken: () => Promise<string | null>) {
     return parsed.data;
   }
   return {
-    list: () => request("/api/habits", z.array(habitSchema)),
-    scheduled: (date: string) =>
+    entries: (date: string): Promise<Entry[]> =>
+      request(
+        `/api/entries?date=${encodeURIComponent(date)}`,
+        z.array(entrySchema),
+      ),
+    saveEntry: (
+      habitId: string,
+      date: string,
+      input: WriteEntryInput,
+    ): Promise<Entry> =>
+      request(
+        `/api/habits/${habitId}/entries/${encodeURIComponent(date)}`,
+        entrySchema,
+        {
+          method: "PUT",
+          body: JSON.stringify(input),
+        },
+      ),
+    list: (): Promise<Habit[]> => request("/api/habits", z.array(habitSchema)),
+    scheduled: (date: string): Promise<Habit[]> =>
       request(
         `/api/habits/scheduled?date=${encodeURIComponent(date)}`,
         z.array(habitSchema),
       ),
-    create: (input: NewHabit) =>
+    create: (input: NewHabit): Promise<Habit> =>
       request("/api/habits", habitSchema, {
         method: "POST",
         body: JSON.stringify(input),

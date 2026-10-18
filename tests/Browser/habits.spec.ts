@@ -109,7 +109,7 @@ test("the creation panel remains usable on mobile and at double zoom", async ({
   ).toBe(true);
 });
 
-async function createWalking(page: Page) {
+async function createWalking(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Add habit", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("Walking");
   await page.getByLabel("Good", { exact: true }).fill("5 minutes");
@@ -121,7 +121,7 @@ async function createWalking(page: Page) {
   await page.getByRole("button", { name: "Save habit", exact: true }).click();
 }
 
-async function expectWalking(page: Page) {
+async function expectWalking(page: Page): Promise<void> {
   const list = page.getByRole("region", { name: "Saved habits" });
   await expect(
     list.getByRole("heading", { name: "Walking", exact: true }),

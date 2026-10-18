@@ -9,16 +9,26 @@ type ScanReport = {
   state: string;
   sourceRevision: string;
   tags: string[];
-  violations: (Pick<RuleResult, "id" | "impact" | "help"> & {
-    nodes: Pick<RuleResult["nodes"][number], "target" | "failureSummary">[];
-  })[];
+  violations: {
+    id: RuleResult["id"];
+    impact: RuleResult["impact"];
+    help: RuleResult["help"];
+    nodes: {
+      target: RuleResult["nodes"][number]["target"];
+      failureSummary: RuleResult["nodes"][number]["failureSummary"];
+    }[];
+  }[];
   incomplete: { id: RuleResult["id"]; nodes: number }[];
   passedRules: number;
 };
 
 test.use({ viewport: { width: 1280, height: 800 }, video: "on" });
 
-async function scan(page: Page, testInfo: TestInfo, state: string) {
+async function scan(
+  page: Page,
+  testInfo: TestInfo,
+  state: string,
+): Promise<ScanReport> {
   await page.evaluate(() => document.fonts.ready);
   await page.waitForFunction(() =>
     document.getAnimations().every((animation) => {
@@ -73,7 +83,7 @@ async function scan(page: Page, testInfo: TestInfo, state: string) {
   return report;
 }
 
-function assertAccessible(report: ScanReport) {
+function assertAccessible(report: ScanReport): void {
   expect(report.violations, `WCAG violations in ${report.state}`).toEqual([]);
 }
 
@@ -109,18 +119,19 @@ test("the production entry explains missing sign-in configuration accessibly", a
   let habitRequests = 0;
   const scripts = new Set<string>();
   const errors: string[] = [];
+  const apiOrigin = `http://localhost:${process.env["DAMADAMA_API_PORT"] ?? "5055"}`;
   page.on("pageerror", (error) => errors.push(error.name));
   page.on("request", (request) => {
     const path = new URL(request.url()).pathname;
     if (path === "/api/habits") habitRequests++;
     if (path.startsWith("/assets/") && path.endsWith(".js")) scripts.add(path);
   });
-  await page.route("http://localhost:5055/api/config", async (route) => {
+  await page.route(`${apiOrigin}/api/config`, async (route) => {
     const response = await route.fetch();
     realConfigStatus = response.status();
     await route.fulfill({ response, json: { clerkPublishableKey: null } });
   });
-  await page.goto("http://localhost:5055/");
+  await page.goto(`${apiOrigin}/`);
   await expect(
     page.getByRole("heading", { name: "Damadama", exact: true }),
   ).toBeVisible();
@@ -233,7 +244,7 @@ test("keyboard creation contains focus, explains API refusal, and persists a sav
     ["Good", "5 minutes"],
     ["Better", "15 minutes"],
     ["Best", "30 minutes"],
-  ]) {
+  ] satisfies [string, string][]) {
     await expect(panel.getByLabel(label, { exact: true })).toBeFocused();
     await page.keyboard.insertText(value);
     await page.keyboard.press("Tab");
@@ -365,7 +376,7 @@ for (const layout of [
       ["Good", "5 minutes"],
       ["Better", "15 minutes"],
       ["Best", "30 minutes"],
-    ]) {
+    ] satisfies [string, string][]) {
       await panel.getByLabel(label, { exact: true }).fill(value);
     }
     await panel.getByRole("checkbox", { name: "Monday", exact: true }).check();

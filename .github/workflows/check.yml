@@ -72,6 +72,8 @@ jobs:
             .audit/accessibility-*.png
             .audit/today-*.png
             .audit/today-*.webm
+            .audit/entries-*.png
+            .audit/entries-*.webm
             test-results/**/*.png
             test-results/**/error-context.md
             tests/Browser/playwright-report

@@ -1,3 +1,4 @@
+using Damadama.Entries;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
@@ -7,6 +8,7 @@ public sealed class HabitsDb(DbContextOptions<HabitsDb> options) : DbContext(opt
 {
     public DbSet<Habit> Habits => Set<Habit>();
     public DbSet<InitialSchedule> InitialSchedules => Set<InitialSchedule>();
+    public DbSet<Entry> Entries => Set<Entry>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -31,6 +33,20 @@ public sealed class HabitsDb(DbContextOptions<HabitsDb> options) : DbContext(opt
                 table.HasCheckConstraint("SelectedWeekdays", "cardinality(\"Weekdays\") > 0 AND \"Weekdays\" <@ ARRAY[1,2,3,4,5,6,7]");
             });
             schedule.HasKey(s => s.HabitId);
+        });
+        model.Entity<Entry>(entry =>
+        {
+            entry.ToTable("DailyEntries", table => table.HasCheckConstraint("EntryResult", "\"Result\" BETWEEN 0 AND 4"));
+            entry.HasKey(e => new { e.HabitId, e.CalendarDate });
+            entry.HasOne<Habit>().WithMany().HasForeignKey(e => e.HabitId).IsRequired();
+            entry.Property(e => e.EditedAt).HasColumnName("EditedAtTicks")
+                .HasConversion(instant => instant.UtcTicks, ticks => new DateTimeOffset(ticks, TimeSpan.Zero));
+            entry.ComplexProperty(e => e.OriginalLevels, levels =>
+            {
+                levels.Property(l => l.Good).HasColumnName("Good").IsRequired();
+                levels.Property(l => l.Better).HasColumnName("Better").IsRequired();
+                levels.Property(l => l.Best).HasColumnName("Best").IsRequired();
+            });
         });
     }
 
