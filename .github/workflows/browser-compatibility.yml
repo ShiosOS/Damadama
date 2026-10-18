@@ -1,0 +1,83 @@
+name: Browser compatibility
+
+on:
+  pull_request:
+    paths:
+      - tests/Browser/**
+      - tests/BrowserHost/**
+      - tests/Backend/**
+      - web/**
+      - server/**
+      - package.json
+      - bun.lock
+      - tsconfig.base.json
+      - global.json
+      - NuGet.Config
+      - Directory.Build.props
+      - Directory.Packages.props
+      - "*.slnx"
+      - .github/workflows/browser-compatibility.yml
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-compatibility:
+    name: Browser compatibility (${{ matrix.mode }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [capture, verify]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun test tests/Browser/visual-support.test.ts
+      - run: dotnet restore --locked-mode --artifacts-path .audit/check-build
+      - run: dotnet build --no-restore --artifacts-path .audit/check-build
+      - run: bun x --no-install vite build --config tests/Browser/compatibility.vite.config.ts
+      - run: node node_modules/@playwright/test/cli.js install --with-deps chromium firefox webkit
+      - run: bun run browser:compatibility:${{ matrix.mode }}
+      - if: always() && matrix.mode == 'capture'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: browser-candidates-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: |
+            .audit/browser-quality/candidates/desktop-creation.png
+            .audit/browser-quality/candidates/desktop-saved.png
+            .audit/browser-quality/candidates/mobile-layout.png
+            .audit/browser-quality/candidates/manifest.json
+            .audit/browser-quality/receipts/capture.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+      - if: always() && matrix.mode == 'verify'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: browser-comparison-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: |
+            .audit/browser-quality/receipts/verify.json
+            .audit/browser-quality/test-results/**/*-comparison.json
+            .audit/browser-quality/test-results/**/*-comparison.png
+            .audit/browser-quality/test-results/**/*-actual.png
+            .audit/browser-quality/test-results/**/*-expected.png
+            .audit/browser-quality/test-results/**/*-diff.png
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
