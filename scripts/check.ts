@@ -1,6 +1,7 @@
 import { spawn } from "bun";
 
 const commands = [
+  ["node", "--test", "scripts/pr-evidence.test.mjs"],
   ["docker", "info", "--format", "{{.ServerVersion}}"],
   ["bun", "install", "--frozen-lockfile"],
   ["dotnet", "tool", "restore"],

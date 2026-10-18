@@ -3,6 +3,17 @@
 Use [README.md](README.md) for local commands and [Notion](https://app.notion.com/p/3f69c051011881e1bc4ec68e47231420) for planning and system design.
 Run `bun run check` before handing off a code change. CI runs the same command.
 
+## Evidence
+
+Commit reusable tests, verification scripts, API contracts, and runbooks.
+Store per-run logs, screenshots, recordings, traces, and reports as PR attachments or CI artifacts.
+Use the [PR template](.github/pull_request_template.md) to summarize the tested revision, environment, results, limitations, and proof links.
+Retain durable release and recovery receipts under their established policy.
+The [PR evidence check](.github/workflows/pr-evidence.yml) enforces the current head SHA, required proof, and generated-output locations.
+Its [behavior tests](scripts/pr-evidence.test.mjs) run in `bun run check`.
+
+## Domain rules
+
 | Rule                                                                                                                                                    | Enforcement                                                                                                                                                                                 |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Use branches for nested conditional logic in JavaScript, TypeScript, and Vue expressions.                                                               | `eslint.config.mjs`, run by `bun run lint` and `bun run check`.                                                                                                                             |

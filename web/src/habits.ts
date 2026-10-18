@@ -67,6 +67,11 @@ export function habitsApi(getToken: () => Promise<string | null>) {
   }
   return {
     list: () => request("/api/habits", z.array(habitSchema)),
+    scheduled: (date: string) =>
+      request(
+        `/api/habits/scheduled?date=${encodeURIComponent(date)}`,
+        z.array(habitSchema),
+      ),
     create: (input: NewHabit) =>
       request("/api/habits", habitSchema, {
         method: "POST",
