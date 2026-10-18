@@ -1,11 +1,18 @@
 <script setup lang="ts">
 import SignedInApp from "./SignedInApp.vue";
-defineProps<{ setupMessage: string | null }>();
+import type { ApplicationBootstrap } from "./habits";
+defineProps<{
+  setupMessage: string | null;
+  bootstrap: ApplicationBootstrap | null;
+}>();
 </script>
 
 <template>
   <UApp>
-    <SignedInApp v-if="setupMessage === null" />
+    <SignedInApp
+      v-if="setupMessage === null && bootstrap"
+      :bootstrap="bootstrap"
+    />
     <main v-else class="max-w-3xl mx-auto p-6 space-y-4">
       <h1 class="text-3xl font-semibold">Damadama</h1>
       <UAlert

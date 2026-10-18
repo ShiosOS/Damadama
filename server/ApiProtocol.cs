@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Routing.Template;
 using Microsoft.Net.Http.Headers;
 
 namespace Damadama;
@@ -16,8 +15,12 @@ public static class ApiProtocol
                 await next(context);
                 return;
             }
-            context.Response.Headers.CacheControl = "private, no-store";
-            context.Response.Headers.Vary = "Accept";
+            context.Response.OnStarting(() =>
+            {
+                context.Response.Headers.CacheControl = "private, no-store";
+                context.Response.Headers.Vary = "Accept";
+                return Task.CompletedTask;
+            });
             var output = context.Response.Body;
             if (HttpMethods.IsHead(context.Request.Method)) context.Response.Body = Stream.Null;
             try { await next(context); }
@@ -39,8 +42,9 @@ public static class ApiProtocol
                 var routes = context.RequestServices.GetRequiredService<EndpointDataSource>().Endpoints
                     .OfType<RouteEndpoint>()
                     .Where(endpoint => endpoint.Metadata.GetMetadata<ApiContractMetadata>() is not null &&
-                        new TemplateMatcher(TemplateParser.Parse(endpoint.RoutePattern.RawText!), new RouteValueDictionary())
-                            .TryMatch(context.Request.Path, new RouteValueDictionary()))
+                        endpoint.Metadata.GetMetadata<IEndpointNameMetadata>() is { } name &&
+                        context.RequestServices.GetRequiredService<LinkParser>()
+                            .ParsePathByEndpointName(name.EndpointName, context.Request.Path) is not null)
                     .ToArray();
                 if (routes.Any(endpoint => endpoint.Metadata.GetMetadata<IAuthorizeData>() is not null) &&
                     context.User.Identity?.IsAuthenticated != true)

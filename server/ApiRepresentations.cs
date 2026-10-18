@@ -35,7 +35,7 @@ public sealed class ApiRepresentations(LinkGenerator links)
         ["result", "editedAt", "deviceToday", "timeZone"], new { id, date = date.ToString("yyyy-MM-dd") });
 
     public SirenEntity Bootstrap(string? clerkPublishableKey) => new(["application"], new { clerkPublishableKey },
-        [.. Links(Href("application-config")), new(["habits"], Href("list-habits"))],
+        [.. Links(Href("application-config")), new(["https://github.com/ShiosOS/Damadama/rels/habits"], Href("list-habits"))],
         [CreateHabit(), Action("scheduled-habits", "GET", ["date"]), Action("entries-by-date", "GET", ["date"])], []);
 
     public SirenEntity Profile() => new(["profile"], new
@@ -47,7 +47,7 @@ public sealed class ApiRepresentations(LinkGenerator links)
         conflict = "409 current contains the authoritative entry representation; adopt it without fetching or retrying the rejected candidate.",
         dates = "Calendar dates use YYYY-MM-DD. Entry dates must be scheduled or retained and no later than deviceToday. timeZone is an IANA identifier; deviceToday must match the current date there.",
         forms = "GET actions encode fields in the query. POST and PUT actions encode all advertised fields as JSON. create-habit weekdays is an integer ISO weekday array; repeatEveryWeeks is a positive integer. Other fields are strings.",
-        relations = "self identifies the represented resource; profile describes this protocol; habits identifies the habit collection; item identifies an embedded collection member. scheduled-habits and entries-by-date require date. Every scheduled habit and retained entry advertises replace-entry for that date.",
+        relations = "self identifies the represented resource; profile describes this protocol; https://github.com/ShiosOS/Damadama/rels/habits identifies the habit collection; item identifies an embedded collection member. scheduled-habits and entries-by-date require date. Every scheduled habit and retained entry advertises replace-entry for that date.",
         statuses = "Creation is 201 with Location, accepted replacement/replay is 200, superseded replacement is 409. Errors use RFC 9457 application/problem+json. All API responses are private, no-store."
     }, Links(Href("application-profile")), [], []);
 

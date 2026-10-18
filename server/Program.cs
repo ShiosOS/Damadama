@@ -102,7 +102,7 @@ app.MapApiOptions("/api/habits/{id:guid}", "options-read-habit", ["GET", "HEAD",
 app.MapApiOptions("/api/habits/scheduled", "options-scheduled-habits", ["GET", "HEAD", "OPTIONS"], true);
 app.MapApiOptions("/api/entries", "options-entries-by-date", ["GET", "HEAD", "OPTIONS"], true);
 app.MapApiOptions("/api/habits/{id:guid}/entries/{date}", "options-read-entry", ["GET", "HEAD", "PUT", "OPTIONS"], true);
-app.MapFallbackToFile("index.html");
+app.MapFallbackToFile("index.html").WithName("application-shell");
 app.Run();
 public partial class Program;
 

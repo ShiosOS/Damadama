@@ -1,17 +1,31 @@
 <script setup lang="ts">
-import { nextTick, reactive, ref, watch } from "vue";
-import { ApiError, habitsApi, weekdays } from "./habits";
-import type { Habit, NewHabit } from "./habits.schema";
+import { computed, nextTick, reactive, ref, watch } from "vue";
+import {
+  ApiError,
+  type ApplicationBootstrap,
+  weekdays,
+  type Habit,
+  type NewHabit,
+} from "./habits";
 import HabitDetails from "./HabitDetails.vue";
 import CheckeredD from "./CheckeredD.vue";
 import TodayView from "./TodayView.vue";
 
 type Props = {
+  bootstrap: ApplicationBootstrap;
   accountId: string | null;
   getToken: () => Promise<string | null>;
 };
 const props = defineProps<Props>();
-const api = habitsApi(() => props.getToken());
+const api = computed(() =>
+  props.accountId
+    ? props.bootstrap.forAccount(
+        props.accountId,
+        () => props.getToken(),
+        () => props.accountId,
+      )
+    : null,
+);
 const habits = ref<Habit[]>([]);
 type Activity =
   | { kind: "idle" }
@@ -60,7 +74,9 @@ watch(
     const current = generation;
     activity.value = { kind: "loading" };
     try {
-      const saved = await api.list();
+      const currentApi = api.value;
+      if (!currentApi) return;
+      const saved = await currentApi.list();
       if (current !== generation) return;
       habits.value = saved;
       activity.value = { kind: "idle" };
@@ -90,7 +106,9 @@ async function save(): Promise<void> {
   const current = generation;
   activity.value = { kind: "saving" };
   try {
-    const saved = await api.create({
+    const currentApi = api.value;
+    if (!currentApi) throw new ApiError("Sign in to continue.", 401);
+    const saved = await currentApi.create({
       ...form,
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     });
@@ -263,7 +281,7 @@ async function save(): Promise<void> {
       <TodayView
         :key="accountId ?? ''"
         :account-id="accountId"
-        :get-token="getToken"
+        :api="api"
         :saved-revision="savedRevision"
       />
       <section aria-label="Saved habits">

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Npgsql;
 using NUnit.Framework;
 
 namespace Damadama.Tests;
@@ -23,6 +24,68 @@ public class EntryApiTests
     }
 
     private string Path(string date = "2026-01-04") => $"/api/habits/{habitId}/entries/{date}";
+
+    [Test]
+    public async Task Concurrent_first_PUTs_report_exactly_one_creation_after_commit()
+    {
+        const long gateKey = 714303;
+        await using var gate = new NpgsqlConnection(DatabaseFixture.Database.GetConnectionString());
+        await gate.OpenAsync();
+        await using var take = new NpgsqlCommand($"SELECT pg_advisory_lock({gateKey})", gate);
+        await take.ExecuteNonQueryAsync();
+        await DatabaseFixture.Execute($"""
+            CREATE FUNCTION block_first_put() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN PERFORM pg_advisory_xact_lock({gateKey}); RETURN NEW; END; $$;
+            CREATE TRIGGER block_first_put AFTER INSERT ON "DailyEntries"
+            FOR EACH ROW WHEN (NEW."HabitId" = '{habitId}') EXECUTE FUNCTION block_first_put();
+            """);
+        Task<HttpResponseMessage>? first = null;
+        Task<HttpResponseMessage>? second = null;
+        try
+        {
+            first = client.PutAsJsonAsync(Path(), EntrySteps.Change());
+            await WaitForBlockedWrites(1);
+            second = client.PutAsJsonAsync(Path(), EntrySteps.Change());
+            await WaitForBlockedWrites(2);
+            Assert.That(first.IsCompleted || second.IsCompleted, Is.False);
+        }
+        finally
+        {
+            await using var release = new NpgsqlCommand($"SELECT pg_advisory_unlock({gateKey})", gate);
+            await release.ExecuteNonQueryAsync();
+            try
+            {
+                if (first is not null) await first;
+                if (second is not null) await second;
+            }
+            finally
+            {
+                await DatabaseFixture.Execute("DROP TRIGGER block_first_put ON \"DailyEntries\"; DROP FUNCTION block_first_put()");
+            }
+        }
+        using var created = await first!;
+        using var replay = await second!;
+        Assert.That(created.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        Assert.That(created.Headers.Location?.OriginalString, Is.EqualTo(Path()));
+        Assert.That(replay.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(await DatabaseFixture.Count("DailyEntries"), Is.EqualTo(1));
+        var firstEntry = await created.Content.ReadSirenProperties("entry");
+        var secondEntry = await replay.Content.ReadSirenProperties("entry");
+        Assert.That(secondEntry.GetRawText(), Is.EqualTo(firstEntry.GetRawText()));
+    }
+
+    private static async Task WaitForBlockedWrites(int count)
+    {
+        await using var connection = new NpgsqlConnection(DatabaseFixture.Database.GetConnectionString());
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand("""
+            SELECT count(*) FROM pg_stat_activity
+            WHERE wait_event_type = 'Lock' AND query LIKE '%INSERT INTO "DailyEntries"%'
+            """, connection);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        while (Convert.ToInt32(await command.ExecuteScalarAsync(timeout.Token)) < count)
+            await Task.Delay(20, timeout.Token);
+    }
 
     [TestCase(false)]
     [TestCase(true)]

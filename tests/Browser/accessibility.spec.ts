@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { AxeBuilder } from "@axe-core/playwright";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { execFileSync } from "node:child_process";
@@ -129,7 +130,17 @@ test("the production entry explains missing sign-in configuration accessibly", a
   await page.route(`${apiOrigin}/api/config`, async (route) => {
     const response = await route.fetch();
     realConfigStatus = response.status();
-    await route.fulfill({ response, json: { clerkPublishableKey: null } });
+    const data: unknown = await response.json();
+    const bootstrap = z
+      .object({
+        properties: z.object({ clerkPublishableKey: z.string().nullable() }),
+      })
+      .passthrough()
+      .parse(data);
+    await route.fulfill({
+      response,
+      json: { ...bootstrap, properties: { clerkPublishableKey: null } },
+    });
   });
   await page.goto(`${apiOrigin}/`);
   await expect(

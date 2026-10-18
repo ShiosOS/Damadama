@@ -15,6 +15,7 @@ const commands = [
   ],
   ["dotnet", "build", "--no-restore", "--artifacts-path", ".audit/check-build"],
   ["dotnet", "format", "--no-restore", "--verify-no-changes"],
+  ["bun", "test", "tests/Browser/rest-client.test.ts"],
   [
     "bun",
     "x",

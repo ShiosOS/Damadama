@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import { z } from "zod";
-import { ApiError, habitsApi } from "./habits";
-import type { Habit } from "./habits.schema";
+import {
+  ApiError,
+  type Habit,
+  type HabitsApi,
+  type EntryEditor,
+  type RecordedEntry,
+  type ScheduledHabit,
+} from "./habits";
 import HabitDetails from "./HabitDetails.vue";
 import HabitLevels from "./HabitLevels.vue";
 import EntryControls from "./EntryControls.vue";
@@ -10,13 +16,18 @@ import type { Entry, EntryEdit } from "./entries.schema";
 
 type Props = {
   accountId: string | null;
-  getToken: () => Promise<string | null>;
+  api: HabitsApi | null;
   savedRevision: number;
 };
 const props = defineProps<Props>();
 type TodayState =
   | { kind: "loading"; date: string }
-  | { kind: "ready"; date: string; habits: Habit[]; entries: Entry[] }
+  | {
+      kind: "ready";
+      date: string;
+      habits: ScheduledHabit[];
+      entries: RecordedEntry[];
+    }
   | { kind: "error"; date: string; message: string };
 type TodayRow =
   | {
@@ -25,6 +36,7 @@ type TodayRow =
       habitId: string;
       name: string;
       entry: Entry | undefined;
+      editor: EntryEditor;
       habit: Habit;
     }
   | {
@@ -33,6 +45,7 @@ type TodayRow =
       habitId: string;
       name: string;
       entry: Entry;
+      editor: EntryEditor;
     };
 type Load = { generation: number; date: string; accountId: string | null };
 
@@ -44,7 +57,6 @@ function localCalendarDate(): string {
   return `${year}-${month}-${day}`;
 }
 
-const api = habitsApi(() => props.getToken());
 const selectedDate = ref<string | null>(null);
 const deviceToday = ref(localCalendarDate());
 const requestedDate = (): string => selectedDate.value ?? localCalendarDate();
@@ -78,6 +90,7 @@ const rows = computed<TodayRow[]>(() => {
       habitId: habit.id,
       name: habit.name,
       entry,
+      editor: habit.editor,
       habit: displayedHabit,
     };
   });
@@ -89,6 +102,7 @@ const rows = computed<TodayRow[]>(() => {
       habitId: entry.habitId,
       name: entry.habitName,
       entry,
+      editor: entry.editor,
     }));
   return [...scheduled, ...retained];
 });
@@ -104,22 +118,26 @@ function selectDate(event: Event): void {
   selectedDate.value = value === localCalendarDate() ? null : value;
 }
 
-function saveEntry(habitId: string, edit: EntryEdit): Promise<Entry> {
-  return api.saveEntry(habitId, state.value.date, {
-    ...edit,
+async function saveEntry(editor: EntryEditor, edit: EntryEdit): Promise<Entry> {
+  const outcome = await editor.save(edit, {
     deviceToday: localCalendarDate(),
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   });
+  return outcome.entry;
 }
 
 function acceptEntry(entry: Entry): void {
   const current = state.value;
   if (current.kind !== "ready" || current.date !== entry.calendarDate) return;
+  const editor =
+    current.entries.find((saved) => saved.habitId === entry.habitId)?.editor ??
+    current.habits.find((habit) => habit.id === entry.habitId)?.editor;
+  if (!editor) return;
   state.value = {
     ...current,
     entries: [
       ...current.entries.filter((saved) => saved.habitId !== entry.habitId),
-      entry,
+      { ...entry, editor },
     ],
   };
 }
@@ -175,7 +193,8 @@ async function refresh(mode: "all" | "schedule" = "all"): Promise<void> {
   deviceToday.value = localCalendarDate();
   if (!keepEntries) state.value = { kind: "loading", date: load.date };
   armMidnight();
-  if (!load.accountId) return;
+  const api = props.api;
+  if (!load.accountId || !api) return;
   try {
     const [habits, loadedEntries] = await Promise.all([
       api.scheduled(load.date),
@@ -305,7 +324,7 @@ onUnmounted(() => {
           :key="`${accountId}/${state.date}/${row.habitId}`"
           :habit-name="row.name"
           :entry="row.entry"
-          :save="(edit: EntryEdit) => saveEntry(row.habitId, edit)"
+          :save="(edit: EntryEdit) => saveEntry(row.editor, edit)"
           @saved="acceptEntry"
           @unauthorized="signInRequired"
         />

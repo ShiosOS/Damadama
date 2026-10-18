@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Net.Http.Json;
 using Damadama.Tests;
 using Damadama.Habits;
 using Damadama.Entries;
@@ -25,8 +26,10 @@ await using (var seed = new HabitsDb(new DbContextOptionsBuilder<HabitsDb>()
 using var app = new TestApp(database.GetConnectionString());
 var apiPort = int.Parse(Environment.GetEnvironmentVariable("DAMADAMA_API_PORT") ?? "5055");
 app.UseKestrel(apiPort);
-var fixture = JsonSerializer.Serialize(new
+var tokens = new
 {
+    restHypermedia = app.Token("rest-hypermedia-account"),
+    restInvalid = app.Token("rest-invalid-account"),
     owner = app.Token(),
     other = app.Token("other-account"),
     reload = app.Token("reload-account"),
@@ -69,11 +72,17 @@ var fixture = JsonSerializer.Serialize(new
     entriesTravel = app.Token("entries-travel-account"),
     entriesRetained = app.Token("entries-retained-account"),
     entriesCreation = app.Token("entries-creation-account")
-});
+};
+using var client = app.CreateClient();
+using var configResponse = await client.GetAsync("/api/config");
+configResponse.EnsureSuccessStatusCode();
+if (configResponse.Content.Headers.ContentType?.MediaType != "application/vnd.siren+json")
+    throw new InvalidOperationException("The actual application bootstrap must use Siren.");
+var bootstrap = await configResponse.Content.ReadFromJsonAsync<JsonElement>();
+var fixture = JsonSerializer.Serialize(new { tokens, bootstrap });
 await File.WriteAllTextAsync("tests/Browser/fixture.json", fixture);
 if (Directory.Exists(".audit/browser-build"))
     await File.WriteAllTextAsync(".audit/browser-build/fixture.json", fixture);
-using var client = app.CreateClient();
 Console.WriteLine($"Browser fixture ready at http://localhost:{apiPort}. This does not test Clerk sign-in.");
 var stopped = new TaskCompletionSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; stopped.TrySetResult(); };

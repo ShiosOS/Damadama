@@ -1,12 +1,13 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { AxeBuilder } from "@axe-core/playwright";
 import { z } from "zod";
-import { habitSchema, type Habit } from "../../web/src/habits.schema";
 import {
-  entrySchema,
-  entryResultSchema,
-  type Entry,
-} from "../../web/src/entries.schema";
+  readSirenProperties,
+  readSirenItems,
+  fixtureSchema,
+} from "./siren-test";
+import { habitSchema, type Habit } from "../../web/src/habits.schema";
+import { entrySchema, entryResultSchema, type Entry } from "../../web/src/entries.schema";
 
 test.use({ viewport: { width: 1280, height: 800 }, video: "on" });
 
@@ -27,9 +28,9 @@ async function openDailyHabit(
   name: string,
 ): Promise<{ habit: Habit; token: string }> {
   await page.clock.setFixedTime(new Date("2026-01-05T00:30:00Z"));
-  const tokens = z
-    .record(z.string(), z.string())
-    .parse(await (await page.request.get("/fixture.json")).json());
+  const tokens = fixtureSchema.parse(
+    await (await page.request.get("/fixture.json")).json(),
+  ).tokens;
   const token = tokens[account];
   if (!token) throw new Error("The entry fixture account is missing.");
   const created = await page.request.post("/api/habits", {
@@ -45,7 +46,7 @@ async function openDailyHabit(
     },
   });
   expect(created.status()).toBe(201);
-  const habit = habitSchema.parse(await created.json());
+  const habit = await readSirenProperties(created, "habit", habitSchema);
   await page.goto(`/?account=${account}`);
   await expect(
     page
@@ -69,7 +70,7 @@ test("the committed result appears before any reload", async ({ page }) => {
       response.url().includes("/entries/2026-01-04"),
   );
   await controls.getByRole("button", { name: "Good", exact: true }).click();
-  expect((await saved).status()).toBe(200);
+  expect((await saved).status()).toBe(201);
   await expect(
     controls.getByRole("button", { name: "Good", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -89,6 +90,7 @@ async function choose(
   controls: Locator,
   result: string,
   seconds: number,
+  status = 201,
 ): Promise<Entry> {
   await page.clock.setFixedTime(
     new Date(Date.parse("2026-01-05T00:30:00Z") + seconds * 1000),
@@ -100,8 +102,15 @@ async function choose(
   );
   await controls.getByRole("button", { name: result, exact: true }).click();
   const response = await acknowledged;
-  expect(response.status()).toBe(200);
-  const saved = entrySchema.parse(await response.json());
+  expect(response.status()).toBe(status);
+  const saved =
+    status === 409
+      ? entrySchema.parse(
+          z
+            .object({ current: z.object({ properties: entrySchema }) })
+            .parse(await response.json()).current.properties,
+        )
+      : await readSirenProperties(response, "entry", entrySchema);
   await expect(
     controls.getByRole("button", { name: saved.result, exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -144,7 +153,9 @@ test("all five outcomes stay distinct after reload", async ({ page }) => {
   await expect(controls).toBeVisible();
   let seconds = 1;
   for (const result of ["Good", "Better", "Best", "Rest", "Clear"]) {
-    const saved = await choose(page, controls, result, seconds++);
+    const expectedStatus = seconds === 1 ? 201 : 200;
+    const saved = await choose(page, controls, result, seconds, expectedStatus);
+    seconds++;
     expect(saved.result).toBe(result);
     expect(saved.calendarDate).toBe("2026-01-04");
   }
@@ -169,7 +180,7 @@ test("a committed write stays unconfirmed while its acknowledgment is held", asy
   const release = Promise.withResolvers<void>();
   await page.route("**/api/habits/*/entries/*", async (route) => {
     const response = await route.fetch();
-    expect(response.status()).toBe(200);
+    expect(response.status()).toBe(201);
     committed.resolve();
     await release.promise;
     await route.fulfill({ response });
@@ -181,10 +192,9 @@ test("a committed write stays unconfirmed while its acknowledgment is held", asy
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(
-      z
-        .array(entrySchema)
-        .parse(await independent.json())
-        .map((row) => row.result),
+      (await readSirenItems(independent, "entries", "entry", entrySchema)).map(
+        (row) => row.result,
+      ),
     ).toEqual(["Good"]);
     await expect(
       controls.getByRole("button", { name: "Good", exact: true }),
@@ -217,11 +227,15 @@ test("retry after a lost acknowledgment preserves the exact edit", async ({
     writes.push(requestSchema.parse(route.request().postDataJSON()));
     if (writes.length > 1) return route.continue();
     const committed = await route.fetch();
-    expect(committed.status()).toBe(200);
+    expect(committed.status()).toBe(201);
     await route.fulfill({
       status: 503,
       contentType: "application/problem+json",
-      body: JSON.stringify({ title: "The acknowledgment was lost." }),
+      body: JSON.stringify({
+        type: "about:blank",
+        status: 503,
+        title: "The acknowledgment was lost.",
+      }),
     });
   });
   await controls.getByRole("button", { name: "Good", exact: true }).click();
@@ -248,7 +262,7 @@ test("creating another habit preserves an entry awaiting acknowledgment", async 
   const release = Promise.withResolvers<void>();
   await page.route("**/api/habits/*/entries/*", async (route) => {
     const response = await route.fetch();
-    expect(response.status()).toBe(200);
+    expect(response.status()).toBe(201);
     committed.resolve();
     await release.promise;
     await route.fulfill({ response });
@@ -308,8 +322,8 @@ test("the browser displays the server winner when its own edit loses", async ({
       },
     },
   );
-  expect(otherDevice.status()).toBe(200);
-  const winner = await choose(page, controls, "Good", 1);
+  expect(otherDevice.status()).toBe(201);
+  const winner = await choose(page, controls, "Good", 1, 409);
   expect(winner.result).toBe("Best");
   await expect(controls.getByRole("status")).toHaveText("Best is saved.");
   await expect(
@@ -332,7 +346,7 @@ for (const destination of ["other account", "sign out"]) {
     const release = Promise.withResolvers<void>();
     await page.route("**/api/habits/*/entries/*", async (route) => {
       const response = await route.fetch();
-      expect(response.status()).toBe(200);
+      expect(response.status()).toBe(201);
       committed.resolve();
       await release.promise;
       await route.fulfill({ response });
@@ -401,13 +415,17 @@ test("a delayed save error stays hidden after sign-out", async ({ page }) => {
   const release = Promise.withResolvers<void>();
   await page.route("**/api/habits/*/entries/*", async (route) => {
     const response = await route.fetch();
-    expect(response.status()).toBe(200);
+    expect(response.status()).toBe(201);
     committed.resolve();
     await release.promise;
     await route.fulfill({
       status: 503,
       contentType: "application/problem+json",
-      body: JSON.stringify({ title: "The acknowledgment was lost." }),
+      body: JSON.stringify({
+        type: "about:blank",
+        status: 503,
+        title: "The acknowledgment was lost.",
+      }),
     });
   });
   await controls.getByRole("button", { name: "Good", exact: true }).click();
@@ -459,7 +477,7 @@ test("retained unscheduled history stays visible and keeps original definitions"
   await expect(today).not.toContainText("new good");
   const controls = controlsFor(page, "Retained walking");
   await expect(controls.getByRole("status")).toHaveText("Good is saved.");
-  await choose(page, controls, "Better", 1);
+  await choose(page, controls, "Better", 1, 200);
   await page.reload();
   await expect(controls.getByRole("status")).toHaveText("Better is saved.");
   await expect(today).toContainText("Good: 5 minutes");
@@ -494,7 +512,7 @@ test.describe("entry calendar dates during travel", () => {
     await expect(controls.getByRole("status")).toHaveText("No entry recorded.");
     await page.getByLabel("Calendar date", { exact: true }).fill("2026-01-04");
     await expect(controls.getByRole("status")).toHaveText("Better is saved.");
-    const saved = await choose(page, controls, "Rest", 2);
+    const saved = await choose(page, controls, "Rest", 2, 200);
     expect(saved.calendarDate).toBe("2026-01-04");
     await capture(page, ".audit/entries-past.png");
     await page.reload();

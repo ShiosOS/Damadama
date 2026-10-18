@@ -1,5 +1,10 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { z } from "zod";
+import {
+  readSirenProperties,
+  readSirenItems,
+  fixtureSchema,
+} from "./siren-test";
 import { habitSchema, type Habit } from "../../web/src/habits.schema";
 
 const instant = new Date("2026-01-05T00:30:00Z");
@@ -35,9 +40,9 @@ test.afterEach(({ page }) => {
 });
 
 async function tokenFor(page: Page, account: string): Promise<string> {
-  const tokens = z
-    .record(z.string(), z.string())
-    .parse(await (await page.request.get("/fixture.json")).json());
+  const tokens = fixtureSchema.parse(
+    await (await page.request.get("/fixture.json")).json(),
+  ).tokens;
   const token = tokens[account];
   if (!token) throw new Error("Missing browser fixture account.");
   return token;
@@ -62,7 +67,7 @@ async function seed(
     },
   });
   expect(response.status()).toBe(201);
-  return habitSchema.parse(await response.json());
+  return await readSirenProperties(response, "habit", habitSchema);
 }
 
 async function create(
@@ -177,7 +182,11 @@ test("a Today service error stays distinct from empty and Retry reads the server
     await route.fulfill({
       status: 503,
       contentType: "application/problem+json",
-      body: JSON.stringify({ title: "Today is temporarily unavailable." }),
+      body: JSON.stringify({
+        type: "about:blank",
+        status: 503,
+        title: "Today is temporarily unavailable.",
+      }),
     });
   });
   await page.goto("/?account=todayError");
@@ -278,7 +287,11 @@ for (const outcome of ["Success", "Error"]) {
         return route.fulfill({
           status: 503,
           contentType: "application/problem+json",
-          body: JSON.stringify({ title: "Previous account failure." }),
+          body: JSON.stringify({
+            type: "about:blank",
+            status: 503,
+            title: "Previous account failure.",
+          }),
         });
       await route.fulfill({ response });
     });
@@ -322,7 +335,11 @@ for (const outcome of ["Success", "Error"]) {
         return route.fulfill({
           status: 503,
           contentType: "application/problem+json",
-          body: JSON.stringify({ title: "Yesterday failed." }),
+          body: JSON.stringify({
+            type: "about:blank",
+            status: 503,
+            title: "Yesterday failed.",
+          }),
         });
       await route.fulfill({ response });
     });
@@ -419,7 +436,12 @@ test("travel updates Today both directions in the same page while stored schedul
       },
     });
     expect(response.status()).toBe(200);
-    const saved = z.array(habitSchema).parse(await response.json());
+    const saved = await readSirenItems(
+      response,
+      "habits",
+      "habit",
+      habitSchema,
+    );
     expect(saved).toEqual([habit]);
     expect(errors).toEqual([]);
   } finally {
