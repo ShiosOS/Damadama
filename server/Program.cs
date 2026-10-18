@@ -1,3 +1,4 @@
+using Damadama.Telemetry;
 using Damadama.Habits;
 using Damadama.Entries;
 using Damadama;
@@ -9,6 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddJsonConsole(options => options.IncludeScopes = false);
 builder.Services.AddRequestDiagnostics();
+builder.Services.AddPrivateRequestTracing();
 builder.Services.AddDbContext<HabitsDb>(options => options.UseNpgsql(builder.Configuration.GetConnectionString("habits")));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
