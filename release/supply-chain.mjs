@@ -12,6 +12,7 @@ import {
   reconcileRuntimeReport,
 } from "./supply-policy.mjs";
 import { prepareArchive } from "./images.mjs";
+import { compareRegistryArchive } from "./supply-registry.mjs";
 import { materializeProducers } from "./supply-producers.mjs";
 import { manifestFiles, evidenceGroups } from "./supply-evidence.mjs";
 import {
@@ -663,6 +664,7 @@ async function verifyCapsule(
   if (trust === production) {
     subject = `oci://${image.reference}`;
     digest = image.digest.slice(7);
+    await compareRegistryArchive(image, join(directory, "build/image.tar"));
   }
   const provenance = await verifySignature(
     subject,

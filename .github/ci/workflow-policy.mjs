@@ -83,15 +83,17 @@ export function gateGraphErrors(workflows) {
   const expect = (condition, message) => {
     if (!condition) errors.push(message);
   };
-  for (const [gate, { workflow: filename, needs }] of Object.entries(gates)) {
+  for (const [gate, contract] of Object.entries(gates)) {
+    const { workflow: filename, needs } = contract;
+    const nativeJob = contract.job ?? gate;
     const workflow = workflows[filename];
-    const job = workflow?.jobs?.[gate];
-    const location = `${filename}:jobs.${gate}`;
+    const job = workflow?.jobs?.[nativeJob];
+    const location = `${filename}:jobs.${nativeJob}`;
     expect(Boolean(job), `${location}: required gate is missing`);
     if (!job) continue;
     expect(
-      job.name === undefined || job.name === gate,
-      `${location}: check-run name must be ${gate}`,
+      job.name === undefined || job.name === nativeJob,
+      `${location}: check-run name must be ${nativeJob}`,
     );
     const actual = Array.isArray(job.needs)
       ? job.needs
@@ -144,10 +146,11 @@ export function gateGraphErrors(workflows) {
         ) ?? true,
         `${filename}:jobs.${name}: steps cannot continue on error`,
       );
-      if (gate === "release-controls") {
+      if (gate === "release-controls" || gate === "main-release-controls") {
         const callable = releaseCallables[name];
+        const prefix = gate === "main-release-controls" ? "./" : "$/";
         expect(
-          dependency.uses === `$/.github/workflows/${callable.workflow}`,
+          dependency.uses === `${prefix}.github/workflows/${callable.workflow}`,
           `${filename}:jobs.${name}: wrong callable workflow`,
         );
         expect(
@@ -322,6 +325,69 @@ export function gateGraphErrors(workflows) {
         (stage[name].name === undefined || stage[name].name === name),
       `stage.yml:jobs.${name}: preserve native controller job`,
     );
+    expect(
+      stage?.[name]?.["continue-on-error"] === undefined &&
+        stage?.[name]?.strategy === undefined,
+      `stage.yml:jobs.${name}: native controller must run once without tolerated errors`,
+    );
+  }
+  for (const [name, needs] of [
+    ["build", ["source", "release-controls", "check"]],
+    ["stage", ["build", "verify"]],
+  ]) {
+    const actual = stage?.[name]?.needs;
+    expect(
+      Array.isArray(actual) &&
+        actual.length === needs.length &&
+        needs.every((dependency) => actual.includes(dependency)),
+      `stage.yml:jobs.${name}: needs must be exactly [${needs.join(", ")}]`,
+    );
+  }
+  expect(
+    stage?.check?.needs === "source" &&
+      stage.check.if === "needs.source.outputs.state == 'application'",
+    "stage.yml:jobs.check: must check every application source",
+  );
+  const mainSuiteCount = Object.values(stage ?? {})
+    .flatMap((job) => job.steps ?? [])
+    .filter((step) => step.run === suite).length;
+  expect(
+    mainSuiteCount === 1,
+    "stage.yml: release runtime suite must run exactly once",
+  );
+  expect(
+    stage?.["release-controls"]?.steps?.every((step) => step.if === undefined),
+    "stage.yml:jobs.release-controls: all barrier steps must run unconditionally",
+  );
+  for (const [name, commands] of [
+    [
+      "release-controls",
+      [suite, "node .github/ci/required-jobs.mjs main-release-controls"],
+    ],
+    [
+      "check",
+      [
+        "bun install --frozen-lockfile",
+        "bun .github/ci/workflow-lint.mjs",
+        "node node_modules/@playwright/test/cli.js install --with-deps chromium",
+        "bun run check",
+      ],
+    ],
+  ]) {
+    const steps = stage?.[name]?.steps ?? [];
+    let previous = -1;
+    for (const command of commands) {
+      const matches = steps.filter((step) => step.run === command);
+      const index = steps.findIndex((step) => step.run === command);
+      expect(
+        matches.length === 1 &&
+          matches[0].if === undefined &&
+          matches[0]["continue-on-error"] === undefined &&
+          index > previous,
+        `stage.yml:jobs.${name}: required ${command} step must run once in order without bypass`,
+      );
+      previous = index;
+    }
   }
   return errors;
 }
