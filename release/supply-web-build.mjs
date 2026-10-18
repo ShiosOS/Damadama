@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
-import { copyFile, mkdir, readFile } from "node:fs/promises";
+import { copyFile, mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import {
   realApplicationOrigin,
   tinyFixtureOrigin,
 } from "./supply-frontend-origin.mjs";
+import { dockerArchive, ociArchive } from "./supply-frontend-tar.mjs";
 import {
   fileHash,
-  hash,
   json,
   root,
   run,
@@ -23,50 +23,6 @@ function docker(args, options = {}) {
     env: { ...toolEnvironment(), BUILDX_METADATA_PROVENANCE: "max" },
     ...options,
   });
-}
-
-async function webDescriptor(layout) {
-  const index = await json(join(layout, "index.json"));
-  const images = index.manifests.filter(
-    (entry) =>
-      entry.platform?.os === "linux" &&
-      entry.platform?.architecture === "amd64",
-  );
-  assert.equal(images.length, 1, "web OCI layout needs one linux/amd64 image");
-  const digest = images[0].digest;
-  assert.match(digest, /^sha256:[a-f0-9]{64}$/);
-  const manifestBytes = await readFile(
-    join(layout, "blobs", "sha256", digest.slice(7)),
-  );
-  assert.equal(`sha256:${hash(manifestBytes)}`, digest);
-  const manifest = JSON.parse(manifestBytes);
-  const configBytes = await readFile(
-    join(layout, "blobs", "sha256", manifest.config.digest.slice(7)),
-  );
-  assert.equal(`sha256:${hash(configBytes)}`, manifest.config.digest);
-  const diffIds = JSON.parse(configBytes).rootfs.diff_ids;
-  assert(Array.isArray(diffIds) && diffIds.length > 0);
-  assert(diffIds.every((digest) => /^sha256:[a-f0-9]{64}$/.test(digest)));
-  return {
-    digest,
-    configDigest: manifest.config.digest,
-    diffIds,
-  };
-}
-
-async function dockerArchiveIdentity(archive, directory) {
-  await mkdir(directory);
-  run("tar", ["-xf", archive, "-C", directory]);
-  const images = await json(join(directory, "manifest.json"));
-  assert.equal(images.length, 1, "web Docker archive needs one image");
-  const configBytes = await readFile(join(directory, images[0].Config));
-  const diffIds = JSON.parse(configBytes).rootfs.diff_ids;
-  assert(Array.isArray(diffIds) && diffIds.length > 0);
-  assert(diffIds.every((digest) => /^sha256:[a-f0-9]{64}$/.test(digest)));
-  return {
-    configDigest: `sha256:${hash(configBytes)}`,
-    diffIds,
-  };
 }
 
 export async function buildApplicationWithWebEvidence(directory, identity) {
@@ -117,7 +73,7 @@ async function buildPaired(directory, identity, fixtureContext) {
     { timeout: 240_000 },
   );
   try {
-    const ociArchive = join(output, "web.oci.tar");
+    const ociArchivePath = join(output, "web.oci.tar");
     const webArchive = join(output, "web-stage.tar");
     const webMetadata = join(output, "web.metadata.json");
     docker(
@@ -136,23 +92,22 @@ async function buildPaired(directory, identity, fixtureContext) {
         "--metadata-file",
         webMetadata,
         "--output",
-        `type=oci,dest=${ociArchive}`,
+        `type=oci,dest=${ociArchivePath}`,
         "--output",
         `type=docker,dest=${webArchive}`,
         context,
       ],
       { stdio: "inherit", timeout: 900_000 },
     );
-    const layout = join(output, "web.layout");
-    await mkdir(layout);
-    run("tar", ["-xf", ociArchive, "-C", layout]);
-    const descriptor = await webDescriptor(layout);
-    const dockerIdentity = await dockerArchiveIdentity(
-      webArchive,
-      join(output, "web.docker"),
-    );
+    const ociArchiveSha256 = await fileHash(ociArchivePath);
+    const dockerArchiveSha256 = await fileHash(webArchive);
+    const descriptor = await ociArchive(ociArchivePath, ociArchiveSha256);
+    const dockerIdentity = await dockerArchive(webArchive, dockerArchiveSha256);
     assert.equal(dockerIdentity.configDigest, descriptor.configDigest);
     assert.deepEqual(dockerIdentity.diffIds, descriptor.diffIds);
+    const layout = join(output, "web.layout");
+    await mkdir(layout);
+    run("tar", ["-xf", ociArchivePath, "-C", layout]);
 
     const reference = `oci-layout://${layout}@${descriptor.digest}`;
     const finalMetadata = join(output, "final.metadata.json");
@@ -184,6 +139,8 @@ async function buildPaired(directory, identity, fixtureContext) {
     const origin = fixtureContext
       ? tinyFixtureOrigin(provenance, descriptor.digest)
       : realApplicationOrigin(provenance, descriptor.digest);
+    assert.equal(await fileHash(ociArchivePath), ociArchiveSha256);
+    assert.equal(await fileHash(webArchive), dockerArchiveSha256);
     await save(join(output, "web-build.json"), {
       schema: 1,
       purpose: fixtureContext
@@ -198,8 +155,8 @@ async function buildPaired(directory, identity, fixtureContext) {
       ),
       web: {
         descriptor,
-        ociArchiveSha256: await fileHash(ociArchive),
-        dockerArchiveSha256: await fileHash(webArchive),
+        ociArchiveSha256,
+        dockerArchiveSha256,
         metadataSha256: await fileHash(webMetadata),
       },
       final: {
