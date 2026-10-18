@@ -23,7 +23,7 @@ namespace Damadama.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Damadama.Entries.DailyEntry", b =>
+            modelBuilder.Entity("Damadama.Entries.Entry", b =>
                 {
                     b.Property<Guid>("HabitId")
                         .HasColumnType("uuid");
@@ -38,7 +38,7 @@ namespace Damadama.Migrations
                     b.Property<int>("Result")
                         .HasColumnType("integer");
 
-                    b.ComplexProperty(typeof(Dictionary<string, object>), "OriginalLevels", "Damadama.Entries.DailyEntry.OriginalLevels#HabitLevels", b1 =>
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "OriginalLevels", "Damadama.Entries.Entry.OriginalLevels#HabitLevels", b1 =>
                         {
                             b1.IsRequired();
 
@@ -142,7 +142,7 @@ namespace Damadama.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Damadama.Entries.DailyEntry", b =>
+            modelBuilder.Entity("Damadama.Entries.Entry", b =>
                 {
                     b.HasOne("Damadama.Habits.Habit", null)
                         .WithMany()
