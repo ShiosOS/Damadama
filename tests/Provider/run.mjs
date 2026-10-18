@@ -170,7 +170,7 @@ async function runBrowser(config, stage) {
     await page
       .getByRole("button", { name: "Open user menu", exact: true })
       .click();
-    await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
+    await page.getByRole("button", { name: "Sign out", exact: true }).click();
     checks.userMenuSignOut = true;
     stage("signed-out");
     await page.waitForFunction(
