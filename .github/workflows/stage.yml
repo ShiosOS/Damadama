@@ -13,13 +13,13 @@ concurrency:
   cancel-in-progress: false
 jobs:
   security-codeql:
-    uses: ./.github/workflows/security-codeql.yml
+    uses: $/.github/workflows/security-codeql.yml
     permissions:
       contents: read
       actions: read
       security-events: write
   security-dependencies:
-    uses: ./.github/workflows/security-dependencies.yml
+    uses: $/.github/workflows/security-dependencies.yml
     permissions:
       contents: read
       pull-requests: read

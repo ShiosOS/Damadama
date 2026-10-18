@@ -39,6 +39,15 @@ const rejected = (name, mutate, pattern) =>
   });
 
 test("main native alias keeps the public check name and separate PR portfolio", () => {
+  assert.deepEqual(gateGraphErrors(workflows), []);
+  for (const gate of ["release-controls", "main-release-controls"]) {
+    const { workflow, needs } = gates[gate];
+    for (const name of needs)
+      assert.equal(
+        workflows[workflow].jobs[name].uses,
+        `$/.github/workflows/${releaseCallables[name].workflow}`,
+      );
+  }
   assert.deepEqual(gates["main-release-controls"], {
     workflow: "stage.yml",
     job: "release-controls",
@@ -78,10 +87,10 @@ for (const name of gates["main-release-controls"].needs) {
       /wrong callable workflow/,
     ],
     [
-      "PR path",
+      "legacy relative path",
       (w) =>
         (caller(w).uses =
-          "$/.github/workflows/" + releaseCallables[name].workflow),
+          "./.github/workflows/" + releaseCallables[name].workflow),
       /wrong callable workflow/,
     ],
     [

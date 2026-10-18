@@ -148,9 +148,8 @@ export function gateGraphErrors(workflows) {
       );
       if (gate === "release-controls" || gate === "main-release-controls") {
         const callable = releaseCallables[name];
-        const prefix = gate === "main-release-controls" ? "./" : "$/";
         expect(
-          dependency.uses === `${prefix}.github/workflows/${callable.workflow}`,
+          dependency.uses === `$/.github/workflows/${callable.workflow}`,
           `${filename}:jobs.${name}: wrong callable workflow`,
         );
         expect(

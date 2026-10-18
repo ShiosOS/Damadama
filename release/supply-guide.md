@@ -1,6 +1,6 @@
 # Supply evidence reference
 
-The supply modules connect one paired production build to original scan evidence, immutable publication, isolated signing, and repeated staging and promotion admission. Production activation remains closed pending shared CI composition and exact-head native acceptance.
+The supply modules connect one paired production build to original scan evidence, immutable publication, isolated signing, and repeated staging and promotion admission. The shared CI graph is implemented in this source. Production activation remains closed pending postmerge main execution and exact-head native acceptance.
 
 ## Archive assessment
 

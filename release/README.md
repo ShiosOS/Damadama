@@ -2,7 +2,7 @@
 
 Merge reviewed PRs after their real `release-controls` and `check` jobs pass. A main push runs the required security and application checks, builds one image, scans its original evidence, publishes its digest, and signs it in a separate job. Staging requires fresh production verification before provider effects.
 
-The signed integration is private preparation. The shared CI graph composition, exact-head native issuance, registry access, cold timing, and final repository validation remain required before activation.
+The signed integration and shared CI graph are implemented in this source. Postmerge main execution, exact-head native issuance, registry access, cold timing, and final repository validation remain required before activation.
 Production uses `https://prod.damadama.app`. Preserve the existing apex site at `https://damadama.app`.
 
 ## Prepare the two hosting environments
