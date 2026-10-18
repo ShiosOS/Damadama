@@ -125,11 +125,11 @@ Use the timestamp in the object key as a conservative snapshot-start bound. `com
 
 Record the backup job's actual deployed immutable image and execution separately from the restore tooling. A successful backup from an older image does not prove the merged deadline rolled out. Preserve source objects and seven-day retention. Remove only the disposable containers and network captured for this exercise.
 
-The [October 15 hosted rehearsal](recovery-evidence.md#hosted-staging-rehearsal-on-october-15) records both a rejected empty application backup and the successful saved-data recovery.
+The [October 15 hosted rehearsal](EVIDENCE.md#hosted-staging-rehearsal-on-october-15) records both a rejected empty application backup and the successful saved-data recovery.
 
 ## Recover after a spending hard stop
 
-The [approved $20 Compute limit](hosting-cost.md) can stop every workload in the Railway workspace, including both environments and their daily backup jobs.
+The [approved $20 Compute limit](../../release/cost.md) can stop every workload in the Railway workspace, including both environments and their daily backup jobs.
 At the limit, Railway also suspends bucket reads and uploads. Existing bucket data remains billed.
 Preserve the database volumes, completed backups, and the hard limit. A spending outage does not authorize data deletion or a restore over the existing database.
 
@@ -144,7 +144,7 @@ Preserve the database volumes, completed backups, and the hard limit. A spending
 
 Railway [tries to restart resources at the next billing cycle](https://docs.railway.com/pricing/cost-control#usage-limits-faq).
 Do not assume that a reset, manual redeployment, or unchanged service settings proves a private image pull or a healthy application.
-Record what actually restarted and what remains offline. The [October 15 evidence](recovery-evidence.md#hosted-staging-rehearsal-on-october-15) verifies staging backup decryption and restoration into local Docker, followed by real Clerk reads through the verified app image. This does not prove automatic recovery after a spending stop, restoration on Railway, or production recovery.
+Record what actually restarted and what remains offline. The [October 15 evidence](EVIDENCE.md#hosted-staging-rehearsal-on-october-15) verifies staging backup decryption and restoration into local Docker, followed by real Clerk reads through the verified app image. This does not prove automatic recovery after a spending stop, restoration on Railway, or production recovery.
 
 A missed backup can leave the latest recoverable copy older than 24 hours. A later successful backup does not fill the missing recovery interval.
 If a restore is necessary, state the backup time and lost-write window before requesting restore and cutover approval.

@@ -115,7 +115,7 @@ The revised scripts passed setup twice, Docker/PostgreSQL, Chromium launch, and 
 The unchanged application check also passed all 11 browser and 51 backend tests with the new default cache path.
 These are local Ubuntu results. The initial baseline at `465b816` completed dependency setup twice, launched Chromium, queried PostgreSQL 17,
 and passed all 171 release tests. The probe used the existing local Docker Desktop daemon.
-The [local output excerpt](../.github/evidence/codex-cloud/local-results.txt) records the source revision and commands.
+The [local output excerpt](../../.github/evidence/codex-cloud/local-results.txt) records the source revision and commands.
 On PR11's unchanged application source at `9c8437e1`, setup twice and `bun run check` passed locally,
 including all 11 browser and 51 backend tests. Adding `tzdata` resolved the minimal image's IANA timezone validation failures.
 The run used `TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal` for local Docker Desktop's nested-container topology.
@@ -132,7 +132,7 @@ Pinned Chromium installation and launch failed because its download redirects to
 The [second fresh task](https://chatgpt.com/local/01a13de0-85b9-7534-9141-5caa97ad30ff) ran the exact revised scripts at `5ee2e42`, based on current main `a8a51bd`.
 It verified Node 24.21.0, Bun 1.3.14, .NET 10.0.112, Docker/PostgreSQL, and all 162 release tests in actual Debian cloud execution.
 Both setup runs and verification exited 1 because pinned Chromium remained blocked at the same redirected host.
-The [cloud results](../.github/evidence/codex-cloud/cloud-results.md) distinguish measured capabilities from remaining checks.
+The [cloud results](../../.github/evidence/codex-cloud/cloud-results.md) distinguish measured capabilities from remaining checks.
 The old phone-created setup could not confirm publication from the browser. At the user's request, a new private **Damadama Development** environment was created and published.
 Its saved configuration uses the reviewed helpers, writable paths, Package managers, and the three observed browser hosts.
 A [fresh task after publication](https://chatgpt.com/local/01a13df3-e195-7668-9046-80ae6bf8f0f1) verified persisted runtime pins and matching helper hashes at source `5eb0bf5`.

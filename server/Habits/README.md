@@ -31,4 +31,4 @@ The SQL query filters by the authenticated subject before materialization. The p
 
 `tests/Backend/ScheduledDateEligibility.feature`, `ScheduleEligibilityTests.cs`, and `ScheduledHabitsTests.cs` cover eligibility and the private read.
 `tests/Browser/today.spec.ts` covers Today, travel, local midnight, and request states.
-Use [Check a change](../README.md#check-a-change) to rerun the repository checks.
+Use [Check a change](../../README.md#check-a-change) to rerun the repository checks.

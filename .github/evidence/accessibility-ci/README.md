@@ -52,4 +52,4 @@ The full check ran on Windows with bundled Node 24, Bun 1.3.14, .NET 10, Docker 
 
 Positive scans report zero violations. Dialog scans retain an incomplete `aria-hidden-focus` result; this is not counted as a passed rule. Explicit keyboard assertions provide separate focus-containment evidence. Reports omit raw DOM markup, request and response bodies, headers, and tokens. Traces remain off. CI retains failure reports for three days.
 
-These checks do not establish full WCAG compliance. Live Clerk sign-in, sign-up, account menus and email delivery were not exercised. Screen-reader speech, native browser zoom and assistive-technology interoperability still need manual review. CSS zoom is a repeatable layout check. See the [scanner and keyboard documentation](../../../docs/browser-accessibility.md).
+These checks do not establish full WCAG compliance. Live Clerk sign-in, sign-up, account menus and email delivery were not exercised. Screen-reader speech, native browser zoom and assistive-technology interoperability still need manual review. CSS zoom is a repeatable layout check. See the [scanner and keyboard documentation](../../../tests/Browser/accessibility.md).
