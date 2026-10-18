@@ -1,0 +1,46 @@
+name: Operational monitor
+on:
+  pull_request:
+    paths:
+      - ops/monitoring/**
+      - .github/workflows/ops-monitor.yml
+  schedule:
+    - cron: "2-57/5 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ops-monitor-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: node --test ops/monitoring/monitor.test.mjs
+  staging:
+    name: Staging monitoring activation and observation
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: node ops/monitoring/run.mjs
+        env:
+          OPS_MONITOR_ENABLED_STAGING: ${{ vars.OPS_MONITOR_ENABLED_STAGING }}
+          BACKUP_METADATA_URL_STAGING: ${{ secrets.BACKUP_METADATA_URL_STAGING }}
+          BACKUP_METADATA_ORIGIN_STAGING: ${{ vars.BACKUP_METADATA_ORIGIN_STAGING }}

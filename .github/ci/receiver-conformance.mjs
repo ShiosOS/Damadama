@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
 import {
+  verifyReceiverTriggers,
+  receiverTriggerMutations,
+} from "./receiver-triggers.mjs";
+import {
   config,
   consoleEvent,
   providerBody,
@@ -210,6 +214,7 @@ function resolveEnvironment(workflow, repository, staging, event = "schedule") {
 }
 
 function verifyStructure(workflow) {
+  verifyReceiverTriggers(workflow);
   assert.ok(workflow?.jobs?.fixtures, "fixture job must exist");
   assert.ok(workflow?.jobs?.staging, "staging job must exist");
   const staging = workflow.jobs.staging;
@@ -392,6 +397,7 @@ function verifyMutations(workflow) {
   const branchCondition =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
   const mutations = [
+    ...receiverTriggerMutations,
     [
       "removed branch guard",
       (changed) => {
