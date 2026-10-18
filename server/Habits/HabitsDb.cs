@@ -56,6 +56,7 @@ public sealed class HabitsDb(DbContextOptions<HabitsDb> options) : DbContext(opt
         await using var transaction = await Database.BeginTransactionAsync(cancellationToken);
         Habits.Add(habit);
         await SaveChangesAsync(cancellationToken);
+        await Entry(habit).ReloadAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return habit;
     }
