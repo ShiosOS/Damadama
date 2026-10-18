@@ -97,6 +97,8 @@ internal static class RestContractAssertions
             var authorized = endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>().Count > 0;
             if (category == "control-plane" && !authorized && methods is null &&
                 ((name == "health-live" && path == "/health/live") || (name == "health-ready" && path == "/health/ready"))) continue;
+            if (category == "control-plane" && name == "worker-retirement" && path == "/sw.js" &&
+                !authorized && methods is not null && methods.SequenceEqual(new[] { "GET" })) continue;
             if (name == "application-shell" && category is null && !authorized && path == "{*path:nonfile}" &&
                 endpoint.Order == int.MaxValue && methods is not null && methods.Order().SequenceEqual(new[] { "GET", "HEAD" })) continue;
             if (name is null || !scenarios.Contains(name)) failures.Add($"endpoint.uncovered:{path}");
@@ -301,5 +303,21 @@ public class RestContractGuardTests
         imitationFallback.Metadata.Add(new HttpMethodMetadata(["GET", "HEAD"]));
         Assert.That(RestContractAssertions.Inventory([imitationFallback.Build()], new HashSet<string>()),
             Does.Contain("endpoint.uncovered:{*path:nonfile}"));
+        var retirement = new RouteEndpointBuilder(_ => Task.CompletedTask, RoutePatternFactory.Parse("/sw.js"), 0);
+        retirement.Metadata.Add(new EndpointNameMetadata("worker-retirement"));
+        retirement.Metadata.Add(new Damadama.ApiContractMetadata("control-plane"));
+        retirement.Metadata.Add(new HttpMethodMetadata(["GET"]));
+        Assert.That(RestContractAssertions.Inventory([retirement.Build()], new HashSet<string>()), Is.Empty);
+        retirement.Metadata.Add(new HttpMethodMetadata(["GET", "POST"]));
+        Assert.That(RestContractAssertions.Inventory([retirement.Build()], new HashSet<string>()),
+            Does.Contain("endpoint.uncovered:/sw.js"));
+        retirement.Metadata.Add(new HttpMethodMetadata(["GET"]));
+        retirement.RoutePattern = RoutePatternFactory.Parse("/unexpected-worker.js");
+        Assert.That(RestContractAssertions.Inventory([retirement.Build()], new HashSet<string>()),
+            Does.Contain("endpoint.uncovered:/unexpected-worker.js"));
+        retirement.RoutePattern = RoutePatternFactory.Parse("/sw.js");
+        retirement.Metadata.Add(new AuthorizeAttribute());
+        Assert.That(RestContractAssertions.Inventory([retirement.Build()], new HashSet<string>()),
+            Does.Contain("endpoint.uncovered:/sw.js"));
     }
 }

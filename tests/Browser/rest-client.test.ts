@@ -4,6 +4,13 @@ import { ApiError, readApplication } from "../../web/src/habits";
 
 const origin = "https://app.example";
 const savedFetch = globalThis.fetch;
+function installFetch(
+  handler: (...args: Parameters<typeof fetch>) => Promise<Response>,
+): void {
+  globalThis.fetch = Object.assign(handler, {
+    preconnect: savedFetch.preconnect,
+  });
+}
 const savedWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 beforeEach(() => {
   Object.defineProperty(globalThis, "window", {
@@ -115,7 +122,7 @@ function isApiError(status: number): (error: unknown) => boolean {
   return (error) => error instanceof ApiError && error.status === status;
 }
 
-test("a discovered foreign target is rejected before acquiring a bearer token", () => {
+void test("a discovered foreign target is rejected before acquiring a bearer token", () => {
   assert.throws(
     () => readApplication(bootstrap("https://foreign.example/token")),
     isApiError(502),
@@ -130,7 +137,7 @@ test("a discovered foreign target is rejected before acquiring a bearer token", 
   );
 });
 
-test("an API cannot acquire or send the next account's token", async () => {
+void test("an API cannot acquire or send the next account's token", async () => {
   let account: string | null = "first";
   let tokenCalls = 0;
   let fetchCalls = 0;
@@ -143,10 +150,10 @@ test("an API cannot acquire or send the next account's token", async () => {
     },
     () => account,
   );
-  globalThis.fetch = async () => {
+  installFetch(async () => {
     fetchCalls++;
     return response(entity("habits", {}));
-  };
+  });
   const pending = api.list();
   account = "second";
   token.resolve("second-account-token");
@@ -156,15 +163,15 @@ test("an API cannot acquire or send the next account's token", async () => {
   assert.equal(fetchCalls, 0);
 });
 
-test("a loaded editing capability remains bound to its account", async () => {
+void test("a loaded editing capability remains bound to its account", async () => {
   let account: string | null = "first";
   let calls = 0;
-  globalThis.fetch = async () => {
+  installFetch(async () => {
     calls++;
     return response(
       scheduled([form("replace-entry", "PUT", "/opaque/edit", writeFields)]),
     );
-  };
+  });
   const api = readApplication(bootstrap()).forAccount(
     "first",
     async () => "first-token",
@@ -183,12 +190,12 @@ test("a loaded editing capability remains bound to its account", async () => {
   assert.equal(calls, 1);
 });
 
-test("an absent save action fails discovery instead of manufacturing an entry URI", async () => {
+void test("an absent save action fails discovery instead of manufacturing an entry URI", async () => {
   let calls = 0;
-  globalThis.fetch = async () => {
+  installFetch(async () => {
     calls++;
     return response(scheduled([]));
-  };
+  });
   const api = readApplication(bootstrap()).forAccount(
     "owner",
     async () => "token",
@@ -198,7 +205,7 @@ test("an absent save action fails discovery instead of manufacturing an entry UR
   assert.equal(calls, 1);
 });
 
-test("empty and malformed problem bodies become typed errors with the HTTP status", async () => {
+void test("empty and malformed problem bodies become typed errors with the HTTP status", async () => {
   const api = readApplication(bootstrap()).forAccount(
     "owner",
     async () => "token",
@@ -210,33 +217,36 @@ test("empty and malformed problem bodies become typed errors with the HTTP statu
     "null",
     '{"title":"wrong status","status":400}',
   ]) {
-    globalThis.fetch = async () =>
-      new Response(body, {
-        status: 503,
-        headers: { "Content-Type": "application/problem+json" },
-      });
+    installFetch(
+      async () =>
+        new Response(body, {
+          status: 503,
+          headers: { "Content-Type": "application/problem+json" },
+        }),
+    );
     await assert.rejects(api.list(), isApiError(503));
   }
 });
 
-test("success requires both the advertised media and an operation's expected status", async () => {
+void test("success requires both the advertised media and an operation's expected status", async () => {
   const api = readApplication(bootstrap()).forAccount(
     "owner",
     async () => "token",
     () => "owner",
   );
-  globalThis.fetch = async () =>
-    response(entity("habits", {}), 200, "application/json");
+  installFetch(async () =>
+    response(entity("habits", {}), 200, "application/json"),
+  );
   await assert.rejects(api.list(), isApiError(502));
-  globalThis.fetch = async () => response(entity("habits", {}), 202);
+  installFetch(async () => response(entity("habits", {}), 202));
   await assert.rejects(api.list(), isApiError(502));
 });
 
-test("a 409 yields its authoritative winner through the discovered editor without another fetch", async () => {
+void test("a 409 yields its authoritative winner through the discovered editor without another fetch", async () => {
   const visited: string[] = [];
   const edit = form("replace-entry", "PUT", "/opaque/edit", writeFields);
-  globalThis.fetch = async (input, options) => {
-    visited.push(String(input));
+  installFetch(async (input, options) => {
+    visited.push(input instanceof Request ? input.url : String(input));
     if (options?.method === "GET") return response(scheduled([edit]));
     assert.ok(options);
     assert.equal(options.method, "PUT");
@@ -272,7 +282,7 @@ test("a 409 yields its authoritative winner through the discovered editor withou
       409,
       "application/problem+json",
     );
-  };
+  });
   const api = readApplication(bootstrap()).forAccount(
     "owner",
     async () => "token",

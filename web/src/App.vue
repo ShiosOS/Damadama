@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import SignedInApp from "./SignedInApp.vue";
 import type { ApplicationBootstrap } from "./habits";
-defineProps<{
+type Props = {
   setupMessage: string | null;
   bootstrap: ApplicationBootstrap | null;
-}>();
+};
+defineProps<Props>();
 </script>
 
 <template>
@@ -18,7 +19,7 @@ defineProps<{
       <UAlert
         color="warning"
         title="Sign-in needs development configuration."
-        :description="setupMessage ?? undefined"
+        :description="setupMessage ?? ''"
       />
     </main>
   </UApp>

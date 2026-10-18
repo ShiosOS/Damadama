@@ -16,14 +16,14 @@ An editor closes over its advertised action, date and account. Token acquisition
 
 PUT supplies the complete writable state, `result` and `editedAt`, together with device validation context, `deviceToday` and `timeZone`. The calendar date and habit identity belong to the resource URI. Habit name and the original Good/Better/Best definitions are read-only output. A newly inserted entry snapshots the definitions; later changes to the habit never replace that snapshot.
 
-| Observation | Status and representation |
-| --- | --- |
-| Habit created | 201 Siren habit with canonical `Location` |
-| Entry first inserted | 201 Siren entry with canonical `Location` |
-| Entry edit accepted or replay identical | 200 Siren entry |
-| Edit superseded | 409 problem with the authoritative Siren entry in `current` |
-| Canonical entry read | 200 Siren entry, including Clear |
-| Missing or foreign-owned resource | 404 problem |
+| Observation                             | Status and representation                                   |
+| --------------------------------------- | ----------------------------------------------------------- |
+| Habit created                           | 201 Siren habit with canonical `Location`                   |
+| Entry first inserted                    | 201 Siren entry with canonical `Location`                   |
+| Entry edit accepted or replay identical | 200 Siren entry                                             |
+| Edit superseded                         | 409 problem with the authoritative Siren entry in `current` |
+| Canonical entry read                    | 200 Siren entry, including Clear                            |
+| Missing or foreign-owned resource       | 404 problem                                                 |
 
 Ordering remains greatest `(editedAt UTC ticks, result rank)`, with Clear=0, Rest=1, Good=2, Better=3 and Best=4. Clear retains the resource. No If-Match precondition is required. The client adopts a 409 winner without a second fetch or retrying the rejected candidate. After a lost response, retry resends the same result and edit timestamp; an initial 201 can become 200 on replay because the resource already exists.
 
@@ -35,7 +35,7 @@ All API responses, including the public bootstrap/profile and problems, carry `C
 
 Protected route authentication runs before negotiation, body binding and semantic validation. Missing/invalid authentication returns a 401 problem and `WWW-Authenticate: Bearer`. Within a validly bound entry request, owned-habit lookup precedes field validation. Malformed JSON or incompatible JSON types are rejected by ASP.NET body binding before domain validation, as a separate transport boundary.
 
-GET resources support HEAD with the same status/headers and no body. OPTIONS has an explicit registration and accurate Allow. Known routes reject unsupported methods with 405 and Allow; an unknown API path gets a 404 problem and cannot fall through to the SPA. API routes carry explicit contract metadata. The health endpoints are separately classified control-plane checks; the SPA fallback is not an API resource.
+GET resources support HEAD with the same status/headers and no body. OPTIONS has an explicit registration and accurate Allow. Known routes reject unsupported methods with 405 and Allow; an unknown API path gets a 404 problem and cannot fall through to the SPA. API routes carry explicit contract metadata. The health endpoints are separately classified control-plane checks. The named GET `/sw.js` worker retirement route is an operational JavaScript resource, restricted to the staging authority and served with `no-store`; its existing worker retirement tests cover host restrictions and behavior. The inventory exempts only that exact route, name, method and control-plane classification. The SPA fallback is not an API resource.
 
 ## What CI proves
 

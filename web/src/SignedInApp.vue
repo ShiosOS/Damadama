@@ -3,7 +3,8 @@ import { SignIn, UserButton, useAuth } from "@clerk/vue";
 import HabitsPage from "./HabitsPage.vue";
 import CheckeredD from "./CheckeredD.vue";
 import type { ApplicationBootstrap } from "./habits";
-defineProps<{ bootstrap: ApplicationBootstrap }>();
+type Props = { bootstrap: ApplicationBootstrap };
+defineProps<Props>();
 const { isLoaded, isSignedIn, userId, getToken } = useAuth();
 </script>
 

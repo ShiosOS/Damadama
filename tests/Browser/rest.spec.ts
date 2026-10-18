@@ -94,8 +94,8 @@ test("opaque advertisements drive list, create, date reads, exact retry and conf
     }
     const data: unknown = await response.json();
     const headers = { ...response.headers() };
-    const location = headers.location;
-    if (location) headers.location = alias(location);
+    const location = headers["location"];
+    if (location) headers["location"] = alias(location);
     await route.fulfill({ response, headers, json: rewrite(data) });
   });
 
@@ -124,7 +124,7 @@ test("opaque advertisements drive list, create, date reads, exact retry and conf
   const fixture = fixtureSchema.parse(
     await (await page.request.get("/fixture.json")).json(),
   );
-  const token = fixture.tokens.restHypermedia;
+  const token = fixture.tokens["restHypermedia"];
   if (!entryTarget || !token)
     throw new Error("The first advertised save must identify its resource.");
   const winner = await page.request.put(entryTarget, {
@@ -194,12 +194,12 @@ for (const fault of [
           entities: z.array(
             z
               .object({
-                actions: z.array(z.object({ href: z.string() }).passthrough()),
+                actions: z.array(z.object({ href: z.string() }).loose()),
               })
-              .passthrough(),
+              .loose(),
           ),
         })
-        .passthrough()
+        .loose()
         .parse(data);
       const entities = collection.entities.map((entity) => ({
         ...entity,

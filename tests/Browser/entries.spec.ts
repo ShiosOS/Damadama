@@ -7,7 +7,11 @@ import {
   fixtureSchema,
 } from "./siren-test";
 import { habitSchema, type Habit } from "../../web/src/habits.schema";
-import { entrySchema, entryResultSchema, type Entry } from "../../web/src/entries.schema";
+import {
+  entrySchema,
+  entryResultSchema,
+  type Entry,
+} from "../../web/src/entries.schema";
 
 test.use({ viewport: { width: 1280, height: 800 }, video: "on" });
 

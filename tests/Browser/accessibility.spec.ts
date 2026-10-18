@@ -135,7 +135,7 @@ test("the production entry explains missing sign-in configuration accessibly", a
       .object({
         properties: z.object({ clerkPublishableKey: z.string().nullable() }),
       })
-      .passthrough()
+      .loose()
       .parse(data);
     await route.fulfill({
       response,

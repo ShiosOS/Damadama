@@ -72,7 +72,7 @@ app.MapMethods("/api/config", ["GET", "HEAD"], (IConfiguration configuration, Ap
     .WithName("application-config").WithMetadata(new ApiContractMetadata("bootstrap"));
 app.MapMethods("/api/profile", ["GET", "HEAD"], (ApiRepresentations representations) => ApiRepresentations.Ok(representations.Profile()))
     .WithName("application-profile").WithMetadata(new ApiContractMetadata("profile"));
-app.MapGet("/sw.js", WorkerRetirement.Respond);
+app.MapGet("/sw.js", WorkerRetirement.Respond).WithName("worker-retirement").WithMetadata(new ApiContractMetadata("control-plane"));
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapPost("/api/habits", async (CreateHabit input, System.Security.Claims.ClaimsPrincipal user,
