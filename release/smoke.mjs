@@ -136,8 +136,16 @@ export async function stagingBrowserChecks(record) {
     await page.getByLabel("Sunday", { exact: true }).check();
     await page.getByLabel("Repeat every (weeks)", { exact: true }).fill("2");
     await page.getByRole("button", { name: "Save habit", exact: true }).click();
-    await page.getByRole("heading", { name, exact: true }).waitFor();
-    const card = page
+    const savedHabits = page.getByRole("region", {
+      name: "Saved habits",
+      exact: true,
+    });
+    const savedHeading = savedHabits.getByRole("heading", {
+      name,
+      exact: true,
+    });
+    await savedHeading.waitFor();
+    const card = savedHabits
       .locator("article")
       .filter({ has: page.getByRole("heading", { name, exact: true }) });
     const visibleValues = async () => {
@@ -163,7 +171,7 @@ export async function stagingBrowserChecks(record) {
     assert.equal(habit.schedule.repeatEveryWeeks, 2);
     assert.equal(habit.schedule.timeZone, "America/New_York");
     await page.reload();
-    await page.getByRole("heading", { name, exact: true }).waitFor();
+    await savedHeading.waitFor();
     await visibleValues();
     const reloaded = await authenticatedGet(page, `/api/habits/${habit.id}`);
     assert.equal(
@@ -195,9 +203,9 @@ export async function stagingBrowserChecks(record) {
       "owner filtering excludes the habit",
     );
     await page.evaluate(() => window.Clerk.signOut());
-    await page
-      .getByRole("heading", { name, exact: true })
-      .waitFor({ state: "detached" });
+    await expect(page.getByRole("heading", { name, exact: true })).toHaveCount(
+      0,
+    );
     const outsiderContext = await browser.newContext();
     contexts.push(outsiderContext);
     const outsider = await outsiderContext.newPage();
