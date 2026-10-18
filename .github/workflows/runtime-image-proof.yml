@@ -1,0 +1,56 @@
+name: Runtime image proof
+
+on:
+  pull_request:
+    paths:
+      - release/Dockerfile
+      - .github/workflows/runtime-image-proof.yml
+  push:
+    branches:
+      - main
+      - codex/patch-dotnet-runtime
+    paths:
+      - release/Dockerfile
+      - .github/workflows/runtime-image-proof.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime-image-proof-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-application-scan:
+    name: native-application-scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ShiosOS/Damadama
+          ref: bbea506b64653820f3a941ebb2e7ec043865af3f
+          path: .audit/runtime-supply-tools
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.22.0
+      - run: node .audit/runtime-supply-tools/release/supply-install.mjs
+      - run: node .audit/runtime-supply-tools/release/supply-proof.mjs build .audit/runtime-image
+      - run: |
+          mkdir -p .audit/runtime-scan
+          cp .audit/runtime-image/identity.json .audit/runtime-scan/identity.json
+          node .audit/runtime-supply-tools/release/supply-proof.mjs scan-application .audit/runtime-image .audit/runtime-scan
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: runtime-image-scan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .audit/runtime-scan
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 90
