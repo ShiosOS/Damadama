@@ -1,26 +1,17 @@
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref, watch } from "vue";
-import { ApiError, type ApplicationBootstrap } from "./habits";
+import { nextTick, reactive, ref, watch } from "vue";
+import { ApiError, habitsApi } from "./habits";
 import { weekdays, type Habit, type NewHabit } from "./habits.schema";
 import HabitDetails from "./HabitDetails.vue";
 import CheckeredD from "./CheckeredD.vue";
 import TodayView from "./TodayView.vue";
 
 type Props = {
-  bootstrap: ApplicationBootstrap;
   accountId: string | null;
   getToken: () => Promise<string | null>;
 };
 const props = defineProps<Props>();
-const api = computed(() =>
-  props.accountId
-    ? props.bootstrap.forAccount(
-        props.accountId,
-        () => props.getToken(),
-        () => props.accountId,
-      )
-    : null,
-);
+const api = habitsApi(() => props.getToken());
 const habits = ref<Habit[]>([]);
 type Activity =
   | { kind: "idle" }
@@ -69,9 +60,7 @@ watch(
     const current = generation;
     activity.value = { kind: "loading" };
     try {
-      const currentApi = api.value;
-      if (!currentApi) return;
-      const saved = await currentApi.list();
+      const saved = await api.list();
       if (current !== generation) return;
       habits.value = saved;
       activity.value = { kind: "idle" };
@@ -101,9 +90,7 @@ async function save(): Promise<void> {
   const current = generation;
   activity.value = { kind: "saving" };
   try {
-    const currentApi = api.value;
-    if (!currentApi) throw new ApiError("Sign in to continue.", 401);
-    const saved = await currentApi.create({
+    const saved = await api.create({
       ...form,
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     });
@@ -276,7 +263,7 @@ async function save(): Promise<void> {
       <TodayView
         :key="accountId ?? ''"
         :account-id="accountId"
-        :api="api"
+        :get-token="getToken"
         :saved-revision="savedRevision"
       />
       <section aria-label="Saved habits">

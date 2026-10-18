@@ -2,9 +2,6 @@
 import { SignIn, UserButton, useAuth } from "@clerk/vue";
 import HabitsPage from "./HabitsPage.vue";
 import CheckeredD from "./CheckeredD.vue";
-import type { ApplicationBootstrap } from "./habits";
-type Props = { bootstrap: ApplicationBootstrap };
-defineProps<Props>();
 const { isLoaded, isSignedIn, userId, getToken } = useAuth();
 </script>
 
@@ -22,7 +19,6 @@ const { isLoaded, isSignedIn, userId, getToken } = useAuth();
     v-if="isLoaded"
     :account-id="isSignedIn ? (userId ?? null) : null"
     :get-token="() => getToken()"
-    :bootstrap="bootstrap"
     ><template #account><UserButton v-if="isSignedIn" /></template
   ></HabitsPage>
 </template>

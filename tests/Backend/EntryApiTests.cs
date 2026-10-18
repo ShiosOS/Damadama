@@ -20,7 +20,7 @@ public class EntryApiTests
         await DatabaseFixture.Reset();
         using var created = await client.PostAsJsonAsync("/api/habits", HabitTests.Walking with
         { Weekdays = [1, 2, 3, 4, 5, 6, 7], RepeatEveryWeeks = 1 });
-        habitId = (await created.Content.ReadSirenProperties("habit")).GetProperty("id").GetGuid();
+        habitId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }
 
     private string Path(string date = "2026-01-04") => $"/api/habits/{habitId}/entries/{date}";
@@ -69,8 +69,8 @@ public class EntryApiTests
         Assert.That(created.Headers.Location?.OriginalString, Is.EqualTo(Path()));
         Assert.That(replay.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(await DatabaseFixture.Count("DailyEntries"), Is.EqualTo(1));
-        var firstEntry = await created.Content.ReadSirenProperties("entry");
-        var secondEntry = await replay.Content.ReadSirenProperties("entry");
+        var firstEntry = await created.Content.ReadFromJsonAsync<JsonElement>();
+        var secondEntry = await replay.Content.ReadFromJsonAsync<JsonElement>();
         Assert.That(secondEntry.GetRawText(), Is.EqualTo(firstEntry.GetRawText()));
     }
 
@@ -110,7 +110,7 @@ public class EntryApiTests
         using var response = await client.PutAsJsonAsync(Path(), new
         { result, editedAt = "2026-01-05T00:00:00Z", deviceToday = "2026-01-04", timeZone = "America/New_York" });
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
-        var saved = await response.Content.ReadSirenProperties("entry");
+        var saved = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.That(saved.GetProperty("result").GetString(), Is.EqualTo(result));
     }
 
@@ -163,11 +163,11 @@ public class EntryApiTests
         await DatabaseFixture.Execute($"UPDATE \"InitialSchedules\" SET \"Weekdays\" = ARRAY[3] WHERE \"HabitId\" = '{habitId}'");
         using var changed = await client.PutAsJsonAsync(Path(), EntrySteps.Change("Better", "2026-01-05T00:01:00Z"));
         Assert.That(changed.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var saved = await changed.Content.ReadSirenProperties("entry");
+        var saved = await changed.Content.ReadFromJsonAsync<JsonElement>();
         Assert.That(saved.GetProperty("result").GetString(), Is.EqualTo("Better"));
         Assert.That(await DatabaseFixture.Count("DailyEntries"), Is.EqualTo(1));
         using var history = await client.GetAsync("/api/entries?date=2026-01-04");
-        var retained = (await history.Content.ReadSirenItems("entries", "entry"))[0];
+        var retained = (await history.Content.ReadFromJsonAsync<JsonElement>())[0];
         var name = retained.TryGetProperty("habitName", out var property) ? property.GetString() : null;
         Assert.That(name, Is.EqualTo("Walking"), "Retained history needs its owned habit name even when the scheduled read omits it.");
     }

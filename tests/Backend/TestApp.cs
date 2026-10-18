@@ -3,6 +3,8 @@ using System.Security.Cryptography;
 using Damadama.Habits;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
@@ -13,7 +15,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Damadama.Tests;
 
-public sealed class TestApp(string connectionString) : WebApplicationFactory<Program>
+public sealed class TestApp(string connectionString, Action<IEndpointRouteBuilder>? extraEndpoints = null) : WebApplicationFactory<Program>
 {
     public const string Issuer = "https://clerk-test.invalid";
     public const string Origin = "http://127.0.0.1:5174";
@@ -35,6 +37,7 @@ public sealed class TestApp(string connectionString) : WebApplicationFactory<Pro
         }));
         builder.ConfigureTestServices(services =>
         {
+            if (extraEndpoints is not null) services.AddSingleton<IStartupFilter>(new AdditionalEndpoints(extraEndpoints));
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(new FixedTime());
             services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
@@ -74,6 +77,15 @@ public sealed class TestApp(string connectionString) : WebApplicationFactory<Pro
     {
         base.Dispose(disposing);
         if (disposing) rsa.Dispose();
+    }
+
+    private sealed class AdditionalEndpoints(Action<IEndpointRouteBuilder> map) : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            next(app);
+            app.UseEndpoints(map);
+        };
     }
 
     private sealed class FixedTime : TimeProvider

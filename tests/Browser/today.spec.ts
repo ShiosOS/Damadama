@@ -1,14 +1,10 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import {
-  readSirenProperties,
-  readSirenItems,
-  fixtureSchema,
-} from "./siren-test";
+import { z } from "zod";
 import { habitSchema, type Habit } from "../../web/src/habits.schema";
 
 const instant = new Date("2026-01-05T00:30:00Z");
 const travelInstant = new Date("2026-01-12T00:30:00Z");
-const scheduledPath = "**/api/habits/scheduled?date=*";
+const scheduledPath = "**/api/habits?scheduledOn=*";
 const today = (page: Page): Locator =>
   page.getByRole("region", { name: "Today", exact: true });
 const walking = (page: Page): Locator =>
@@ -39,9 +35,9 @@ test.afterEach(({ page }) => {
 });
 
 async function tokenFor(page: Page, account: string): Promise<string> {
-  const tokens = fixtureSchema.parse(
-    await (await page.request.get("/fixture.json")).json(),
-  ).tokens;
+  const tokens = z
+    .record(z.string(), z.string())
+    .parse(await (await page.request.get("/fixture.json")).json());
   const token = tokens[account];
   if (!token) throw new Error("Missing browser fixture account.");
   return token;
@@ -66,7 +62,7 @@ async function seed(
     },
   });
   expect(response.status()).toBe(201);
-  return await readSirenProperties(response, "habit", habitSchema);
+  return habitSchema.parse(await response.json());
 }
 
 async function create(
@@ -181,11 +177,7 @@ test("a Today service error stays distinct from empty and Retry reads the server
     await route.fulfill({
       status: 503,
       contentType: "application/problem+json",
-      body: JSON.stringify({
-        type: "about:blank",
-        status: 503,
-        title: "Today is temporarily unavailable.",
-      }),
+      body: JSON.stringify({ title: "Today is temporarily unavailable." }),
     });
   });
   await page.goto("/?account=todayError");
@@ -207,7 +199,7 @@ test("eligible and ineligible creations refresh Today before reload", async ({
   await expect(today(page)).toContainText("Nothing scheduled for today.");
   let reads = 0;
   page.on("request", (request) => {
-    if (request.url().includes("/api/habits/scheduled?date=")) reads++;
+    if (request.url().includes("/api/habits?scheduledOn=")) reads++;
   });
   await create(page, "Sunday walk", "Sunday");
   await expect(
@@ -263,7 +255,7 @@ test("owner Today success precedes foreign empty and sign-out clears the view wi
     page.getByText("Sign in to create and view your habits."),
   ).toBeVisible();
   expect(
-    (await page.request.get("/api/habits/scheduled?date=2026-01-04")).status(),
+    (await page.request.get("/api/habits?scheduledOn=2026-01-04")).status(),
   ).toBe(401);
 });
 
@@ -286,11 +278,7 @@ for (const outcome of ["Success", "Error"]) {
         return route.fulfill({
           status: 503,
           contentType: "application/problem+json",
-          body: JSON.stringify({
-            type: "about:blank",
-            status: 503,
-            title: "Previous account failure.",
-          }),
+          body: JSON.stringify({ title: "Previous account failure." }),
         });
       await route.fulfill({ response });
     });
@@ -302,7 +290,7 @@ for (const outcome of ["Success", "Error"]) {
         .click();
       await expect(today(page)).toContainText("Nothing scheduled for today.");
       const acknowledgement = page.waitForResponse((response) =>
-        response.url().includes("/api/habits/scheduled?date=2026-01-04"),
+        response.url().includes("/api/habits?scheduledOn=2026-01-04"),
       );
       release.resolve();
       await (await acknowledgement).finished();
@@ -334,11 +322,7 @@ for (const outcome of ["Success", "Error"]) {
         return route.fulfill({
           status: 503,
           contentType: "application/problem+json",
-          body: JSON.stringify({
-            type: "about:blank",
-            status: 503,
-            title: "Yesterday failed.",
-          }),
+          body: JSON.stringify({ title: "Yesterday failed." }),
         });
       await route.fulfill({ response });
     });
@@ -346,7 +330,7 @@ for (const outcome of ["Success", "Error"]) {
     await received.promise;
     await page.clock.setSystemTime(new Date("2026-01-05T12:00:00Z"));
     const acknowledgement = page.waitForResponse((response) =>
-      response.url().includes("/api/habits/scheduled?date=2026-01-04"),
+      response.url().includes("/api/habits?scheduledOn=2026-01-04"),
     );
     release.resolve();
     await (await acknowledgement).finished();
@@ -435,12 +419,7 @@ test("travel updates Today both directions in the same page while stored schedul
       },
     });
     expect(response.status()).toBe(200);
-    const saved = await readSirenItems(
-      response,
-      "habits",
-      "habit",
-      habitSchema,
-    );
+    const saved = z.array(habitSchema).parse(await response.json());
     expect(saved).toEqual([habit]);
     expect(errors).toEqual([]);
   } finally {
@@ -525,7 +504,7 @@ test("a read finishing after sign-out cannot restore Today or start midnight rea
     .getByRole("button", { name: "Fixture sign out", exact: true })
     .click();
   const acknowledgement = page.waitForResponse((response) =>
-    response.url().includes("/api/habits/scheduled?date="),
+    response.url().includes("/api/habits?scheduledOn="),
   );
   release.resolve();
   await (await acknowledgement).finished();

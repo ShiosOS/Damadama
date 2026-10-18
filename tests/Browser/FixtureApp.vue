@@ -1,15 +1,11 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
 import { z } from "zod";
-import { readApplication } from "../../web/src/habits";
 import HabitsPage from "../../web/src/HabitsPage.vue";
 
-const fixtureData: unknown = await (await fetch("/fixture.json")).json();
-const fixture = z
-  .object({ tokens: z.record(z.string(), z.string()), bootstrap: z.unknown() })
-  .parse(fixtureData);
-const tokens = fixture.tokens;
-const bootstrap = readApplication(fixture.bootstrap);
+const tokens = z
+  .record(z.string(), z.string())
+  .parse(await (await fetch("/fixture.json")).json());
 const account = ref<string | null>(
   new URLSearchParams(location.search).get("account") ?? "owner",
 );
@@ -39,10 +35,7 @@ onUnmounted(() => {
       <button @click="account = 'owner'">Fixture owning account</button>
     </nav>
     <Suspense
-      ><HabitsPage
-        :account-id="account"
-        :get-token="getToken"
-        :bootstrap="bootstrap"
+      ><HabitsPage :account-id="account" :get-token="getToken"
     /></Suspense>
   </UApp>
 </template>

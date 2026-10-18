@@ -64,6 +64,7 @@ jobs:
           name: verification-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
           path: |
             .audit/TestResults
+            .audit/api-contract
             .audit/performance-assets.json
             .audit/performance-browser.json
             .audit/performance-saved.png

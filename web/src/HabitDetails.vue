@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { weekdays, type Habit } from "./habits.schema";
+import { weekdays } from "./habits.schema";
+import type { Habit } from "./habits.schema";
 import HabitLevels from "./HabitLevels.vue";
 type Props = { habit: Habit };
 defineProps<Props>();

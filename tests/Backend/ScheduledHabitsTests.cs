@@ -25,16 +25,16 @@ public class ScheduledHabitsTests
     {
         var habit = await Save(HabitTests.Walking with { Weekdays = [1, 3, 7] });
 
-        using var ownerResponse = await client.GetAsync("/api/habits/scheduled?date=2026-10-14");
+        using var ownerResponse = await client.GetAsync("/api/habits?scheduledOn=2026-10-14");
         Assert.That(ownerResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var ownerList = await ownerResponse.Content.ReadSirenItems("scheduled-habits", "habit");
+        var ownerList = await ownerResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.That(ownerList.GetArrayLength(), Is.EqualTo(1));
         AssertWalking(ownerList[0], habit.Id);
 
         using var other = app.SignedIn("another-account");
-        using var otherResponse = await other.GetAsync("/api/habits/scheduled?date=2026-10-14");
+        using var otherResponse = await other.GetAsync("/api/habits?scheduledOn=2026-10-14");
         Assert.That(otherResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var otherList = await otherResponse.Content.ReadSirenItems("scheduled-habits", "habit");
+        var otherList = await otherResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.That(otherList.GetArrayLength(), Is.Zero);
     }
 
@@ -45,24 +45,24 @@ public class ScheduledHabitsTests
 
         foreach (var date in new[] { "2026-10-14", "2026-10-18", "2026-10-26", "2026-10-14" })
         {
-            using var response = await client.GetAsync($"/api/habits/scheduled?date={date}");
+            using var response = await client.GetAsync($"/api/habits?scheduledOn={date}");
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            var list = await response.Content.ReadSirenItems("scheduled-habits", "habit");
+            var list = await response.Content.ReadFromJsonAsync<JsonElement>();
             Assert.That(list.GetArrayLength(), Is.EqualTo(1), date);
             AssertWalking(list[0], habit.Id);
         }
 
         foreach (var date in new[] { "2026-10-12", "2026-10-15", "2026-10-19", "2026-10-25" })
         {
-            using var response = await client.GetAsync($"/api/habits/scheduled?date={date}");
+            using var response = await client.GetAsync($"/api/habits?scheduledOn={date}");
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            var list = await response.Content.ReadSirenItems("scheduled-habits", "habit");
+            var list = await response.Content.ReadFromJsonAsync<JsonElement>();
             Assert.That(list.GetArrayLength(), Is.Zero, date);
         }
 
         using var readResponse = await client.GetAsync($"/api/habits/{habit.Id}");
         Assert.That(readResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        AssertWalking(await readResponse.Content.ReadSirenProperties("habit"), habit.Id);
+        AssertWalking(await readResponse.Content.ReadFromJsonAsync<JsonElement>(), habit.Id);
     }
 
     [Test]
@@ -75,30 +75,30 @@ public class ScheduledHabitsTests
         await Save(HabitTests.Walking with { Name = "Thursday", Weekdays = [4], RepeatEveryWeeks = 1 });
         await Save(HabitTests.Walking with { Name = "Private", Weekdays = [3], RepeatEveryWeeks = 1 }, "another-account");
 
-        using var response = await client.GetAsync("/api/habits/scheduled?date=2026-10-14");
+        using var response = await client.GetAsync("/api/habits?scheduledOn=2026-10-14");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var list = await response.Content.ReadSirenItems("scheduled-habits", "habit");
+        var list = await response.Content.ReadFromJsonAsync<JsonElement>();
         var tiedIds = new[] { firstTie.Id, secondTie.Id }.Order().ToArray();
         Assert.That(list.EnumerateArray().Select(item => item.GetProperty("id").GetGuid()),
             Is.EqualTo(new[] { tiedIds[0], tiedIds[1], later.Id }));
     }
 
-    [TestCase("")]
-    [TestCase("?date=")]
-    [TestCase("?date=%20")]
-    [TestCase("?date=2026-2-03")]
-    [TestCase("?date=10/14/2026")]
-    [TestCase("?date=2026-02-30")]
-    [TestCase("?date=2026-10-14T00:00:00Z")]
-    [TestCase("?date=%202026-10-14")]
-    [TestCase("?date=2026-10-14%20")]
-    [TestCase("?date=2026-10-14&date=2026-10-14")]
-    [TestCase("?date=2026-10-14&date=2026-10-18")]
-    [TestCase("?date=2026-10-14&date=")]
-    [TestCase("?date=2026-10-14,2026-10-18")]
+
+    [TestCase("?scheduledOn=")]
+    [TestCase("?scheduledOn=%20")]
+    [TestCase("?scheduledOn=2026-2-03")]
+    [TestCase("?scheduledOn=10/14/2026")]
+    [TestCase("?scheduledOn=2026-02-30")]
+    [TestCase("?scheduledOn=2026-10-14T00:00:00Z")]
+    [TestCase("?scheduledOn=%202026-10-14")]
+    [TestCase("?scheduledOn=2026-10-14%20")]
+    [TestCase("?scheduledOn=2026-10-14&scheduledOn=2026-10-14")]
+    [TestCase("?scheduledOn=2026-10-14&scheduledOn=2026-10-18")]
+    [TestCase("?scheduledOn=2026-10-14&scheduledOn=")]
+    [TestCase("?scheduledOn=2026-10-14,2026-10-18")]
     public async Task Requires_exactly_one_valid_ISO_calendar_date(string query)
     {
-        using var response = await client.GetAsync($"/api/habits/scheduled{query}");
+        using var response = await client.GetAsync($"/api/habits{query}");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/problem+json"));
@@ -107,8 +107,8 @@ public class ScheduledHabitsTests
         {
             Assert.That(problem.GetProperty("title").GetString(), Is.EqualTo("Check the requested date."));
             var errors = problem.GetProperty("errors");
-            Assert.That(errors.EnumerateObject().Select(error => error.Name), Is.EqualTo(new[] { "date" }));
-            Assert.That(errors.GetProperty("date")[0].GetString(),
+            Assert.That(errors.EnumerateObject().Select(error => error.Name), Is.EqualTo(new[] { "scheduledOn" }));
+            Assert.That(errors.GetProperty("scheduledOn")[0].GetString(),
                 Is.EqualTo("Use one valid calendar date in YYYY-MM-DD format."));
             Assert.That(problem.GetProperty("traceId").GetString(), Is.Not.Empty);
         });
@@ -118,15 +118,15 @@ public class ScheduledHabitsTests
     public async Task Signed_out_scheduled_read_is_refused_before_date_validation()
     {
         await Save(HabitTests.Walking with { Weekdays = [1, 3, 7] });
-        using var ownerResponse = await client.GetAsync("/api/habits/scheduled?date=2026-10-14");
-        var ownerList = await ownerResponse.Content.ReadSirenItems("scheduled-habits", "habit");
+        using var ownerResponse = await client.GetAsync("/api/habits?scheduledOn=2026-10-14");
+        var ownerList = await ownerResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.That(ownerResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(ownerList.GetArrayLength(), Is.EqualTo(1));
 
         using var signedOut = app.CreateClient();
-        foreach (var query in new[] { "?date=2026-10-14", "", "?date=invalid" })
+        foreach (var query in new[] { "?scheduledOn=2026-10-14", "", "?scheduledOn=invalid" })
         {
-            using var response = await signedOut.GetAsync($"/api/habits/scheduled{query}");
+            using var response = await signedOut.GetAsync($"/api/habits{query}");
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
             var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
             Assert.That(problem.GetProperty("title").GetString(), Is.EqualTo("Sign in to continue."));

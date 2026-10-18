@@ -30,7 +30,7 @@ public sealed class EntrySteps
         using var created = await client.PostAsJsonAsync("/api/habits", HabitTests.Walking with
         { Weekdays = weekdays, RepeatEveryWeeks = 1 });
         Assert.That(created.StatusCode, Is.EqualTo(HttpStatusCode.Created));
-        habitId = (await created.Content.ReadSirenProperties("habit")).GetProperty("id").GetGuid();
+        habitId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }
 
     internal static object Change(string result = "Good", string editedAt = "2026-01-05T00:00:00.1234567Z") =>
@@ -47,7 +47,7 @@ public sealed class EntrySteps
     public async Task Committed()
     {
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
-        AssertEntry(await response.Content.ReadSirenProperties("entry"));
+        AssertEntry(await response.Content.ReadFromJsonAsync<JsonElement>());
         await using var connection = new NpgsqlConnection(DatabaseFixture.Database.GetConnectionString());
         await connection.OpenAsync();
         await using var command = new NpgsqlCommand("""
@@ -88,11 +88,11 @@ public sealed class EntrySteps
         using var foreign = app.SignedIn("foreign-entry-account");
         using var read = await foreign.GetAsync("/api/entries?date=2026-01-04");
         Assert.That(read.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        Assert.That((await read.Content.ReadSirenItems("entries", "entry")).GetArrayLength(), Is.Zero);
+        Assert.That((await read.Content.ReadFromJsonAsync<JsonElement>()).GetArrayLength(), Is.Zero);
         using var write = await foreign.PutAsJsonAsync($"/api/habits/{habitId}/entries/2026-01-04", Change("Best"));
         Assert.That(write.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
         using var owner = await client.GetAsync("/api/entries?date=2026-01-04");
-        AssertEntry((await owner.Content.ReadSirenItems("entries", "entry"))[0]);
+        AssertEntry((await owner.Content.ReadFromJsonAsync<JsonElement>())[0]);
     }
 
     [Then("a signed-out browser cannot read or replace that entry")]
@@ -107,7 +107,7 @@ public sealed class EntrySteps
             Assert.That(write.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
         });
         using var owner = await client.GetAsync("/api/entries?date=2026-01-04");
-        AssertEntry((await owner.Content.ReadSirenItems("entries", "entry"))[0]);
+        AssertEntry((await owner.Content.ReadFromJsonAsync<JsonElement>())[0]);
     }
 
     [Then("a fresh application reads Good for January 4")]
@@ -119,7 +119,7 @@ public sealed class EntrySteps
         client = app.SignedIn();
         using var read = await client.GetAsync("/api/entries?date=2026-01-04");
         Assert.That(read.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var entries = await read.Content.ReadSirenItems("entries", "entry");
+        var entries = await read.Content.ReadFromJsonAsync<JsonElement>();
         Assert.That(entries.GetArrayLength(), Is.EqualTo(1));
         AssertEntry(entries[0]);
     }

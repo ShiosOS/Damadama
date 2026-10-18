@@ -34,7 +34,7 @@ public sealed class HabitSteps
     public async Task Saved()
     {
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
-        saved = await response.Content.ReadSirenProperties("habit");
+        saved = await response.Content.ReadFromJsonAsync<JsonElement>();
         AssertSaved(saved);
     }
 
@@ -97,12 +97,12 @@ public sealed class HabitSteps
     {
         using var listResponse = await client.GetAsync("/api/habits");
         Assert.That(listResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var list = await listResponse.Content.ReadSirenItems("habits", "habit");
+        var list = await listResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.That(list.GetArrayLength(), Is.EqualTo(1));
         AssertSaved(list[0]);
         using var readResponse = await client.GetAsync($"/api/habits/{saved.GetProperty("id").GetGuid()}");
         Assert.That(readResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        AssertSaved(await readResponse.Content.ReadSirenProperties("habit"));
+        AssertSaved(await readResponse.Content.ReadFromJsonAsync<JsonElement>());
     }
 
     [When("another account lists and opens that known habit")]
@@ -117,7 +117,7 @@ public sealed class HabitSteps
     public async Task RefusesOther()
     {
         Assert.That(otherList!.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var list = await otherList.Content.ReadSirenItems("habits", "habit");
+        var list = await otherList.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Multiple(() =>
         {
             Assert.That(list.GetArrayLength(), Is.Zero);

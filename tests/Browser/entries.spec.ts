@@ -1,11 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { AxeBuilder } from "@axe-core/playwright";
 import { z } from "zod";
-import {
-  readSirenProperties,
-  readSirenItems,
-  fixtureSchema,
-} from "./siren-test";
 import { habitSchema, type Habit } from "../../web/src/habits.schema";
 import {
   entrySchema,
@@ -32,9 +27,9 @@ async function openDailyHabit(
   name: string,
 ): Promise<{ habit: Habit; token: string }> {
   await page.clock.setFixedTime(new Date("2026-01-05T00:30:00Z"));
-  const tokens = fixtureSchema.parse(
-    await (await page.request.get("/fixture.json")).json(),
-  ).tokens;
+  const tokens = z
+    .record(z.string(), z.string())
+    .parse(await (await page.request.get("/fixture.json")).json());
   const token = tokens[account];
   if (!token) throw new Error("The entry fixture account is missing.");
   const created = await page.request.post("/api/habits", {
@@ -50,7 +45,7 @@ async function openDailyHabit(
     },
   });
   expect(created.status()).toBe(201);
-  const habit = await readSirenProperties(created, "habit", habitSchema);
+  const habit = habitSchema.parse(await created.json());
   await page.goto(`/?account=${account}`);
   await expect(
     page
@@ -94,7 +89,7 @@ async function choose(
   controls: Locator,
   result: string,
   seconds: number,
-  status = 201,
+  expectedStatus: 200 | 201 | 409 = 201,
 ): Promise<Entry> {
   await page.clock.setFixedTime(
     new Date(Date.parse("2026-01-05T00:30:00Z") + seconds * 1000),
@@ -106,15 +101,12 @@ async function choose(
   );
   await controls.getByRole("button", { name: result, exact: true }).click();
   const response = await acknowledged;
-  expect(response.status()).toBe(status);
+  expect(response.status()).toBe(expectedStatus);
+  const body: unknown = await response.json();
   const saved =
-    status === 409
-      ? entrySchema.parse(
-          z
-            .object({ current: z.object({ properties: entrySchema }) })
-            .parse(await response.json()).current.properties,
-        )
-      : await readSirenProperties(response, "entry", entrySchema);
+    expectedStatus === 409
+      ? z.object({ current: entrySchema }).parse(body).current
+      : entrySchema.parse(body);
   await expect(
     controls.getByRole("button", { name: saved.result, exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -157,9 +149,13 @@ test("all five outcomes stay distinct after reload", async ({ page }) => {
   await expect(controls).toBeVisible();
   let seconds = 1;
   for (const result of ["Good", "Better", "Best", "Rest", "Clear"]) {
-    const expectedStatus = seconds === 1 ? 201 : 200;
-    const saved = await choose(page, controls, result, seconds, expectedStatus);
-    seconds++;
+    const saved = await choose(
+      page,
+      controls,
+      result,
+      seconds++,
+      result === "Good" ? 201 : 200,
+    );
     expect(saved.result).toBe(result);
     expect(saved.calendarDate).toBe("2026-01-04");
   }
@@ -196,9 +192,10 @@ test("a committed write stays unconfirmed while its acknowledgment is held", asy
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(
-      (await readSirenItems(independent, "entries", "entry", entrySchema)).map(
-        (row) => row.result,
-      ),
+      z
+        .array(entrySchema)
+        .parse(await independent.json())
+        .map((row) => row.result),
     ).toEqual(["Good"]);
     await expect(
       controls.getByRole("button", { name: "Good", exact: true }),
@@ -235,11 +232,7 @@ test("retry after a lost acknowledgment preserves the exact edit", async ({
     await route.fulfill({
       status: 503,
       contentType: "application/problem+json",
-      body: JSON.stringify({
-        type: "about:blank",
-        status: 503,
-        title: "The acknowledgment was lost.",
-      }),
+      body: JSON.stringify({ title: "The acknowledgment was lost." }),
     });
   });
   await controls.getByRole("button", { name: "Good", exact: true }).click();
@@ -368,7 +361,7 @@ for (const destination of ["other account", "sign out"]) {
     } finally {
       release.resolve();
     }
-    await (await acknowledgment).finished();
+    entrySchema.parse(await (await acknowledgment).json());
     await expect(
       page.getByRole("heading", { name: "Entry private", exact: true }),
     ).toHaveCount(0);
@@ -403,7 +396,7 @@ test("date changes discard a delayed acknowledgment and refetch its original dat
   } finally {
     release.resolve();
   }
-  await (await acknowledgment).finished();
+  entrySchema.parse(await (await acknowledgment).json());
   await expect(page.getByText("Good is saved.", { exact: true })).toHaveCount(
     0,
   );
@@ -425,11 +418,7 @@ test("a delayed save error stays hidden after sign-out", async ({ page }) => {
     await route.fulfill({
       status: 503,
       contentType: "application/problem+json",
-      body: JSON.stringify({
-        type: "about:blank",
-        status: 503,
-        title: "The acknowledgment was lost.",
-      }),
+      body: JSON.stringify({ title: "The acknowledgment was lost." }),
     });
   });
   await controls.getByRole("button", { name: "Good", exact: true }).click();

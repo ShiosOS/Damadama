@@ -3,18 +3,18 @@ import { clerkPlugin } from "@clerk/vue";
 import ui from "@nuxt/ui/vue-plugin";
 import App from "./App.vue";
 import "./style.css";
-import { loadApplication, type ApplicationBootstrap } from "./habits";
+import { z } from "zod";
 
-type Configuration = {
-  bootstrap: ApplicationBootstrap | null;
+const schema = z.object({ clerkPublishableKey: z.string().nullable() });
+async function loadConfiguration(): Promise<{
   key: string | null;
   message: string | null;
-};
-async function loadConfiguration(): Promise<Configuration> {
+}> {
   try {
-    const config = await loadApplication();
+    const response = await fetch("/api/config");
+    if (!response.ok) throw new Error("Configuration request failed.");
+    const config = schema.parse(await response.json());
     return {
-      bootstrap: config,
       key: config.clerkPublishableKey,
       message: config.clerkPublishableKey
         ? null
@@ -22,7 +22,6 @@ async function loadConfiguration(): Promise<Configuration> {
     };
   } catch {
     return {
-      bootstrap: null,
       key: null,
       message:
         "The app could not load its sign-in configuration. Check that the backend is ready.",
@@ -30,10 +29,7 @@ async function loadConfiguration(): Promise<Configuration> {
   }
 }
 const config = await loadConfiguration();
-const app = createApp(App, {
-  setupMessage: config.message,
-  bootstrap: config.bootstrap,
-});
+const app = createApp(App, { setupMessage: config.message });
 app.use(ui);
 if (config.key) app.use(clerkPlugin, { publishableKey: config.key });
 app.mount("#app");

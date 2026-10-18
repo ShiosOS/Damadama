@@ -15,6 +15,7 @@ export const habitSchema = z.object({
     firstWeekMonday: z.iso.date(),
   }),
 });
+
 export type Habit = z.infer<typeof habitSchema>;
 export type NewHabit = Pick<Habit, "name" | "good" | "better" | "best"> &
   Pick<Habit["schedule"], "weekdays" | "repeatEveryWeeks" | "timeZone">;
