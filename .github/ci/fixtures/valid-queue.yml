@@ -1,0 +1,13 @@
+name: Valid queue
+on: push
+permissions:
+  contents: read
+concurrency:
+  group: validation-${{ github.repository }}
+  queue: max
+  cancel-in-progress: false
+jobs:
+  example:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo valid
