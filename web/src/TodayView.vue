@@ -1,23 +1,42 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import { z } from "zod";
-import { ApiError, habitsApi, type Habit } from "./habits";
+import { ApiError, habitsApi } from "./habits";
+import type { Habit } from "./habits.schema";
 import HabitDetails from "./HabitDetails.vue";
 import HabitLevels from "./HabitLevels.vue";
 import EntryControls from "./EntryControls.vue";
-import type { Entry, EntryEdit } from "./entries";
+import type { Entry, EntryEdit } from "./entries.schema";
 
-const props = defineProps<{
+type Props = {
   accountId: string | null;
   getToken: () => Promise<string | null>;
   savedRevision: number;
-}>();
+};
+const props = defineProps<Props>();
 type TodayState =
   | { kind: "loading"; date: string }
   | { kind: "ready"; date: string; habits: Habit[]; entries: Entry[] }
   | { kind: "error"; date: string; message: string };
+type TodayRow =
+  | {
+      kind: "scheduled";
+      key: string;
+      habitId: string;
+      name: string;
+      entry: Entry | undefined;
+      habit: Habit;
+    }
+  | {
+      kind: "retained";
+      key: string;
+      habitId: string;
+      name: string;
+      entry: Entry;
+    };
+type Load = { generation: number; date: string; accountId: string | null };
 
-function localCalendarDate() {
+function localCalendarDate(): string {
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -28,7 +47,7 @@ function localCalendarDate() {
 const api = habitsApi(() => props.getToken());
 const selectedDate = ref<string | null>(null);
 const deviceToday = ref(localCalendarDate());
-const requestedDate = () => selectedDate.value ?? localCalendarDate();
+const requestedDate = (): string => selectedDate.value ?? localCalendarDate();
 const state = shallowRef<TodayState>({
   kind: "loading",
   date: localCalendarDate(),
@@ -41,15 +60,40 @@ const dateLabel = computed(() =>
 let generation = 0;
 let disposed = false;
 let midnightTimer: ReturnType<typeof setTimeout> | undefined;
-const retainedEntries = computed(() => {
+const rows = computed<TodayRow[]>(() => {
   const current = state.value;
   if (current.kind !== "ready") return [];
-  return current.entries.filter(
-    (entry) => !current.habits.some((habit) => habit.id === entry.habitId),
+  const entries = new Map(
+    current.entries.map((entry) => [entry.habitId, entry]),
   );
+  const scheduledIds = new Set(current.habits.map((habit) => habit.id));
+  const scheduled: TodayRow[] = current.habits.map((habit) => {
+    const entry = entries.get(habit.id);
+    const displayedHabit = entry
+      ? { ...habit, good: entry.good, better: entry.better, best: entry.best }
+      : habit;
+    return {
+      kind: "scheduled",
+      key: habit.id,
+      habitId: habit.id,
+      name: habit.name,
+      entry,
+      habit: displayedHabit,
+    };
+  });
+  const retained: TodayRow[] = current.entries
+    .filter((entry) => !scheduledIds.has(entry.habitId))
+    .map((entry) => ({
+      kind: "retained",
+      key: `retained-${entry.habitId}`,
+      habitId: entry.habitId,
+      name: entry.habitName,
+      entry,
+    }));
+  return [...scheduled, ...retained];
 });
 
-function selectDate(event: Event) {
+function selectDate(event: Event): void {
   const input = event.target;
   if (!(input instanceof HTMLInputElement)) return;
   const value = input.value;
@@ -60,18 +104,7 @@ function selectDate(event: Event) {
   selectedDate.value = value === localCalendarDate() ? null : value;
 }
 
-function entryFor(id: string) {
-  if (state.value.kind !== "ready") return undefined;
-  return state.value.entries.find((entry) => entry.habitId === id);
-}
-
-function recordedHabit(habit: Habit) {
-  const entry = entryFor(habit.id);
-  if (!entry) return habit;
-  return { ...habit, good: entry.good, better: entry.better, best: entry.best };
-}
-
-function saveEntry(habitId: string, edit: EntryEdit) {
+function saveEntry(habitId: string, edit: EntryEdit): Promise<Entry> {
   return api.saveEntry(habitId, state.value.date, {
     ...edit,
     deviceToday: localCalendarDate(),
@@ -79,7 +112,7 @@ function saveEntry(habitId: string, edit: EntryEdit) {
   });
 }
 
-function acceptEntry(entry: Entry) {
+function acceptEntry(entry: Entry): void {
   const current = state.value;
   if (current.kind !== "ready" || current.date !== entry.calendarDate) return;
   state.value = {
@@ -91,7 +124,7 @@ function acceptEntry(entry: Entry) {
   };
 }
 
-function signInRequired() {
+function signInRequired(): void {
   generation++;
   state.value = {
     kind: "error",
@@ -100,7 +133,7 @@ function signInRequired() {
   };
 }
 
-function armMidnight() {
+function armMidnight(): void {
   clearTimeout(midnightTimer);
   const now = new Date();
   const midnight = new Date(
@@ -111,34 +144,45 @@ function armMidnight() {
   midnightTimer = setTimeout(checkDate, midnight.getTime() - now.getTime());
 }
 
-function checkDate() {
+function checkDate(): void {
   deviceToday.value = localCalendarDate();
   if (requestedDate() !== state.value.date) void refresh();
   else armMidnight();
 }
 
-function onVisible() {
+function onVisible(): void {
   if (document.visibilityState === "visible") checkDate();
 }
 
-async function refresh(mode: "all" | "schedule" = "all") {
-  const current = ++generation;
-  const date = requestedDate();
+function isCurrentLoad(load: Load): boolean {
+  return (
+    !disposed &&
+    load.generation === generation &&
+    load.accountId === props.accountId
+  );
+}
+
+async function refresh(mode: "all" | "schedule" = "all"): Promise<void> {
+  const load: Load = {
+    generation: ++generation,
+    date: requestedDate(),
+    accountId: props.accountId,
+  };
   const keepEntries =
     mode === "schedule" &&
     state.value.kind === "ready" &&
-    state.value.date === date;
+    state.value.date === load.date;
   deviceToday.value = localCalendarDate();
-  if (!keepEntries) state.value = { kind: "loading", date };
+  if (!keepEntries) state.value = { kind: "loading", date: load.date };
   armMidnight();
-  if (!props.accountId) return;
+  if (!load.accountId) return;
   try {
     const [habits, loadedEntries] = await Promise.all([
-      api.scheduled(date),
-      keepEntries ? Promise.resolve([]) : api.entries(date),
+      api.scheduled(load.date),
+      keepEntries ? Promise.resolve([]) : api.entries(load.date),
     ]);
-    if (disposed || current !== generation) return;
-    if (date !== requestedDate()) {
+    if (!isCurrentLoad(load)) return;
+    if (load.date !== requestedDate()) {
       void refresh();
       return;
     }
@@ -146,10 +190,10 @@ async function refresh(mode: "all" | "schedule" = "all") {
       keepEntries && state.value.kind === "ready"
         ? state.value.entries
         : loadedEntries;
-    state.value = { kind: "ready", date, habits, entries };
+    state.value = { kind: "ready", date: load.date, habits, entries };
   } catch (error) {
-    if (disposed || current !== generation) return;
-    if (date !== requestedDate()) {
+    if (!isCurrentLoad(load)) return;
+    if (load.date !== requestedDate()) {
       void refresh();
       return;
     }
@@ -160,7 +204,7 @@ async function refresh(mode: "all" | "schedule" = "all") {
     } else if (error instanceof ApiError) {
       message = error.message;
     }
-    state.value = { kind: "error", date, message };
+    state.value = { kind: "error", date: load.date, message };
   }
 }
 
@@ -238,47 +282,30 @@ onUnmounted(() => {
       >
     </div>
     <template v-else>
-      <p
-        v-if="state.habits.length === 0 && retainedEntries.length === 0"
-        class="empty-habits"
-      >
+      <p v-if="rows.length === 0" class="empty-habits">
         {{
           selectedDate
             ? "Nothing scheduled for this date."
             : "Nothing scheduled for today."
         }}
       </p>
-      <article v-for="habit in state.habits" :key="habit.id" class="habit-row">
-        <h3 class="habit-name">{{ habit.name }}</h3>
-        <HabitDetails :habit="recordedHabit(habit)" />
+      <article v-for="row in rows" :key="row.key" class="habit-row">
+        <h3 class="habit-name">{{ row.name }}</h3>
+        <HabitDetails v-if="row.kind === 'scheduled'" :habit="row.habit" />
+        <template v-else>
+          <p class="mb-2 text-sm text-muted">Retained entry</p>
+          <HabitLevels
+            :good="row.entry.good"
+            :better="row.entry.better"
+            :best="row.entry.best"
+          />
+        </template>
         <EntryControls
           v-if="state.date <= deviceToday"
-          :key="`${accountId}/${state.date}/${habit.id}`"
-          :habit-name="habit.name"
-          :entry="entryFor(habit.id)"
-          :save="(edit: EntryEdit) => saveEntry(habit.id, edit)"
-          @saved="acceptEntry"
-          @unauthorized="signInRequired"
-        />
-      </article>
-      <article
-        v-for="entry in retainedEntries"
-        :key="`retained-${entry.habitId}`"
-        class="habit-row"
-      >
-        <h3 class="habit-name">{{ entry.habitName }}</h3>
-        <p class="mb-2 text-sm text-muted">Retained entry</p>
-        <HabitLevels
-          :good="entry.good"
-          :better="entry.better"
-          :best="entry.best"
-        />
-        <EntryControls
-          v-if="state.date <= deviceToday"
-          :key="`${accountId}/${state.date}/${entry.habitId}`"
-          :habit-name="entry.habitName"
-          :entry="entry"
-          :save="(edit: EntryEdit) => saveEntry(entry.habitId, edit)"
+          :key="`${accountId}/${state.date}/${row.habitId}`"
+          :habit-name="row.name"
+          :entry="row.entry"
+          :save="(edit: EntryEdit) => saveEntry(row.habitId, edit)"
           @saved="acceptEntry"
           @unauthorized="signInRequired"
         />

@@ -1,8 +1,8 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { AxeBuilder } from "@axe-core/playwright";
 import { z } from "zod";
-import { habitSchema } from "../../web/src/habits";
-import { entrySchema, entryResultSchema } from "../../web/src/entries";
+import { habitSchema } from "../../web/src/habits.schema";
+import { entrySchema, entryResultSchema } from "../../web/src/entries.schema";
 
 test.use({ viewport: { width: 1280, height: 800 }, video: "on" });
 

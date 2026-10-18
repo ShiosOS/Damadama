@@ -1,17 +1,23 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from "vue";
-import { entryResultSchema, type Entry, type EntryEdit } from "./entries";
+import {
+  entryResultSchema,
+  type Entry,
+  type EntryEdit,
+} from "./entries.schema";
 import { ApiError } from "./habits";
 
-const props = defineProps<{
+type Props = {
   habitName: string;
   entry: Entry | undefined;
   save: (edit: EntryEdit) => Promise<Entry>;
-}>();
-const emit = defineEmits<{
+};
+type Emits = {
   saved: [entry: Entry];
   unauthorized: [];
-}>();
+};
+const props = defineProps<Props>();
+const emit = defineEmits<Emits>();
 
 type Activity =
   | { kind: "idle" }
@@ -30,7 +36,7 @@ const entryStatus = computed(() => {
   return `${props.entry.result} is saved.`;
 });
 
-async function saveEntry(edit: EntryEdit) {
+async function saveEntry(edit: EntryEdit): Promise<void> {
   if (activity.value.kind === "saving") return;
   activity.value = { kind: "saving", edit };
   try {
@@ -48,12 +54,12 @@ async function saveEntry(edit: EntryEdit) {
   }
 }
 
-function choose(result: EntryEdit["result"]) {
-  return saveEntry({ result, editedAt: new Date().toISOString() });
+function choose(result: EntryEdit["result"]): void {
+  void saveEntry({ result, editedAt: new Date().toISOString() });
 }
 
-function retry() {
-  if (activity.value.kind === "error") return saveEntry(activity.value.edit);
+function retry(): void {
+  if (activity.value.kind === "error") void saveEntry(activity.value.edit);
 }
 </script>
 

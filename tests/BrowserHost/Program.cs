@@ -15,8 +15,8 @@ await using (var seed = new HabitsDb(new DbContextOptionsBuilder<HabitsDb>()
         [7], 1, "America/New_York"), "entries-retained-account", TestApp.CreationInstant);
     seed.Habits.Add(retained);
     await seed.SaveChangesAsync();
-    await EntryStore.Save(seed, retained, new DateOnly(2026, 1, 4), EntryResult.Good,
-        TestApp.CreationInstant, CancellationToken.None);
+    await EntryStore.Save(seed, retained,
+        new EntryEdit(new DateOnly(2026, 1, 4), EntryResult.Good, TestApp.CreationInstant), CancellationToken.None);
     await seed.Database.ExecuteSqlInterpolatedAsync($"""
         UPDATE "InitialSchedules" SET "Weekdays" = ARRAY[3] WHERE "HabitId" = {retained.Id};
         UPDATE "Habits" SET "Good" = 'new good', "Better" = 'new better', "Best" = 'new best' WHERE "Id" = {retained.Id};
