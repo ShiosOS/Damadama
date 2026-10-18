@@ -11,6 +11,7 @@ const commands = [
   ["node", "--test", "scripts/pr-evidence.test.mjs"],
   ["bun", "install", "--frozen-lockfile"],
   ["bun", "run", "check:types"],
+  ["bun", "run", "check:railway"],
   ["bun", "test", "scripts/doctor.test.ts", "scripts/developer.test.ts"],
   ["bun", "run", "doctor", "backend"],
   ["docker", "info", "--format", "{{.ServerVersion}}"],

@@ -7,7 +7,7 @@
     "start": "bun scripts/start.ts",
     "check": "bun scripts/check.ts",
     "doctor": "bun scripts/doctor.ts",
-    "check:types": "node scripts/type-coverage.mjs && vue-tsc -p web/tsconfig.json --noEmit && tsc -p tests/Browser/tsconfig.json --noEmit && vue-tsc -p tests/Browser/tsconfig.json --noEmit && tsc -p scripts/tsconfig.json --noEmit && eslint . && node --test scripts/typecheck.test.mjs",
+    "check:types": "node scripts/type-coverage.mjs && vue-tsc -p web/tsconfig.json --noEmit && tsc -p tests/Browser/tsconfig.json --noEmit && vue-tsc -p tests/Browser/tsconfig.json --noEmit && tsc -p scripts/tsconfig.json --noEmit && tsc -p .railway/tsconfig.json --noEmit && eslint . && node --test scripts/typecheck.test.mjs",
     "lint": "eslint .",
     "serve:browser-fixture": "vite --config tests/Browser/vite.config.ts",
     "test:backend": "bun scripts/developer.ts test:backend",
@@ -16,7 +16,8 @@
     "browser:compatibility:verify": "bun tests/Browser/compatibility-run.ts verify",
     "check:performance": "node --test scripts/performance-budget.test.mjs && node scripts/performance-budget.mjs",
     "format": "bun scripts/developer.ts format",
-    "format:check": "bun scripts/developer.ts format:check"
+    "format:check": "bun scripts/developer.ts format:check",
+    "check:railway": "node --test .railway/railway.test.mjs .railway/plan.test.mjs && node .railway/verify.mjs"
   },
   "workspaces": [
     "web"
@@ -34,6 +35,7 @@
     "eslint": "10.12.0",
     "eslint-plugin-vue": "10.11.1",
     "prettier": "3.9.10",
-    "vue-eslint-parser": "10.4.1"
+    "vue-eslint-parser": "10.4.1",
+    "railway": "3.16.0"
   }
 }

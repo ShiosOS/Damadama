@@ -1,0 +1,12 @@
+{
+  "name": "damadama-railway",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc -p tsconfig.json && node --test railway.test.mjs plan.test.mjs && node verify.mjs"
+  },
+  "devDependencies": {
+    "railway": "3.16.0",
+    "typescript": "5.9.3"
+  }
+}
