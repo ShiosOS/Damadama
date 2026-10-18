@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { writeFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -195,12 +195,17 @@ export const forced = optional!;
 test("coverage rejects new files outside projects and JavaScript Vue scripts", async () => {
   const omitted = resolve(root, "web/type-probe.ts");
   const untypedVue = resolve(root, "web/src/type-probe.vue");
+  const mixedVue = resolve(root, "web/src/type-probe-mixed.vue");
   await withProbes(
     [
       [omitted, "export const omitted = true;\n"],
       [
         untypedVue,
         "<script setup>const value = 1;</script>\n<template>{{ value }}</template>\n",
+      ],
+      [
+        mixedVue,
+        '<script setup lang="ts">const value = 1;</script>\n<script>export default {};</script>\n<template>{{ value }}</template>\n',
       ],
     ],
     () => {
@@ -209,9 +214,67 @@ test("coverage rejects new files outside projects and JavaScript Vue scripts", a
         [],
         [
           /web\/type-probe\.ts: outside checked projects/,
-          /web\/src\/type-probe\.vue: Vue script must use lang="ts"/,
+          /web\/src\/type-probe\.vue: every Vue script must use lang="ts"/,
+          /web\/src\/type-probe-mixed\.vue: every Vue script must use lang="ts"/,
         ],
       );
+    },
+  );
+});
+
+test("coverage rejects tracked files outside compiler and typed lint", async () => {
+  const omitted = resolve(root, "web/type-probe-tracked.ts");
+  const moduleFile = resolve(root, "web/type-probe-tracked.mts");
+  const commonJsFile = resolve(root, "web/type-probe-tracked.cts");
+  const ignored = resolve(root, ".audit/type-probe-ignored.ts");
+  await withProbes(
+    [
+      [omitted, "export const omitted = true;\n"],
+      [moduleFile, "export const omitted = true;\n"],
+      [commonJsFile, "export const omitted = true;\n"],
+      [ignored, "export const ignored = true;\n"],
+    ],
+    () => {
+      try {
+        execFileSync(
+          "git",
+          [
+            "add",
+            "-f",
+            "-N",
+            "--",
+            "web/type-probe-tracked.ts",
+            "web/type-probe-tracked.mts",
+            "web/type-probe-tracked.cts",
+            ".audit/type-probe-ignored.ts",
+          ],
+          { cwd: root },
+        );
+        rejects(
+          "scripts/type-coverage.mjs",
+          [],
+          [
+            /web\/type-probe-tracked\.ts: outside checked projects/,
+            /web\/type-probe-tracked\.mts: outside checked projects/,
+            /web\/type-probe-tracked\.cts: outside checked projects/,
+            /\.audit\/type-probe-ignored\.ts: outside typed ESLint coverage/,
+          ],
+        );
+      } finally {
+        execFileSync(
+          "git",
+          [
+            "reset",
+            "-q",
+            "--",
+            "web/type-probe-tracked.ts",
+            "web/type-probe-tracked.mts",
+            "web/type-probe-tracked.cts",
+            ".audit/type-probe-ignored.ts",
+          ],
+          { cwd: root },
+        );
+      }
     },
   );
 });

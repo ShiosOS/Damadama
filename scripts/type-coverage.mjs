@@ -19,6 +19,8 @@ const maintained = [
         "--",
         "*.ts",
         "*.tsx",
+        "*.mts",
+        "*.cts",
         "*.vue",
       ],
       { cwd: root, encoding: "utf8" },
@@ -79,11 +81,15 @@ for (const file of maintained) {
   )
     failures.push(`${name}: outside typed ESLint coverage`);
   const source = await readFile(file, "utf8");
-  if (
-    extname(file) === ".vue" &&
-    !/<script\b[^>]*\blang=["']ts["'][^>]*>/.test(source)
-  ) {
-    failures.push(`${name}: Vue script must use lang="ts"`);
+  if (extname(file) === ".vue") {
+    const scripts = [...source.matchAll(/<script\b([^>]*)>/g)];
+    if (
+      scripts.length === 0 ||
+      scripts.some(
+        ([, attributes]) => !/\blang=["']ts["']/.test(attributes ?? ""),
+      )
+    )
+      failures.push(`${name}: every Vue script must use lang="ts"`);
   }
   if (
     /\b(?:@ts-(?:ignore|expect-error|nocheck)|eslint-disable)\b/.test(source)

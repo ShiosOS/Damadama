@@ -16,7 +16,7 @@ test("staging worker retires a cached shell without changing open drafts or stor
   request,
 }) => {
   let phase: "legacy" | "missing" | "retirement" = "legacy";
-  let retirementBytes = Buffer.alloc(0);
+  let retirementBytes: Buffer = Buffer.alloc(0);
   const server = createServer((incoming, response) => {
     response.setHeader("Cache-Control", "no-store");
     if (incoming.url === "/sw.js") {
@@ -62,7 +62,8 @@ test("staging worker retires a cached shell without changing open drafts or stor
         open.onupgradeneeded = () =>
           open.result.createObjectStore("pending", { keyPath: "id" });
         open.onsuccess = () => resolve(open.result);
-        open.onerror = () => reject(open.error);
+        open.onerror = () =>
+          reject(open.error ?? new Error("Could not open legacy data"));
       });
       await new Promise<void>((resolve, reject) => {
         const transaction = database.transaction("pending", "readwrite");
@@ -73,19 +74,29 @@ test("staging worker retires a cached shell without changing open drafts or stor
           .objectStore("pending")
           .put({ id: "two", owner: "account-two", draft: "second pending" });
         transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
+        transaction.onerror = () =>
+          reject(
+            transaction.error ?? new Error("Could not store pending data"),
+          );
       });
       database.close();
       await (
         await caches.open("unrelated-data")
       ).put("/sentinel", new Response("keep-cache"));
     });
-    const readStorage = () =>
+    const readStorage: () => Promise<{
+      settings: string | null;
+      pending: unknown;
+      caches: string[];
+      shell: string | undefined;
+      sentinel: string | undefined;
+    }> = () =>
       draft.evaluate(async () => {
         const database = await new Promise<IDBDatabase>((resolve, reject) => {
           const open = indexedDB.open("legacy-data");
           open.onsuccess = () => resolve(open.result);
-          open.onerror = () => reject(open.error);
+          open.onerror = () =>
+            reject(open.error ?? new Error("Could not open legacy data"));
         });
         const pending = await new Promise<unknown>((resolve, reject) => {
           const read = database
@@ -93,7 +104,8 @@ test("staging worker retires a cached shell without changing open drafts or stor
             .objectStore("pending")
             .getAll();
           read.onsuccess = () => resolve(read.result);
-          read.onerror = () => reject(read.error);
+          read.onerror = () =>
+            reject(read.error ?? new Error("Could not read pending data"));
         });
         database.close();
         return {

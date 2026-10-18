@@ -8,7 +8,7 @@ const nestedConditional = {
   message: "Use branches instead of nested conditional expressions.",
 };
 
-const typedFiles = ["**/*.{ts,tsx,vue}"];
+const typedFiles = ["**/*.{ts,tsx,mts,cts,vue}"];
 const typedRules = tsPlugin.configs["flat/strict-type-checked"];
 
 export default [
@@ -25,7 +25,7 @@ export default [
     ],
   },
   {
-    files: ["**/*.{js,mjs,cjs,ts,tsx,vue}"],
+    files: ["**/*.{js,mjs,cjs,ts,tsx,mts,cts,vue}"],
     languageOptions: { parser: tsParser },
     rules: { "no-restricted-syntax": ["error", nestedConditional] },
   },
