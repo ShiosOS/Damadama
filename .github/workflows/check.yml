@@ -70,6 +70,10 @@ jobs:
         run: node node_modules/@playwright/test/cli.js install --with-deps chromium
       - if: steps.application.outputs.state == 'application'
         run: bun run check
+      - if: steps.application.outputs.state == 'application'
+        name: AppHost and EF compatibility
+        timeout-minutes: 5
+        run: bash .github/ci/apphost-proof.sh
       - id: failure-reports
         if: always() && steps.application.outputs.state == 'application'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
