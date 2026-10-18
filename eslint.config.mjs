@@ -16,8 +16,8 @@ export default [
       ".audit/**",
       "server/wwwroot/**",
       "web/dist/**",
-      "test-results/**",
-      "playwright-report/**",
+      "**/test-results/**",
+      "**/playwright-report/**",
     ],
   },
   {
