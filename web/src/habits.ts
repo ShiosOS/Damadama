@@ -20,26 +20,47 @@ export interface HabitsApi {
 const problemSchema = z.object({
   title: z.string(),
   detail: z.string().optional(),
-  traceId: z.string().optional(),
   errors: z.record(z.string(), z.array(z.string())).optional(),
 });
 const conflictSchema = problemSchema.extend({
   status: z.literal(409),
   current: entrySchema,
 });
+const traceIdSchema = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9:_-]+$/);
+const referenceSchema = z.object({ traceId: traceIdSchema });
+
 export class ApiError extends Error {
+  readonly traceId: string | undefined;
+
   constructor(
     message: string,
     readonly status: number,
+    traceId?: string,
   ) {
-    super(message);
+    const reference = traceIdSchema.safeParse(traceId);
+    const validated = reference.success ? reference.data : undefined;
+    super(validated ? `${message} Support reference: ${validated}.` : message);
+    this.traceId = validated;
   }
 }
 
-function parse<T>(data: unknown, schema: z.ZodType<T>): T {
+function reference(data: unknown): string | undefined {
+  const parsed = referenceSchema.safeParse(data);
+  return parsed.success ? parsed.data.traceId : undefined;
+}
+
+function parse<T>(data: unknown, schema: z.ZodType<T>, traceId?: string): T {
   const parsed = schema.safeParse(data);
   if (!parsed.success)
-    throw new ApiError("The service returned an unexpected response.", 502);
+    throw new ApiError(
+      "The service returned an unexpected response.",
+      502,
+      traceId,
+    );
   return parsed.data;
 }
 
@@ -52,7 +73,7 @@ function refuse(data: unknown, status: number): never {
       problem.data.detail ||
       problem.data.title
     : "The request could not be completed.";
-  throw new ApiError(message, status);
+  throw new ApiError(message, status, reference(data));
 }
 
 export function habitsApi(getToken: () => Promise<string | null>): HabitsApi {
@@ -69,7 +90,12 @@ export function habitsApi(getToken: () => Promise<string | null>): HabitsApi {
         "Content-Type": "application/json",
       },
     });
-    const data: unknown = await response.json();
+    let data: unknown;
+    try {
+      data = await response.json();
+    } catch {
+      throw new ApiError("The service returned an unexpected response.", 502);
+    }
     return { response, data };
   }
   async function request<T>(
@@ -79,13 +105,18 @@ export function habitsApi(getToken: () => Promise<string | null>): HabitsApi {
     options: RequestInit = {},
   ): Promise<T> {
     const { response, data } = await send(path, options);
+    const traceId = reference(data);
     if (!response.ok) refuse(data, response.status);
     if (
       response.status !== status ||
       response.headers.get("content-type")?.split(";")[0] !== "application/json"
     )
-      throw new ApiError("The service returned an unexpected response.", 502);
-    return parse(data, schema);
+      throw new ApiError(
+        "The service returned an unexpected response.",
+        502,
+        traceId,
+      );
+    return parse(data, schema, traceId);
   }
   return {
     entries: (date) =>
@@ -100,9 +131,10 @@ export function habitsApi(getToken: () => Promise<string | null>): HabitsApi {
         body: JSON.stringify(input),
       });
       const mediaType = response.headers.get("content-type")?.split(";")[0];
+      const traceId = reference(data);
       let saved: Entry;
       if (response.status === 409 && mediaType === "application/problem+json") {
-        saved = parse(data, conflictSchema).current;
+        saved = parse(data, conflictSchema, traceId).current;
       } else {
         if (!response.ok) refuse(data, response.status);
         if (
@@ -113,11 +145,16 @@ export function habitsApi(getToken: () => Promise<string | null>): HabitsApi {
           throw new ApiError(
             "The service returned an unexpected response.",
             502,
+            traceId,
           );
-        saved = parse(data, entrySchema);
+        saved = parse(data, entrySchema, traceId);
       }
       if (saved.habitId !== habitId || saved.calendarDate !== date)
-        throw new ApiError("The service returned an unexpected response.", 502);
+        throw new ApiError(
+          "The service returned an unexpected response.",
+          502,
+          traceId,
+        );
       return saved;
     },
     list: () => request("/api/habits", z.array(habitSchema)),
