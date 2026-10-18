@@ -11,6 +11,8 @@ public enum EntryResult
     Best = 4
 }
 
+public sealed record EntryEdit(DateOnly CalendarDate, EntryResult Result, DateTimeOffset EditedAt);
+
 public sealed class Entry
 {
     private Entry() { }
