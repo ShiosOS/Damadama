@@ -71,6 +71,8 @@ jobs:
             .audit/accessibility-*.png
             .audit/today-*.png
             .audit/today-*.webm
+            .audit/entries-*.png
+            .audit/entries-*.webm
             test-results
             tests/Browser/playwright-report
             !**/fixture.json
