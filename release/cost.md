@@ -41,7 +41,7 @@ Confirm the recipient in workspace settings. A configured alert is not evidence 
 
 Do not raise or remove the hard limit, add a paid service, or incur new recovery spend without explicit operator approval.
 If the operator keeps the no-overage policy, preserve the limit and accept a possible outage until the next billing-cycle reset.
-Follow [recovery after a spending hard stop](recovery.md#recover-after-a-spending-hard-stop) if workloads stop.
+Follow [recovery after a spending hard stop](../ops/recovery/README.md#recover-after-a-spending-hard-stop) if workloads stop.
 
 ## Verify the operating cost
 
