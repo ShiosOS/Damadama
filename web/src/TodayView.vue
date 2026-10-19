@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  ref,
+  shallowRef,
+  watch,
+} from "vue";
 import { z } from "zod";
 import { ApiError, habitsApi } from "./habits";
 import type { Habit } from "./habits.schema";
@@ -7,11 +15,11 @@ import HabitDetails from "./HabitDetails.vue";
 import HabitLevels from "./HabitLevels.vue";
 import EntryControls from "./EntryControls.vue";
 import type { Entry, EntryEdit } from "./entries.schema";
+import type { TodayHandle } from "./TodayView.types";
 
 type Props = {
   accountId: string | null;
   getToken: () => Promise<string | null>;
-  savedRevision: number;
 };
 const props = defineProps<Props>();
 type TodayState =
@@ -162,7 +170,7 @@ function isCurrentLoad(load: Load): boolean {
   );
 }
 
-async function refresh(mode: "all" | "schedule" = "all"): Promise<void> {
+async function refresh(mode: "all" | "schedule" = "all"): Promise<Load | null> {
   const load: Load = {
     generation: ++generation,
     date: requestedDate(),
@@ -175,16 +183,16 @@ async function refresh(mode: "all" | "schedule" = "all"): Promise<void> {
   deviceToday.value = localCalendarDate();
   if (!keepEntries) state.value = { kind: "loading", date: load.date };
   armMidnight();
-  if (!load.accountId) return;
+  if (!load.accountId) return null;
   try {
     const [habits, loadedEntries] = await Promise.all([
       api.scheduled(load.date),
       keepEntries ? Promise.resolve([]) : api.entries(load.date),
     ]);
-    if (!isCurrentLoad(load)) return;
+    if (!isCurrentLoad(load)) return null;
     if (load.date !== requestedDate()) {
       void refresh();
-      return;
+      return null;
     }
     const entries =
       keepEntries && state.value.kind === "ready"
@@ -192,10 +200,10 @@ async function refresh(mode: "all" | "schedule" = "all"): Promise<void> {
         : loadedEntries;
     state.value = { kind: "ready", date: load.date, habits, entries };
   } catch (error) {
-    if (!isCurrentLoad(load)) return;
+    if (!isCurrentLoad(load)) return null;
     if (load.date !== requestedDate()) {
       void refresh();
-      return;
+      return null;
     }
     let message =
       "Could not reach the service. Check your connection and try again.";
@@ -206,22 +214,27 @@ async function refresh(mode: "all" | "schedule" = "all"): Promise<void> {
     }
     state.value = { kind: "error", date: load.date, message };
   }
+  return load;
 }
+
+async function refreshAfterCreate(): ReturnType<
+  TodayHandle["refreshAfterCreate"]
+> {
+  const load = await refresh("schedule");
+  await nextTick();
+  if (!load || !isCurrentLoad(load) || load.date !== requestedDate())
+    return null;
+  return () => isCurrentLoad(load) && load.date === requestedDate();
+}
+
+defineExpose({ refreshAfterCreate } satisfies TodayHandle);
 
 watch(
   () => ({
     account: props.accountId,
-    revision: props.savedRevision,
     date: selectedDate.value,
   }),
-  (next, previous) => {
-    const created =
-      previous !== undefined &&
-      next.account === previous.account &&
-      next.date === previous.date &&
-      next.revision !== previous.revision;
-    void refresh(created ? "schedule" : "all");
-  },
+  () => void refresh(),
   {
     immediate: true,
     flush: "sync",
