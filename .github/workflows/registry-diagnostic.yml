@@ -1,0 +1,36 @@
+name: Temporary registry diagnostic only
+on:
+  pull_request:
+    paths:
+      - .github/workflows/registry-diagnostic.yml
+      - .github/ci/registry-diagnostic.mjs
+      - release/supply-registry.mjs
+      - release/supply-registry.test.mjs
+permissions:
+  contents: read
+  packages: read
+jobs:
+  registry-diagnostic-only:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'codex/supply76-registry-diagnostics'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: controls
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24.21.0
+          package-manager-cache: false
+      - run: node controls/.github/ci/registry-diagnostic.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: registry-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: registry-diagnostic.json
+          retention-days: 7
+          if-no-files-found: error
