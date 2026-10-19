@@ -216,6 +216,15 @@ test("read-only proof accepts coordinated full immutable action refs", () => {
     [5, "actions/upload-artifact", "c".repeat(40)],
   ])
     proofJob(changed).steps[index].uses = action + "@" + sha;
+  for (const workflow of Object.values(changed)) {
+    for (const job of Object.values(workflow.jobs ?? {})) {
+      for (const step of job.steps ?? []) {
+        if (step.uses?.startsWith("actions/setup-node@")) {
+          step.uses = "actions/setup-node@" + "b".repeat(40);
+        }
+      }
+    }
+  }
   assert.deepEqual(gateGraphErrors(changed), []);
 });
 
