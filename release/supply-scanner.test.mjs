@@ -108,9 +108,9 @@ test("native distribution syntax requires the exact canonical Anchore source and
     status.from.replace("vulnerability-db_v6.1.10", "vulnerability-db_v6.1.11"),
     status.from.replace("2026-10-17T", "2026-02-30T"),
     status.from.replace(".tar.zst", ".tar.gz"),
-    status.from.replace("%3A", ":"),
-    status.from.replace("%3A", "%3a"),
-    status.from.replace("%3A", "%253A"),
+    status.from.replaceAll("%3A", ":"),
+    status.from.replaceAll("%3A", "%3a"),
+    status.from.replaceAll("%3A", "%253A"),
     status.from.replace(
       database.archiveSha256,
       database.archiveSha256.toUpperCase(),
