@@ -1,22 +1,6 @@
 name: Developer experience
 on:
   workflow_call:
-  pull_request:
-    paths:
-      - .editorconfig
-      - .vscode/**
-      - .github/workflows/developer-experience.yml
-      - scripts/**
-      - dev/README.md
-      - README.md
-      - package.json
-      - bun.lock
-      - global.json
-      - Damadama.slnx
-      - "**/*.csproj"
-      - "**/packages*.lock.json"
-      - tsconfig.base.json
-      - eslint.config.mjs
 permissions:
   contents: read
 concurrency:

@@ -1,7 +1,6 @@
 name: Railway tracing proof
 on:
   workflow_call:
-  pull_request:
 permissions:
   contents: read
 concurrency:

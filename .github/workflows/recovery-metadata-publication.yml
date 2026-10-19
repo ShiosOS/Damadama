@@ -1,8 +1,6 @@
 name: Recovery metadata publication
 on:
   workflow_call:
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read

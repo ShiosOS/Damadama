@@ -1,7 +1,6 @@
 name: Current image recovery
 on:
   workflow_call:
-  pull_request:
   workflow_dispatch:
   schedule:
     - cron: "37 3 * * *"

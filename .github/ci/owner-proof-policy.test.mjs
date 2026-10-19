@@ -146,12 +146,12 @@ for (const [name, filename] of Object.entries(lanes)) {
   }
 }
 
-test("direct and called owner routes have disjoint cancellable concurrency", () => {
+test("owner workflows omit direct PR triggers and retain disjoint concurrency", () => {
   for (const filename of Object.values(lanes).filter(
     (name) => name !== "supply-pr-proof.yml",
   )) {
     const w = workflows[filename];
-    assert.ok(Object.hasOwn(w.on, "pull_request"), filename);
+    assert.equal(Object.hasOwn(w.on, "pull_request"), false, filename);
     assert.ok(Object.hasOwn(w.on, "workflow_call"), filename);
     assert.equal(w.concurrency["cancel-in-progress"], true);
     const group = (workflow) =>
@@ -169,8 +169,9 @@ test("direct and called owner routes have disjoint cancellable concurrency", () 
   assert.deepEqual(workflows["browser-compatibility.yml"].on.schedule, [
     { cron: "17 4 * * 1" },
   ]);
-  assert.ok(
+  assert.equal(
     Object.hasOwn(workflows["supply-chain-proof.yml"].on, "pull_request"),
+    false,
   );
   assert.deepEqual(workflows["supply-chain-proof.yml"].on.push, {
     branches: ["codex/polish-image-supply-chain"],

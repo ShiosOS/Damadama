@@ -1,10 +1,6 @@
 name: Supply chain proof
 
 on:
-  pull_request:
-    paths:
-      - release/**
-      - .github/workflows/supply-chain-proof.yml
   push:
     branches: [codex/polish-image-supply-chain]
 
