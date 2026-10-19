@@ -3,7 +3,7 @@ import {
   requireFreshCandidate,
   requireApproval,
 } from "./controller.mjs";
-import { prepareArchive, publishArchive } from "./images.mjs";
+import { locateRelease, authenticateRelease } from "./supply-release.mjs";
 import { readFile, writeFile, appendFile, mkdir } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import {
@@ -20,6 +20,7 @@ import {
   requirePromotion,
   requireStageRun,
   requireCIEvidence,
+  requireSupplyIdentity,
   recordHash,
 } from "./policy.mjs";
 import {
@@ -41,7 +42,7 @@ const output = async (value) =>
 const summary = async (value) =>
   appendFile(process.env.GITHUB_STEP_SUMMARY, value + "\n");
 
-async function stageEvidence(runId) {
+async function nativeStageEvidence(runId) {
   const run = await github(`repos/${repository}/actions/runs/${runId}`);
   const authority = { sha: run.head_sha, runId, attempt: run.run_attempt };
   requireStageRun(run, authority);
@@ -85,6 +86,20 @@ async function stageEvidence(runId) {
   )
     throw new Error("promotion metadata differs from verified image");
   return { record, run, jobs, artifacts: { receipt, metadata } };
+}
+
+async function stageEvidence(runId) {
+  const before = await nativeStageEvidence(runId);
+  await authenticateRelease(
+    before.record,
+    before.record.image,
+    before.record.evidence.supply,
+  );
+  const after = await nativeStageEvidence(runId);
+  if (recordHash(before) !== recordHash(after))
+    throw new Error("staging authority changed during signed verification");
+  await requireController();
+  return after;
 }
 
 async function verifyDeployment(record, recheck, verify) {
@@ -136,7 +151,7 @@ if (operation === "snapshot") {
   }
 } else if (operation === "stage") {
   const record = await read("candidate.json");
-  const ci = await requireFreshCandidate(record);
+  await requireFreshCandidate(record);
   const artifacts = await runArtifacts(record.authority.runId);
   if (
     artifacts.some(
@@ -145,39 +160,41 @@ if (operation === "snapshot") {
   )
     throw new Error("unexpected preexisting staging receipt");
   await requireEnvironment("staging");
-  const prepared = await prepareArchive(
-    "application",
-    "image.tar",
-    await read("build.json"),
-    record.source,
-    record.authority,
-  );
-  await requireFreshCandidate(record);
-  record.image = publishArchive(prepared);
-  await requireFreshCandidate(record);
+  const { image, supply } = await locateRelease(record);
+  record.image = image;
+  const recheck = async () => {
+    await requireFreshCandidate(record);
+    await authenticateRelease(record, image, supply);
+    return requireFreshCandidate(record);
+  };
+  const ci = await recheck();
   try {
     record.deployment = {
-      ...(await deployImage(record.image.reference, () =>
-        requireFreshCandidate(record),
-      )),
+      ...(await deployImage(record.image.reference, recheck)),
       url: process.env.APP_ORIGIN,
     };
     const { publicChecks, stagingBrowserChecks } = await import("./smoke.mjs");
     const automated = await verifyDeployment(
       record,
-      () => requireFreshCandidate(record),
+      recheck,
       async (current) => ({
         ...(await publicChecks(current)),
         ...(await stagingBrowserChecks(current)),
       }),
     );
-    record.evidence = { ci, automated, observedAt: new Date().toISOString() };
+    record.schema = 3;
+    record.evidence = {
+      ci,
+      supply,
+      automated,
+      observedAt: new Date().toISOString(),
+    };
     requireVerifiedRecord(record);
     await write(
       "runtime-evidence/deployment-summary.json",
       await logSummary(record.deployment.id),
     );
-    await requireFreshCandidate(record);
+    await recheck();
     await write("verified.json", record);
     await summary(
       `Automatically staged ${record.source.commit}. Image ${record.image.reference}. Record SHA-256 ${recordHash(record)}. Email delivery, migration review, and recovery remain production approval attestations.`,
@@ -201,8 +218,9 @@ if (operation === "snapshot") {
     throw new Error("successful staging run ID required");
   const evidence = await stageEvidence(runId);
   const plan = {
-    schema: 1,
+    schema: 2,
     authority,
+    supply: evidence.record.evidence.supply,
     stagingAuthority: evidence.record.authority,
     artifacts: evidence.artifacts,
     recordHash: recordHash(evidence.record),
@@ -245,10 +263,12 @@ if (operation === "snapshot") {
     throw new Error("frozen plan artifact ID differs");
   const plan = JSON.parse(await readArtifact(artifact, "promotion-plan.json"));
   if (
+    plan.schema !== 2 ||
     recordHash(plan) !== process.env.PLAN_HASH ||
     recordHash(plan.authority) !== recordHash(authority)
   )
     throw new Error("frozen plan changed after approval");
+  requireSupplyIdentity(plan.supply, plan.stagingAuthority);
   const approval = {
     runId: authority.runId,
     attempt: authority.attempt,
@@ -263,7 +283,8 @@ if (operation === "snapshot") {
     if (
       recordHash(current.artifacts) !== recordHash(plan.artifacts) ||
       recordHash(current.record) !== plan.recordHash ||
-      current.record.image.reference !== plan.image
+      current.record.image.reference !== plan.image ||
+      recordHash(current.record.evidence.supply) !== recordHash(plan.supply)
     )
       throw new Error("frozen staging evidence changed after approval");
     return requirePromotion(current.record, {

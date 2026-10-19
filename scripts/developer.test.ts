@@ -1,4 +1,62 @@
 import { expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { prettierCommand } from "./developer";
+
+test("both generated formatter commands cover Provider and repair a malformed supported file", async () => {
+  const root = await mkdtemp(join(tmpdir(), "common-format-"));
+  try {
+    const check = prettierCommand(false);
+    const write = prettierCommand(true);
+    expect(check.slice(5)).toEqual(write.slice(5));
+    expect(
+      check.slice(5).filter((path) => path === "tests/Provider"),
+    ).toHaveLength(1);
+    expect(check.slice(5)).toContain(".github");
+    for (const path of check.slice(5)) {
+      const target = join(root, path);
+      if (/\.(json|mjs|md)$/.test(path)) {
+        await mkdir(join(target, ".."), { recursive: true });
+        await writeFile(target, path.endsWith(".json") ? "{}\n" : "");
+      } else {
+        await mkdir(target, { recursive: true });
+        await writeFile(
+          join(target, "fixture.mjs"),
+          "export const value = 1;\n",
+        );
+      }
+    }
+    await writeFile(
+      join(root, "tests/Provider/fixture.mjs"),
+      "export const value={a:1}\n",
+    );
+    await symlink(
+      fileURLToPath(new URL("../node_modules", import.meta.url)),
+      join(root, "node_modules"),
+      "junction",
+    );
+    async function run(command: string[]): Promise<number> {
+      const child = Bun.spawn(command, {
+        cwd: root,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [, , exit] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+      ]);
+      return exit;
+    }
+    expect(await run(check)).toBe(1);
+    expect(await run(write)).toBe(0);
+    expect(await run(check)).toBe(0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 30_000);
 
 test("focused browser command rejects invalid configuration before installing or building", async () => {
   const child = Bun.spawn(

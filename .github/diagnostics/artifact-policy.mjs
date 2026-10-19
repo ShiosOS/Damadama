@@ -9,7 +9,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 
 const uploadAction =
-  "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02";
+  "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9";
 const reports = [
   ".audit/TestResults/backend/results.trx",
   ".audit/api-contract/openapi.json",

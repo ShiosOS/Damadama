@@ -4,6 +4,8 @@ import {
   validateScannerConfiguration,
   scannerConfiguration,
   requireSameDatabase,
+  databaseDistribution,
+  requireScanDatabase,
 } from "./supply-scanner.mjs";
 import {
   assess,
@@ -12,6 +14,7 @@ import {
   reconcileRuntimeReport,
 } from "./supply-policy.mjs";
 import { prepareArchive } from "./images.mjs";
+import { compareRegistryArchive } from "./supply-registry.mjs";
 import { materializeProducers } from "./supply-producers.mjs";
 import { manifestFiles, evidenceGroups } from "./supply-evidence.mjs";
 import {
@@ -39,14 +42,12 @@ import {
   toolEnvironment,
   run,
   verifySignature,
-  databaseMetadata,
   instant,
 } from "./supply-internal.mjs";
 
 async function captureDatabase(status, cwd) {
-  const metadata = databaseMetadata(status);
   insist(
-    typeof status.path === "string" && isAbsolute(status.path),
+    typeof status?.path === "string" && isAbsolute(status.path),
     "missing native database path",
   );
   const withinCache = relative(join(cwd, "db"), status.path);
@@ -54,7 +55,10 @@ async function captureDatabase(status, cwd) {
     withinCache && !withinCache.startsWith("..") && !isAbsolute(withinCache),
     "database escaped isolated cache",
   );
-  return { ...metadata, sha256: await fileHash(status.path) };
+  return {
+    ...databaseDistribution(status),
+    sha256: await fileHash(status.path),
+  };
 }
 
 async function scannerContext(action) {
@@ -362,27 +366,20 @@ export async function validateScanEvidence(
     { kind: "runtime", report },
     { kind: "frontend", report: frontend },
   ];
-  insist(
-    Array.isArray(assessment.scans) &&
-      same(
-        assessment.scans.map((scan) => scan.kind),
-        ["runtime", "frontend"],
-      ),
-    "complete ordered runtime/frontend scans required",
-  );
   const scanTime = instant(assessment.scanTime, "scan time");
   const database = assessment.database;
-  insist(
-    /^[a-f0-9]{64}$/.test(database?.sha256) &&
-      same(Object.keys(database).sort(), ["built", "schemaVersion", "sha256"]),
-    "invalid frozen database identity",
-  );
   const cache = report.descriptor?.configuration?.db?.["cache-dir"];
   insist(
     typeof cache === "string" &&
       /(?:^\/|^[A-Za-z]:[\\/])/.test(cache) &&
       /[\\/]db$/.test(cache),
     "invalid original scanner cache",
+  );
+  await requireToolObservation(assessment.tools, ["syft", "grype"]);
+  await requireToolObservation(observation.tools, ["syft", "grype", "crane"]);
+  insist(
+    Array.isArray(assessment.scans) && assessment.scans.length === 2,
+    "complete ordered runtime/frontend scans required",
   );
   let previous = scanTime;
   for (const [index, tagged] of reports.entries()) {
@@ -402,25 +399,16 @@ export async function validateScanEvidence(
       "scan interval or raw timestamp differs",
     );
     previous = ended;
-    insist(
-      same(scan.before, database) && same(scan.after, database),
-      "frozen database checkpoint differs",
-    );
     const status = tagged.report.descriptor?.db?.status;
+    validateScannerConfiguration(tagged.report, cache);
     insist(
-      same(databaseMetadata(status), {
-        schemaVersion: database.schemaVersion,
-        built: database.built,
-      }) &&
-        status.path?.replaceAll("\\", "/") ===
-          `${cache.replaceAll("\\", "/")}/6/vulnerability.db`,
+      status?.path?.replaceAll("\\", "/") ===
+        `${cache.replaceAll("\\", "/")}/6/vulnerability.db`,
       "database identity differs from raw scan",
     );
-    validateScannerConfiguration(tagged.report, cache);
   }
+  requireScanDatabase(database, assessment.scans, reports);
   freshness(assessment.scanTime, database.built, policy);
-  await requireToolObservation(assessment.tools, ["syft", "grype"]);
-  await requireToolObservation(observation.tools, ["syft", "grype", "crane"]);
   const decision = assess(reports, policy, "ghcr.io/shiosos/damadama");
   insist(
     same(decision, await json(join(directory, "decision.json"))),
@@ -663,6 +651,7 @@ async function verifyCapsule(
   if (trust === production) {
     subject = `oci://${image.reference}`;
     digest = image.digest.slice(7);
+    await compareRegistryArchive(image, join(directory, "build/image.tar"));
   }
   const provenance = await verifySignature(
     subject,

@@ -21,8 +21,24 @@ export async function configure(
   operation,
   { reviewerId, request = github, verify = false },
 ) {
+  const ruleset = mainRules();
+  ruleset.rules.find(
+    (rule) => rule.type === "pull_request",
+  ).parameters.required_reviewers = [];
+  ruleset.rules.push({
+    type: "code_scanning",
+    parameters: {
+      code_scanning_tools: [
+        {
+          tool: "CodeQL",
+          security_alerts_threshold: "high_or_higher",
+          alerts_threshold: "none",
+        },
+      ],
+    },
+  });
   const plan = {
-    ruleset: mainRules(),
+    ruleset,
     environments: Object.fromEntries(
       ["staging", "production"].map((name) => [
         name,
@@ -101,8 +117,24 @@ export function assertConfigured(plan, observed) {
   for (const expected of plan.ruleset.rules) {
     const rule = actual.rules.find((item) => item.type === expected.type);
     if (!rule) throw new Error(`missing ${expected.type} rule`);
+    if (expected.type === "code_scanning") {
+      if (
+        actual.rules.filter((item) => item.type === "code_scanning").length !==
+        1
+      )
+        throw new Error("expected exactly one code_scanning rule");
+      const tools = rule.parameters?.code_scanning_tools;
+      if (!Array.isArray(tools) || tools.length !== 1)
+        throw new Error("code_scanning requires exactly one tool");
+      if (recordHash(rule.parameters) !== recordHash(expected.parameters))
+        throw new Error("ruleset did not enforce code_scanning configuration");
+      continue;
+    }
     for (const [key, value] of Object.entries(expected.parameters ?? {})) {
-      if (JSON.stringify(rule.parameters[key]) !== JSON.stringify(value))
+      if (
+        rule.parameters?.[key] === undefined ||
+        recordHash(rule.parameters[key]) !== recordHash(value)
+      )
         throw new Error(`ruleset did not enforce ${key}`);
     }
   }

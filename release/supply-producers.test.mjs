@@ -11,6 +11,7 @@ import {
   evidenceFiles,
   evidenceGroups,
   manifestFiles,
+  releaseMembers,
 } from "./supply-evidence.mjs";
 import { compareOriginals } from "./supply-chain.mjs";
 import { proof, production, installScopes } from "./supply-internal.mjs";
@@ -332,6 +333,65 @@ test("producer authentication streams complete ZIPs and refuses transport or pro
         mode=name;await assert.rejects(materializeProducers(source,authority,proof,join(root,name)),error);
       }
     } finally {await rm(root,{recursive:true,force:true});}
+  `;
+  execFileSync(
+    process.execPath,
+    ["--experimental-test-module-mocks", "--input-type=module", "-e", script],
+    { stdio: "pipe" },
+  );
+});
+
+test("production publication and capsule use canonical bounded transport and native signer membership", () => {
+  const publication = zip([
+    {
+      name: "image.json",
+      content: JSON.stringify({
+        source,
+        authority,
+        image: { reference: "controlled" },
+      }),
+    },
+  ]).toString("base64");
+  const capsule = zip(
+    releaseMembers.map((name) => ({
+      name,
+      content: JSON.stringify({ original: name }),
+    })),
+  ).toString("base64");
+  const script = `
+    import { mock } from 'node:test';
+    import assert from 'node:assert/strict';
+    import { mkdtemp,rm,readFile } from 'node:fs/promises';
+    import { join } from 'node:path';
+    import { tmpdir } from 'node:os';
+    import * as github from './release/github.mjs';
+    import { hash } from './release/supply-internal.mjs';
+    const source=${JSON.stringify(source)},authority=${JSON.stringify(authority)};
+    const bytes=[Buffer.from(${JSON.stringify(publication)},'base64'),Buffer.from(${JSON.stringify(capsule)},'base64')];
+    const workflow={id:123,run_attempt:2,head_sha:source.commit,event:'push',path:'.github/workflows/stage.yml',head_branch:'main',repository:{id:1412858535,owner:{id:31512984}}};
+    const jobs=['publish','sign'].map((name,i)=>({id:10+i,name,head_sha:source.commit,run_id:123,run_attempt:2,status:'completed',conclusion:'success',html_url:'https://github.com/ShiosOS/Damadama/actions/runs/123/job/'+(10+i),started_at:'2026-10-18T00:00:00Z',completed_at:'2026-10-18T00:02:00Z'}));
+    const artifacts=['published-image-2','supply-release-2'].map((name,i)=>({id:i+1,name,digest:'sha256:'+hash(bytes[i]),size_in_bytes:bytes[i].length,expired:false,workflow_run:{id:123,head_sha:source.commit},created_at:'2026-10-18T00:01:00Z'}));
+    let mode='good';
+    mock.module('./release/github.mjs',{namedExports:{...github,
+      github:async()=>mode==='run'?{...workflow,run_attempt:3}:workflow,
+      attemptJobs:async()=>jobs.map(j=>mode==='job'?{...j,conclusion:'failure'}:j),
+      runArtifacts:async()=>artifacts.map(a=>({...a,...(mode==='name'?{name:a.name+'x'}:{}),...(mode==='digest'?{digest:'sha256:'+'f'.repeat(64)}:{}),...(mode==='size'?{size_in_bytes:a.size_in_bytes-1}:{}),...(mode==='interval'?{created_at:'2026-10-17T00:00:00Z'}:{})})),
+    }});
+    globalThis.fetch=async url=>new Response(bytes[Number(url.split('/').at(-2))-1]);
+    process.env.GH_TOKEN='synthetic';
+    const {materializePublication,materializeRelease}=await import('./release/supply-producers.mjs');
+    const root=await mkdtemp(join(tmpdir(),'production-artifact-'));
+    try{
+      assert.deepEqual((await materializePublication(source,authority,join(root,'publication'))).source,source);
+      const identity=await materializeRelease(source,authority,join(root,'release'));
+      assert.deepEqual(identity.signer,{id:11,name:'sign'});
+      assert.equal(identity.artifact.name,'supply-release-2');
+      assert.equal(JSON.parse(await readFile(join(root,'release/manifest.json'),'utf8')).original,'manifest.json');
+      for(const [change,error] of [['run',/run identity/],['job',/CI/],['name',/artifact/],['digest',/transport digest/],['size',/transport exceeds/],['interval',/untrusted/]]){
+        mode=change;
+        await assert.rejects(materializeRelease(source,authority,join(root,change)),error);
+      }
+    }finally{await rm(root,{recursive:true,force:true});}
   `;
   execFileSync(
     process.execPath,

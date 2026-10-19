@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { createReadStream } from "node:fs";
-import { readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
+import { readFile, writeFile, mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,9 +31,10 @@ export async function json(path) {
 export async function save(path, value) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
 }
-export async function fileHash(path) {
+export async function fileHash(path, signal) {
   const digest = createHash("sha256");
-  for await (const bytes of createReadStream(path)) digest.update(bytes);
+  for await (const bytes of createReadStream(path, { signal }))
+    digest.update(bytes);
   return digest.digest("hex");
 }
 
@@ -238,39 +239,78 @@ export async function verifySignature(
       GH_PROMPT_DISABLED: "1",
       GH_NO_UPDATE_NOTIFIER: "1",
     };
-    const output = run(
-      gh.binary,
-      [
-        "attestation",
-        "verify",
-        subject,
-        "--bundle",
-        resolve(bundle),
-        "--hostname",
-        "github.com",
-        "--repo",
-        "ShiosOS/Damadama",
-        "--cert-identity",
-        `https://github.com/ShiosOS/Damadama/.github/workflows/${trust.workflow}@${trust.ref}`,
-        "--cert-oidc-issuer",
-        "https://token.actions.githubusercontent.com",
-        "--source-ref",
-        trust.ref,
-        "--source-digest",
-        source.commit,
-        "--signer-digest",
-        authority.sha,
-        "--deny-self-hosted-runners",
-        "--predicate-type",
-        predicateType,
-        "--format",
-        "json",
-      ],
-      { cwd, env },
-    );
-    insist(output.trim().length > 0, "empty cryptographic verification result");
+    const privateOCI = trust === production && subject.startsWith("oci://");
+    if (privateOCI) {
+      insist(
+        /^oci:\/\/ghcr\.io\/shiosos\/damadama@sha256:[a-f0-9]{64}$/.test(
+          subject,
+        ),
+        "invalid production OCI subject",
+      );
+      const token = process.env.GITHUB_TOKEN;
+      insist(
+        typeof token === "string" && token.length > 0,
+        "missing ephemeral registry token",
+      );
+      const config = join(cwd, "docker");
+      await mkdir(config, { mode: 0o700 });
+      await writeFile(
+        join(config, "config.json"),
+        JSON.stringify({
+          auths: {
+            "ghcr.io": {
+              auth: Buffer.from(`x-access-token:${token}`).toString("base64"),
+            },
+          },
+        }),
+        { flag: "wx", mode: 0o600 },
+      );
+      env.DOCKER_CONFIG = config;
+    }
+    let parsed;
+    try {
+      const output = run(
+        gh.binary,
+        [
+          "attestation",
+          "verify",
+          subject,
+          "--bundle",
+          resolve(bundle),
+          "--hostname",
+          "github.com",
+          "--repo",
+          "ShiosOS/Damadama",
+          "--cert-identity",
+          `https://github.com/ShiosOS/Damadama/.github/workflows/${trust.workflow}@${trust.ref}`,
+          "--cert-oidc-issuer",
+          "https://token.actions.githubusercontent.com",
+          "--source-ref",
+          trust.ref,
+          "--source-digest",
+          source.commit,
+          "--signer-digest",
+          authority.sha,
+          "--deny-self-hosted-runners",
+          "--predicate-type",
+          predicateType,
+          "--format",
+          "json",
+        ],
+        { cwd, env },
+      );
+      insist(
+        output.trim().length > 0,
+        "empty cryptographic verification result",
+      );
+      parsed = JSON.parse(output);
+    } catch (error) {
+      if (privateOCI)
+        throw new Error("production OCI signature verification failed");
+      throw error;
+    }
     return authenticatedStatement(
-      JSON.parse(output),
+      parsed,
       trust,
       source,
       authority,
