@@ -96,6 +96,60 @@ test("stage assembles its CI and browser evidence in the verified receipt", (t) 
   assert.ok(Number.isFinite(Date.parse(receipt.evidence.observedAt)));
 });
 
+test("stage CLI identifies every full admission and final verification boundary", (t) => {
+  const result = operate(t, "stage-real-success");
+  assert.equal(result.status, 0, result.stderr);
+  const markers = result.stderr
+    .split("\n")
+    .filter((line) => line.startsWith("release-phase "))
+    .map((line) => JSON.parse(line.slice("release-phase ".length)));
+  assert.deepEqual(
+    markers.map(({ phase, event }) => [phase, event]),
+    [
+      ["stage.release.locate", "start"],
+      ["stage.release.locate", "complete"],
+      ["stage.release.recheck", "start"],
+      ["stage.release.recheck", "complete"],
+      ["stage.release.recheck", "start"],
+      ["stage.release.recheck", "complete"],
+      ["stage.release.recheck", "start"],
+      ["stage.release.recheck", "complete"],
+      ["deployment.provider.observe.before-checks", "start"],
+      ["deployment.provider.observe.before-checks", "complete"],
+      ["deployment.provider.observe.after-checks", "start"],
+      ["deployment.provider.observe.after-checks", "complete"],
+      ["stage.release.recheck", "start"],
+      ["stage.release.recheck", "complete"],
+      ["stage.deployment.summary", "start"],
+      ["stage.deployment.summary", "complete"],
+      ["stage.release.recheck", "start"],
+      ["stage.release.recheck", "complete"],
+      ["stage.verified.write", "start"],
+      ["stage.verified.write", "complete"],
+    ],
+  );
+  for (let index = 0; index < markers.length; index += 2) {
+    const start = markers[index];
+    const complete = markers[index + 1];
+    assert.deepEqual(Object.keys(start).sort(), [
+      "elapsedMs",
+      "event",
+      "invocation",
+      "phase",
+    ]);
+    assert.deepEqual(Object.keys(complete).sort(), Object.keys(start).sort());
+    assert.ok(Number.isSafeInteger(start.invocation));
+    assert.equal(complete.invocation, start.invocation);
+    assert.equal(start.elapsedMs, 0);
+    assert.ok(Number.isFinite(complete.elapsedMs) && complete.elapsedMs >= 0);
+  }
+  assert.equal(new Set(markers.map((marker) => marker.invocation)).size, 10);
+  assert.deepEqual(
+    result.read("verified.json").evidence.supply,
+    record().evidence.supply,
+  );
+});
+
 test("production records its public checks and preserves the original staging receipt", (t) => {
   const result = operate(t, "production-success");
   assert.equal(result.status, 0, result.stderr);
@@ -187,6 +241,23 @@ for (const [failure, message] of [
         readFileSync(join(result.dir, "summary.md"), "utf8"),
         /No rollback was performed/,
       );
+      if (
+        operation === "stage" &&
+        ["log", "log-write", "write"].includes(failure)
+      ) {
+        const markers = result.stderr
+          .split("\n")
+          .filter((line) => line.startsWith("release-phase "))
+          .map((line) => JSON.parse(line.slice("release-phase ".length)));
+        const last = markers.at(-1);
+        assert.equal(
+          last.phase,
+          failure === "write"
+            ? "stage.verified.write"
+            : "stage.deployment.summary",
+        );
+        assert.equal(last.event, "failed");
+      }
     });
   }
 }
@@ -238,6 +309,14 @@ for (const operation of ["stage", "production"]) {
         }
         if (operation === "production")
           assert.deepEqual(result.read("verified.json"), record());
+        else {
+          const markers = result.stderr
+            .split("\n")
+            .filter((line) => line.startsWith("release-phase "))
+            .map((line) => JSON.parse(line.slice("release-phase ".length)));
+          assert.equal(markers.at(-1).phase, "stage.release.recheck");
+          assert.equal(markers.at(-1).event, "failed");
+        }
       });
   test(`${operation} actual Railway completes both awaited signed callbacks`, (t) => {
     const result = operate(t, `${operation}-real-success`);

@@ -317,6 +317,8 @@ test("producer authentication streams complete ZIPs and refuses transport or pro
     const workflow={id:123,run_attempt:2,head_sha:source.commit,event:'push',path:'.github/workflows/supply-chain-proof.yml',head_branch:'codex/polish-image-supply-chain',repository:{id:1412858535,owner:{id:31512984}}};
     const artifacts=['build','scan'].map((role,i)=>({id:i+1,name:'supply-proof-'+role+'-2',digest:'sha256:'+hash(bytes[role]),size_in_bytes:bytes[role].length,expired:false,workflow_run:{id:123,head_sha:source.commit},created_at:'2026-10-18T00:01:00Z'}));
     let mode='good', downloads=0;
+    const diagnostics=[];
+    mock.method(console,'error',line=>{if(typeof line==='string' && line.startsWith('release-phase '))diagnostics.push(JSON.parse(line.slice('release-phase '.length)));});
     mock.module('./release/github.mjs',{namedExports:{...github,github:async()=>({...workflow,...(mode==='source'?{head_sha:'f'.repeat(40)}:{})}),attemptJobs:async()=>mode==='application'?jobs.slice(0,2):jobs,runArtifacts:async()=>artifacts.map((item,index)=>index===0?{...item,...(mode==='digest'?{digest:'sha256:'+'f'.repeat(64)}:{}),...(mode==='size'?{size_in_bytes:item.size_in_bytes-1}:{}),...(mode==='expired'?{expired:true}:{}),...(mode==='created'?{created_at:'2026-10-17T00:00:00Z'}:{})}:item)}});
     globalThis.fetch=async url=>{
       downloads++;
@@ -329,8 +331,19 @@ test("producer authentication streams complete ZIPs and refuses transport or pro
     try {
       assert.equal((await materializeProducers(source,authority,proof,join(root,'good'))).length,2);
       assert.equal(downloads,2);
+      assert.deepEqual(diagnostics.map(({phase,event})=>[phase,event]),[
+        ['supply.build.download','start'],['supply.build.download','complete'],
+        ['supply.build.extract','start'],['supply.build.extract','complete'],
+        ['supply.scan.download','start'],['supply.scan.download','complete'],
+        ['supply.scan.extract','start'],['supply.scan.extract','complete'],
+      ]);
       for(const [name,error] of [['digest',/transport digest/],['size',/transport exceeds/],['source',/run identity/],['application',/proof-application-scan/],['expired',/untrusted/],['created',/untrusted/]]){
+        diagnostics.length=0;
         mode=name;await assert.rejects(materializeProducers(source,authority,proof,join(root,name)),error);
+        if(['digest','size'].includes(name)){
+          assert.equal(diagnostics.at(-1).phase,'supply.build.download');
+          assert.equal(diagnostics.at(-1).event,'failed');
+        }else assert.deepEqual(diagnostics,[]);
       }
     } finally {await rm(root,{recursive:true,force:true});}
   `;
@@ -372,6 +385,8 @@ test("production publication and capsule use canonical bounded transport and nat
     const jobs=['publish','sign'].map((name,i)=>({id:10+i,name,head_sha:source.commit,run_id:123,run_attempt:2,status:'completed',conclusion:'success',html_url:'https://github.com/ShiosOS/Damadama/actions/runs/123/job/'+(10+i),started_at:'2026-10-18T00:00:00Z',completed_at:'2026-10-18T00:02:00Z'}));
     const artifacts=['published-image-2','supply-release-2'].map((name,i)=>({id:i+1,name,digest:'sha256:'+hash(bytes[i]),size_in_bytes:bytes[i].length,expired:false,workflow_run:{id:123,head_sha:source.commit},created_at:'2026-10-18T00:01:00Z'}));
     let mode='good';
+    const diagnostics=[];
+    mock.method(console,'error',line=>{if(typeof line==='string' && line.startsWith('release-phase '))diagnostics.push(JSON.parse(line.slice('release-phase '.length)));});
     mock.module('./release/github.mjs',{namedExports:{...github,
       github:async()=>mode==='run'?{...workflow,run_attempt:3}:workflow,
       attemptJobs:async()=>jobs.map(j=>mode==='job'?{...j,conclusion:'failure'}:j),
@@ -387,9 +402,20 @@ test("production publication and capsule use canonical bounded transport and nat
       assert.deepEqual(identity.signer,{id:11,name:'sign'});
       assert.equal(identity.artifact.name,'supply-release-2');
       assert.equal(JSON.parse(await readFile(join(root,'release/manifest.json'),'utf8')).original,'manifest.json');
+      assert.deepEqual(diagnostics.map(({phase,event})=>[phase,event]),[
+        ['supply.publication.download','start'],['supply.publication.download','complete'],
+        ['supply.publication.extract','start'],['supply.publication.extract','complete'],
+        ['supply.capsule.download','start'],['supply.capsule.download','complete'],
+        ['supply.capsule.extract','start'],['supply.capsule.extract','complete'],
+      ]);
       for(const [change,error] of [['run',/run identity/],['job',/CI/],['name',/artifact/],['digest',/transport digest/],['size',/transport exceeds/],['interval',/untrusted/]]){
+        diagnostics.length=0;
         mode=change;
         await assert.rejects(materializeRelease(source,authority,join(root,change)),error);
+        if(['digest','size'].includes(change)){
+          assert.equal(diagnostics.at(-1).phase,'supply.capsule.download');
+          assert.equal(diagnostics.at(-1).event,'failed');
+        }else assert.deepEqual(diagnostics,[]);
       }
     }finally{await rm(root,{recursive:true,force:true});}
   `;

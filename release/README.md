@@ -119,6 +119,13 @@ If main advances after a provider write, the run fails with an **applied-but-unv
 
 ## Diagnose and recover
 
+Release commands emit `release-phase ` records to stderr around signed admission, provider observation, browser cleanup, and final Stage writes.
+Each JSON record contains only a fixed `phase`, a numeric `invocation`, an `event` of `start`, `complete`, or `failed`, and monotonic `elapsedMs`.
+Match a start and terminal record by invocation within the same process. A cancellation can leave a start without a terminal record.
+Nested phases overlap, so their durations must not be added together.
+Failed records omit exception details and preserve the original refusal. Diagnostic output is best effort and does not change admission or cleanup outcomes.
+The last unfinished phase identifies an execution boundary. It does not establish the timeout's cause or Stage acceptance.
+
 Use the workflow summary's deployment ID to open Railway deployment logs. Inspect migration startup failures, schema readiness, and app trace IDs.
 The backend emits JSON logs; store neither connection strings nor Clerk tokens in PR evidence.
 Public workflow artifacts retain a sanitized deployment summary and synthetic habit screenshots, not raw production logs.
