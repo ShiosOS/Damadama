@@ -232,8 +232,15 @@ export async function tarIndex(
   };
 }
 
-async function hashSlice(path, entry, budget) {
+async function hashSlice(
+  path,
+  entry,
+  budget,
+  observation,
+  signal = budget?.signal,
+) {
   const source = createReadStream(path, {
+    signal,
     start: entry.offset,
     end: entry.offset + entry.size - 1,
   });
@@ -241,27 +248,36 @@ async function hashSlice(path, entry, budget) {
   let size = 0;
   const streams = [source];
   if (budget) streams.push(createGunzip());
-  await pipeline(...streams, async (stream) => {
-    for await (const bytes of stream) {
-      size += bytes.length;
-      if (budget) {
-        budget.remaining -= bytes.length;
-        assert(size <= budget.perLayer, "layer exceeds supported bound");
-        assert(budget.remaining >= 0, "expanded layers exceed aggregate bound");
-      } else
-        assert(
-          size <= frontendFormat.archiveBytes,
-          "archive exceeds supported bound",
-        );
-      sha.update(bytes);
-    }
-  });
+  await pipeline(
+    ...streams,
+    async (stream) => {
+      for await (const bytes of stream) {
+        size += bytes.length;
+        if (budget) {
+          budget.remaining -= bytes.length;
+          assert(size <= budget.perLayer, "layer exceeds supported bound");
+          assert(
+            budget.remaining >= 0,
+            "expanded layers exceed aggregate bound",
+          );
+        } else
+          assert(
+            size <= frontendFormat.archiveBytes,
+            "archive exceeds supported bound",
+          );
+        sha.update(bytes);
+      }
+    },
+    { signal },
+  );
+  if (observation) observation.size = size;
   return sha.digest("hex");
 }
 
 function layerBudget({
   layerBytes = frontendFormat.layerBytes,
   expandedBytes = frontendFormat.expandedBytes,
+  signal,
 } = {}) {
   assert(
     Number.isSafeInteger(layerBytes) &&
@@ -273,10 +289,14 @@ function layerBudget({
       expandedBytes > 0 &&
       expandedBytes <= frontendFormat.expandedBytes,
   );
-  return { perLayer: layerBytes, remaining: expandedBytes };
+  return { perLayer: layerBytes, remaining: expandedBytes, signal };
 }
 
-export async function dockerArchive(archivePath, expectedArchiveHash, limits) {
+export async function dockerArchiveContent(
+  archivePath,
+  expectedArchiveHash,
+  limits,
+) {
   const budget = layerBudget(limits);
   assert.match(expectedArchiveHash, digest);
   const outer = await tarIndex(
@@ -311,20 +331,34 @@ export async function dockerArchive(archivePath, expectedArchiveHash, limits) {
   const diffIds = parsed.rootfs?.diff_ids;
   assert(Array.isArray(diffIds) && diffIds.length === image.Layers.length);
   assert.equal(new Set(image.Layers).size, image.Layers.length);
+  const expandedSizes = [];
+  const compressed = [];
   for (const [index, name] of image.Layers.entries()) {
     assert.match(name, /^blobs\/sha256\/[a-f0-9]{64}$/);
     const entry = outer.entries.get(name);
     assert(entry?.type === "0" && entry.size > 0, "missing image layer");
-    assert.equal(await hashSlice(archivePath, entry), name.slice(-64));
     assert.equal(
-      `sha256:${await hashSlice(archivePath, entry, budget)}`,
+      await hashSlice(archivePath, entry, undefined, undefined, limits?.signal),
+      name.slice(-64),
+    );
+    const observation = {};
+    assert.equal(
+      `sha256:${await hashSlice(archivePath, entry, budget, observation)}`,
       diffIds[index],
     );
+    expandedSizes.push(observation.size);
+    compressed.push({ digest: `sha256:${name.slice(-64)}`, size: entry.size });
   }
-  const actualArchiveHash = await hashSlice(archivePath, {
-    offset: 0,
-    size: (await stat(archivePath)).size,
-  });
+  const actualArchiveHash = await hashSlice(
+    archivePath,
+    {
+      offset: 0,
+      size: (await stat(archivePath)).size,
+    },
+    undefined,
+    undefined,
+    limits?.signal,
+  );
   assert.equal(
     actualArchiveHash,
     expectedArchiveHash,
@@ -332,9 +366,34 @@ export async function dockerArchive(archivePath, expectedArchiveHash, limits) {
   );
   return {
     configDigest: `sha256:${configDigest}`,
+    config,
+    expandedSizes,
+    compressed,
     diffIds,
     layers: image.Layers.length,
   };
+}
+
+export async function dockerArchive(archivePath, expectedArchiveHash, limits) {
+  const { configDigest, diffIds, layers } = await dockerArchiveContent(
+    archivePath,
+    expectedArchiveHash,
+    limits,
+  );
+  return { configDigest, diffIds, layers };
+}
+
+export async function compressedLayer(path, budget) {
+  const size = (await stat(path)).size;
+  assert(
+    size > 0 && size <= frontendFormat.archiveBytes,
+    "compressed layer size outside supported bounds",
+  );
+  const entry = { offset: 0, size };
+  const digest = `sha256:${await hashSlice(path, entry, undefined, undefined, budget.signal)}`;
+  const observation = {};
+  const diffId = `sha256:${await hashSlice(path, entry, budget, observation)}`;
+  return { digest, size, diffId, expandedSize: observation.size };
 }
 
 export async function ociArchive(archivePath, expectedArchiveHash, limits) {
@@ -420,10 +479,16 @@ export async function ociArchive(archivePath, expectedArchiveHash, limits) {
       "OCI expanded layer DiffID differs",
     );
   }
-  const actualArchiveHash = await hashSlice(archivePath, {
-    offset: 0,
-    size: (await stat(archivePath)).size,
-  });
+  const actualArchiveHash = await hashSlice(
+    archivePath,
+    {
+      offset: 0,
+      size: (await stat(archivePath)).size,
+    },
+    undefined,
+    undefined,
+    limits?.signal,
+  );
   assert.equal(
     actualArchiveHash,
     expectedArchiveHash,

@@ -31,6 +31,10 @@ jobs:
   preflight:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      packages: read
     outputs:
       hash: ${{ steps.plan.outputs.hash }}
       artifact: ${{ steps.upload.outputs.artifact-id }}
@@ -43,10 +47,12 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: 24
+      - run: node controls/release/supply-install.mjs verifier
       - id: plan
         run: node controls/release/operate.mjs preflight
         env:
           GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           STAGING_RUN_ID: ${{ inputs.staging_run_id }}
           RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_NOTES: ${{ inputs.notes }}
@@ -70,6 +76,7 @@ jobs:
     permissions:
       contents: write
       actions: read
+      packages: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -80,9 +87,11 @@ jobs:
         with:
           node-version: 24
       - run: npm ci --ignore-scripts --prefix controls/release
+      - run: node controls/release/supply-install.mjs verifier
       - run: node controls/release/operate.mjs promote
         env:
           GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           PLAN_HASH: ${{ needs.preflight.outputs.hash }}
           PLAN_ARTIFACT_ID: ${{ needs.preflight.outputs.artifact }}
           RELEASE_VERSION: ${{ inputs.version }}

@@ -1,3 +1,4 @@
+import "./preflight-proof.test.mjs";
 import assert from "node:assert/strict";
 import { test } from "bun:test";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
@@ -10,6 +11,11 @@ import {
 } from "./security-policy.mjs";
 import { gateGraphErrors } from "./workflow-policy.mjs";
 import { exerciseBunAudit } from "./security-fixtures.mjs";
+import { gates, releaseCallables, requireJobs } from "./required-jobs.mjs";
+import { requireFreshCandidate } from "../../release/controller.mjs";
+import { source, authority, jobs, run } from "../../release/fixtures.mjs";
+import { existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const workflows = {};
@@ -22,6 +28,7 @@ for (const name of await readdir(join(root, ".github/workflows"))) {
 const dependencies = (w) => w["security-dependencies.yml"].jobs;
 const codeql = (w) => w["security-codeql.yml"].jobs;
 const fixtures = (w) => w["security-fixtures.yml"].jobs;
+const main = (w) => w["stage.yml"].jobs;
 const rejected = (name, mutate, pattern) =>
   test(name, () => {
     const changed = structuredClone(workflows);
@@ -31,6 +38,371 @@ const rejected = (name, mutate, pattern) =>
       `${name}: expected ${pattern}; got ${gateGraphErrors(changed).join("\n")}`,
     );
   });
+
+test("main native alias keeps the public check name and separate PR portfolio", () => {
+  assert.deepEqual(gateGraphErrors(workflows), []);
+  for (const gate of ["release-controls", "main-release-controls"]) {
+    const { workflow, needs } = gates[gate];
+    for (const name of needs)
+      assert.equal(
+        workflows[workflow].jobs[name].uses,
+        `$/.github/workflows/${releaseCallables[name].workflow}`,
+      );
+  }
+  assert.deepEqual(gates["main-release-controls"], {
+    workflow: "stage.yml",
+    job: "release-controls",
+    needs: ["security-codeql", "security-dependencies"],
+  });
+  const changed = structuredClone(workflows);
+  main(changed)["release-controls"].name = "release-controls";
+  for (const name of gates["main-release-controls"].needs)
+    main(changed)[name].permissions = Object.fromEntries(
+      Object.entries(main(changed)[name].permissions).reverse(),
+    );
+  main(changed).build.needs.reverse();
+  main(changed).stage.needs.reverse();
+  assert.deepEqual(gateGraphErrors(changed), []);
+});
+
+for (const name of gates["main-release-controls"].needs) {
+  const caller = (w) => main(w)[name];
+  for (const [label, mutate, pattern] of [
+    [
+      "missing caller",
+      (w) => delete main(w)[name],
+      /required prerequisite is missing/,
+    ],
+    [
+      "missing edge",
+      (w) =>
+        main(w)["release-controls"].needs.splice(
+          main(w)["release-controls"].needs.indexOf(name),
+          1,
+        ),
+      /needs must be exactly/,
+    ],
+    [
+      "wrong path",
+      (w) => (caller(w).uses += "@main"),
+      /wrong callable workflow/,
+    ],
+    [
+      "legacy relative path",
+      (w) =>
+        (caller(w).uses =
+          "./.github/workflows/" + releaseCallables[name].workflow),
+      /wrong callable workflow/,
+    ],
+    [
+      "conditional caller",
+      (w) => (caller(w).if = "false"),
+      /prerequisite must run unconditionally/,
+    ],
+    [
+      "caller dependency",
+      (w) => (caller(w).needs = "source"),
+      /prerequisite must run unconditionally/,
+    ],
+    [
+      "tolerated caller",
+      (w) => (caller(w)["continue-on-error"] = true),
+      /continue-on-error is forbidden/,
+    ],
+    [
+      "matrix caller",
+      (w) => (caller(w).strategy = { matrix: { duplicate: [1, 2] } }),
+      /without a matrix/,
+    ],
+    [
+      "caller input",
+      (w) => (caller(w).with = { injected: true }),
+      /no inputs or secrets/,
+    ],
+    [
+      "caller secrets",
+      (w) => (caller(w).secrets = "inherit"),
+      /no inputs or secrets/,
+    ],
+    [
+      "extra permission",
+      (w) => (caller(w).permissions.issues = "write"),
+      /permissions must match/,
+    ],
+    [
+      "permission shorthand",
+      (w) => (caller(w).permissions = "read-all"),
+      /permissions must match/,
+    ],
+  ])
+    rejected(`main ${name} ${label}`, mutate, pattern);
+  for (const permission of Object.keys(releaseCallables[name].permissions)) {
+    rejected(
+      `main ${name} missing ${permission}`,
+      (w) => delete caller(w).permissions[permission],
+      /permissions must match/,
+    );
+    rejected(
+      `main ${name} changed ${permission}`,
+      (w) => (caller(w).permissions[permission] = "none"),
+      /permissions must match/,
+    );
+  }
+}
+for (const [label, mutate, pattern] of [
+  [
+    "missing barrier",
+    (w) => delete main(w)["release-controls"],
+    /required gate is missing/,
+  ],
+  [
+    "helper alias as native name",
+    (w) => (main(w)["release-controls"].name = "main-release-controls"),
+    /check-run name must be release-controls/,
+  ],
+  [
+    "extra barrier edge",
+    (w) => main(w)["release-controls"].needs.push("source"),
+    /needs must be exactly/,
+  ],
+  [
+    "missing always",
+    (w) => delete main(w)["release-controls"].if,
+    /if must be always/,
+  ],
+  [
+    "check condition bypass",
+    (w) => (main(w).check.if = "false"),
+    /must check every application source/,
+  ],
+  [
+    "check source dependency bypass",
+    (w) => delete main(w).check.needs,
+    /must check every application source/,
+  ],
+  [
+    "conditional barrier",
+    (w) => (main(w)["release-controls"].if = "success()"),
+    /if must be always/,
+  ],
+  [
+    "reusable barrier",
+    (w) =>
+      (main(w)["release-controls"].uses =
+        "./.github/workflows/release-controls.yml"),
+    /ordinary running job/,
+  ],
+  [
+    "wrong helper",
+    (w) =>
+      (main(w)["release-controls"].steps.at(-1).run =
+        "node .github/ci/required-jobs.mjs release-controls"),
+    /exact needs result/,
+  ],
+  [
+    "fabricated helper input",
+    (w) => (main(w)["release-controls"].steps.at(-1).env.REQUIRED_JOBS = "{}"),
+    /exact needs result/,
+  ],
+  [
+    "conditional barrier setup",
+    (w) => (main(w)["release-controls"].steps[0].if = "false"),
+    /all barrier steps must run unconditionally/,
+  ],
+  [
+    "duplicate suite elsewhere",
+    (w) => main(w).check.steps.push({ run: "node --test release/*.test.mjs" }),
+    /suite must run exactly once/,
+  ],
+])
+  rejected(`main ${label}`, mutate, pattern);
+
+for (const name of ["release-controls", "check"]) {
+  rejected(
+    `main ${name} tolerated job`,
+    (w) => (main(w)[name]["continue-on-error"] = true),
+    /native controller must run once without tolerated errors/,
+  );
+  rejected(
+    `main ${name} matrix job`,
+    (w) => (main(w)[name].strategy = { matrix: { duplicate: [1, 2] } }),
+    /native controller must run once without tolerated errors/,
+  );
+}
+for (const name of ["build", "stage"]) {
+  for (const dependency of main(workflows)[name].needs)
+    rejected(
+      `main ${name} missing ${dependency} edge`,
+      (w) =>
+        (main(w)[name].needs = main(w)[name].needs.filter(
+          (value) => value !== dependency,
+        )),
+      new RegExp(`jobs.${name}: needs must be exactly`),
+    );
+  rejected(
+    `main ${name} extra edge`,
+    (w) => main(w)[name].needs.push("security-codeql"),
+    /needs must be exactly/,
+  );
+  rejected(
+    `main ${name} duplicate edge`,
+    (w) => main(w)[name].needs.push(main(w)[name].needs[0]),
+    /needs must be exactly/,
+  );
+}
+for (const [name, commands] of [
+  [
+    "release-controls",
+    [
+      "node --test release/*.test.mjs",
+      "node .github/ci/required-jobs.mjs main-release-controls",
+    ],
+  ],
+  [
+    "check",
+    [
+      "bun install --frozen-lockfile",
+      "bun .github/ci/workflow-lint.mjs",
+      "node node_modules/@playwright/test/cli.js install --with-deps chromium",
+      "bun run check",
+    ],
+  ],
+]) {
+  for (const command of commands) {
+    const selected = (w) =>
+      main(w)[name].steps.find((step) => step.run === command);
+    for (const [label, mutate] of [
+      [
+        "missing",
+        (w) =>
+          (main(w)[name].steps = main(w)[name].steps.filter(
+            (step) => step.run !== command,
+          )),
+      ],
+      [
+        "duplicated",
+        (w) => main(w)[name].steps.push(structuredClone(selected(w))),
+      ],
+      ["conditional", (w) => (selected(w).if = "false")],
+      ["tolerated", (w) => (selected(w)["continue-on-error"] = true)],
+      ["shell bypass", (w) => (selected(w).run += " || true")],
+    ])
+      rejected(
+        `main ${name} ${label} ${command}`,
+        mutate,
+        /step must run once in order without bypass/,
+      );
+  }
+  for (let index = 1; index < commands.length; index++)
+    rejected(
+      `main ${name} reversed command order ${index}`,
+      (w) => {
+        const steps = main(w)[name].steps;
+        const before = steps.findIndex(
+          (step) => step.run === commands[index - 1],
+        );
+        const after = steps.findIndex((step) => step.run === commands[index]);
+        [steps[before], steps[after]] = [steps[after], steps[before]];
+      },
+      /step must run once in order without bypass/,
+    );
+}
+
+const security = readSecurityContract(workflows);
+const mandatory = [
+  ...security.coverage.analysis.map(({ language }) => [
+    "analysis-" + language,
+    "security-codeql",
+  ]),
+  ...security.coverage.uploads.map((language) => [
+    "upload-" + language,
+    "security-codeql",
+  ]),
+  [security.bunAudit.argv.join(" "), "security-dependencies"],
+];
+for (const [leaf, callable] of mandatory)
+  for (const result of ["failure", "skipped", "cancelled", undefined])
+    test(`main controlled ${leaf} ${String(result)} fails helper and actual native admissions`, async () => {
+      assert.deepEqual(gateGraphErrors(workflows), []);
+      const needs = Object.fromEntries(
+        gates["main-release-controls"].needs.map((name) => [
+          name,
+          { result: "success" },
+        ]),
+      );
+      requireJobs("main-release-controls", needs);
+      needs[callable].result = result;
+      let barrier = "success";
+      try {
+        requireJobs("main-release-controls", needs);
+      } catch (error) {
+        assert.match(error.message, /result must be success/);
+        barrier = "failure";
+      }
+      assert.equal(barrier, "failure");
+      const environment = {
+        GH_TOKEN: "synthetic",
+        GITHUB_REF: "refs/heads/main",
+        GITHUB_REPOSITORY: source.repository,
+        GITHUB_SHA: source.commit,
+        GITHUB_RUN_ID: "42",
+        GITHUB_RUN_ATTEMPT: "1",
+      };
+      const saved = Object.fromEntries(
+        Object.keys(environment).map((key) => [key, process.env[key]]),
+      );
+      const originalFetch = globalThis.fetch;
+      const current = jobs();
+      current[0].conclusion = barrier;
+      Object.assign(process.env, environment);
+      globalThis.fetch = async (url) => {
+        let value;
+        if (url.includes("/git/ref/heads/main"))
+          value = { object: { sha: source.commit } };
+        else if (url.includes("/git/commits/"))
+          value = { sha: source.commit, tree: { sha: source.tree } };
+        else if (url.includes("/jobs?"))
+          value = { total_count: current.length, jobs: current };
+        else if (url.endsWith("/actions/runs/42")) value = run;
+        else throw Error("unexpected controlled API request");
+        return new Response(JSON.stringify(value));
+      };
+      try {
+        await assert.rejects(
+          requireFreshCandidate({ source, authority }),
+          /CI release-controls/,
+        );
+      } finally {
+        globalThis.fetch = originalFetch;
+        for (const [key, value] of Object.entries(saved)) {
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+        }
+      }
+      for (const operation of ["preflight", "production"]) {
+        const directory = await mkdtemp(join(tmpdir(), "security-admission-"));
+        try {
+          const child = spawnSync(
+            "node",
+            [
+              join(root, "release/test-fixtures/operation.mjs"),
+              `${operation}-barrier-${barrier}`,
+            ],
+            { cwd: directory, encoding: "utf8" },
+          );
+          assert.equal(child.status, 1, child.stderr);
+          assert.match(child.stderr, /CI release-controls/);
+          for (const path of [
+            "promotion-plan.json",
+            "production.json",
+            "events.jsonl",
+          ])
+            assert.equal(existsSync(join(directory, path)), false, path);
+        } finally {
+          await rm(directory, { recursive: true, force: true });
+        }
+      }
+    });
 
 test("real production contract has independent exact ordered inventories", () => {
   const actual = readSecurityContract(workflows);

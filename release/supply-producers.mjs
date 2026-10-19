@@ -12,8 +12,17 @@ import {
   selectArtifact,
 } from "./github.mjs";
 import { requireCIEvidence } from "./policy.mjs";
-import { producerLayout } from "./supply-evidence.mjs";
-import { insist, proof, isolated, same, json } from "./supply-internal.mjs";
+import { producerLayout, releaseMembers } from "./supply-evidence.mjs";
+import {
+  insist,
+  proof,
+  production,
+  isolated,
+  same,
+  json,
+  fileHash,
+  requireIdentity,
+} from "./supply-internal.mjs";
 
 export const artifactLimits = Object.freeze({
   zip: 1024 * 1024 * 1024,
@@ -23,7 +32,8 @@ export const artifactLimits = Object.freeze({
   directory: 64 * 1024,
 });
 
-export async function authenticateProducers(source, authority, trust) {
+async function authenticateRun(source, authority, trust) {
+  requireIdentity(source, authority);
   insist(
     process.env.GH_TOKEN,
     "authenticated artifact membership requires GH_TOKEN",
@@ -43,6 +53,10 @@ export async function authenticateProducers(source, authority, trust) {
       workflow.repository?.owner?.id === 31512984,
     "producer run identity differs",
   );
+}
+
+export async function authenticateProducers(source, authority, trust) {
+  await authenticateRun(source, authority, trust);
   const layouts = ["build", "scan"].map((role) => producerLayout(trust, role));
   const names = layouts.map((layout) => layout.job);
   if (trust === proof) names.push("proof-application-scan");
@@ -69,6 +83,62 @@ export async function authenticateProducers(source, authority, trust) {
       artifact: { ...selected, size: metadata.size_in_bytes },
     };
   });
+}
+
+async function materializeProductionArtifact(
+  source,
+  authority,
+  kind,
+  directory,
+) {
+  await authenticateRun(source, authority, production);
+  const layout =
+    kind === "publication"
+      ? { job: "publish", artifact: "published-image", members: ["image.json"] }
+      : { job: "sign", artifact: "supply-release", members: releaseMembers };
+  const [job] = requireCIEvidence(
+    source,
+    await attemptJobs(authority),
+    authority,
+    [layout.job],
+  );
+  const artifacts = await runArtifacts(authority.runId);
+  const selected = selectArtifact(artifacts, layout.artifact, authority, job);
+  const size = artifacts.find(
+    (artifact) => artifact.id === selected.id,
+  ).size_in_bytes;
+  insist(
+    Number.isSafeInteger(size) && size > 0 && size <= artifactLimits.zip,
+    "artifact ZIP metadata size exceeds bound",
+  );
+  const artifact = { ...selected, size };
+  await mkdir(directory, { recursive: true });
+  await isolated(async (scratch) => {
+    const archive = join(scratch, "artifact.zip");
+    await downloadArtifact(artifact, archive);
+    const members = await zipMembers(archive, layout.members);
+    for (const name of layout.members)
+      await extractMember(archive, members.get(name), join(directory, name));
+    insist(
+      `sha256:${await fileHash(archive)}` === artifact.digest,
+      "artifact ZIP changed during extraction",
+    );
+  });
+  return { artifact, signer: { id: job.id, name: job.name } };
+}
+
+export async function materializePublication(source, authority, directory) {
+  await materializeProductionArtifact(
+    source,
+    authority,
+    "publication",
+    directory,
+  );
+  return json(join(directory, "image.json"));
+}
+
+export async function materializeRelease(source, authority, directory) {
+  return materializeProductionArtifact(source, authority, "release", directory);
 }
 
 async function downloadArtifact(artifact, path) {

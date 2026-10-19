@@ -1,11 +1,17 @@
 import { execFileSync } from "node:child_process";
 import { readFile, writeFile, lstat } from "node:fs/promises";
-import { createHash } from "node:crypto";
+import { fileHash, requireIdentity } from "./supply-internal.mjs";
+import { buildApplicationWithWebEvidence } from "./supply-web-build.mjs";
 import { requireSource, candidateVersion } from "./policy.mjs";
 import { pathToFileURL } from "node:url";
 
-export async function packageApplication(record, execute = execFileSync) {
+export async function packageApplication(
+  record,
+  execute = execFileSync,
+  build = buildApplicationWithWebEvidence,
+) {
   const source = requireSource(record.source);
+  requireIdentity(source, record.authority);
   const git = (...args) =>
     execute("git", ["-C", "candidate", ...args], {
       encoding: "utf8",
@@ -32,27 +38,16 @@ export async function packageApplication(record, execute = execFileSync) {
   } else {
     await writeFile(path, metadata, { flag: "wx" });
   }
-  execute(
-    "docker",
-    [
-      "build",
-      "--platform",
-      "linux/amd64",
-      "--file",
-      "controls/release/Dockerfile",
-      "--tag",
-      "damadama-candidate",
-      "candidate",
-    ],
-    { stdio: "inherit", timeout: 900_000 },
+  await build(
+    ".",
+    { source, authority: record.authority },
+    {
+      context: "candidate",
+      dockerfile: "controls/release/Dockerfile",
+      tag: "damadama-candidate",
+    },
   );
-  execute("docker", ["save", "--output", "image.tar", "damadama-candidate"], {
-    stdio: "inherit",
-    timeout: 120_000,
-  });
-  const archiveSha256 = createHash("sha256")
-    .update(await readFile("image.tar"))
-    .digest("hex");
+  const archiveSha256 = await fileHash("image.tar");
   await writeFile(
     "build.json",
     JSON.stringify(
@@ -67,6 +62,14 @@ export async function packageApplication(record, execute = execFileSync) {
       2,
     ),
   );
+  const loaded = execute("docker", ["load", "--input", "image.tar"], {
+    encoding: "utf8",
+    timeout: 120_000,
+  });
+  if (
+    !loaded.split(/\r?\n/).includes("Loaded image: damadama-candidate:latest")
+  )
+    throw new Error("paired archive did not load the candidate image");
   const container = execute("docker", ["create", "damadama-candidate"], {
     encoding: "utf8",
   }).trim();

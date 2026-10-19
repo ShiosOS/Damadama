@@ -38,6 +38,11 @@ export const releaseCallables = {
 };
 
 export const gates = {
+  "main-release-controls": {
+    workflow: "stage.yml",
+    job: "release-controls",
+    needs: ["security-codeql", "security-dependencies"],
+  },
   check: {
     workflow: "check.yml",
     needs: ["application", "diagnostics-policy", "workflow-lint"],
