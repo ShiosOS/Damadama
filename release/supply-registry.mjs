@@ -54,8 +54,42 @@ function descriptor(value, type, maximum) {
   );
 }
 
-async function transfer(response, path, maximum, signal) {
-  assert(response.ok && response.status === 200, "registry request refused");
+const transportReasons = new Map([
+  ["ENOTFOUND", "network"],
+  ["ECONNREFUSED", "network"],
+  ["ECONNRESET", "socket"],
+  ["UND_ERR_SOCKET", "socket"],
+  ["CERT_HAS_EXPIRED", "tls"],
+  ["ERR_TLS_CERT_ALTNAME_INVALID", "tls"],
+]);
+
+function transportFailure(error, operation, boundary) {
+  let reason =
+    transportReasons.get(error?.code) ??
+    transportReasons.get(error?.cause?.code) ??
+    "unknown";
+  if (error?.cause?.message === "unexpected redirect") reason = "redirect";
+  return new Error(
+    `registry transport refused (operation=${operation}, boundary=${boundary}, reason=${reason})`,
+  );
+}
+
+async function transfer(response, path, maximum, signal, operation) {
+  if (!response.ok || response.status !== 200) {
+    let status = "unknown";
+    if (
+      Number.isInteger(response.status) &&
+      response.status >= 100 &&
+      response.status <= 599
+    )
+      status = response.status;
+    const reason = [301, 302, 303, 307, 308].includes(status)
+      ? "redirect"
+      : "http";
+    throw new Error(
+      `registry request refused (operation=${operation}, boundary=response, reason=${reason}, status=${status})`,
+    );
+  }
   assert(
     !response.headers.get("content-encoding") ||
       response.headers.get("content-encoding") === "identity",
@@ -74,7 +108,9 @@ async function transfer(response, path, maximum, signal) {
   try {
     for (;;) {
       signal.throwIfAborted();
-      const { done, value } = await reader.read();
+      const { done, value } = await reader.read().catch((error) => {
+        throw transportFailure(error, operation, "body");
+      });
       if (done) break;
       size += value.byteLength;
       assert(size <= maximum, "registry streamed bytes exceed bound");
@@ -115,24 +151,28 @@ export async function compareRegistryArchive(
         { ...limits, signal },
       );
       let bearer;
-      const request = async (url, headers = {}) => {
+      const request = async (operation, url, headers = {}) => {
         signal.throwIfAborted();
         return fetch(url, {
           headers: { "Accept-Encoding": "identity", ...headers },
           redirect: "error",
           signal,
+        }).catch((error) => {
+          throw transportFailure(error, operation, "request");
         });
       };
-      const get = async (suffix, path, maximum, accept) => {
+      const get = async (operation, suffix, path, maximum, accept) => {
         const url = `${repository}/${suffix}`;
         const headers = { Accept: accept };
         if (bearer) headers.Authorization = `Bearer ${bearer}`;
-        let response = await request(url, headers);
+        let response = await request(operation, url, headers);
         if (response.status === 401 && !bearer) {
           const endpoint = registryChallenge(
             response.headers.get("www-authenticate"),
           );
-          await response.body?.cancel();
+          await response.body?.cancel().catch((error) => {
+            throw transportFailure(error, operation, "body");
+          });
           const token = process.env.GITHUB_TOKEN;
           assert(
             typeof token === "string" && token.length > 0,
@@ -140,12 +180,13 @@ export async function compareRegistryArchive(
           );
           const tokenPath = join(directory, "token.json");
           await transfer(
-            await request(endpoint, {
+            await request("auth", endpoint, {
               Authorization: `Basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`,
             }),
             tokenPath,
             64 * 1024,
             signal,
+            "auth",
           );
           try {
             bearer = JSON.parse(await readFile(tokenPath, "utf8")).token;
@@ -158,15 +199,16 @@ export async function compareRegistryArchive(
               bearer.length <= 32 * 1024,
             "invalid registry bearer token",
           );
-          response = await request(url, {
+          response = await request(operation, url, {
             ...headers,
             Authorization: `Bearer ${bearer}`,
           });
         }
-        return transfer(response, path, maximum, signal);
+        return transfer(response, path, maximum, signal, operation);
       };
       const manifestPath = join(directory, "manifest.json");
       await get(
+        "manifest",
         `manifests/${image.digest}`,
         manifestPath,
         limits.manifestBytes,
@@ -206,6 +248,7 @@ export async function compareRegistryArchive(
       );
       const configPath = join(directory, "config.json");
       const configSize = await get(
+        "config",
         `blobs/${manifest.config.digest}`,
         configPath,
         limits.configBytes,
@@ -245,6 +288,7 @@ export async function compareRegistryArchive(
         );
         const path = join(directory, `layer-${index}`);
         const size = await get(
+          "layer",
           `blobs/${layer.digest}`,
           path,
           layer.size,
@@ -287,8 +331,6 @@ export async function compareRegistryArchive(
   } catch (error) {
     if (signal.aborted)
       throw new Error("registry verification deadline exceeded");
-    if (error instanceof TypeError)
-      throw new Error("registry transport refused");
     throw error;
   } finally {
     controller.abort();

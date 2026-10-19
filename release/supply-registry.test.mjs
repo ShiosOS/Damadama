@@ -254,6 +254,72 @@ test("archive input TypeError remains distinguishable from registry transport", 
   });
 });
 
+test("registry identifies a layer body socket failure", async (t) => {
+  const f = await diagnosticFixture(
+    t,
+    "layer",
+    () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.error(
+              Object.assign(new Error("diagnostic-secret"), {
+                code: "UND_ERR_SOCKET",
+              }),
+            );
+          },
+        }),
+      ),
+  );
+  await assert.rejects(
+    compareRegistryArchive(f.image, f.path),
+    diagnosticRefusal("layer", "body", "socket"),
+  );
+});
+
+test("registry redacts an authentication challenge body cancellation failure", async (t) => {
+  const f = await diagnosticFixture(
+    t,
+    "manifest",
+    () =>
+      new Response(
+        new ReadableStream({
+          cancel() {
+            throw new Error("diagnostic-secret");
+          },
+        }),
+        {
+          status: 401,
+          headers: {
+            "www-authenticate":
+              'Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:shiosos/damadama:pull"',
+          },
+        },
+      ),
+  );
+  await assert.rejects(
+    compareRegistryArchive(f.image, f.path),
+    diagnosticRefusal("manifest", "body", "unknown"),
+  );
+});
+
+test("registry identifies an HTTP refusal without response text", async (t) => {
+  const f = await diagnosticFixture(
+    t,
+    "config",
+    () =>
+      new Response("diagnostic-secret", {
+        status: 403,
+        statusText: "diagnostic-secret",
+      }),
+  );
+  await assert.rejects(compareRegistryArchive(f.image, f.path), (error) => {
+    diagnosticRefusal("config", "response", "http")(error);
+    assert.match(error.message, /status=403/);
+    return true;
+  });
+});
+
 for (const options of [{}, { docker: true }, { recompress: true }])
   test(`registry matches authenticated archive ${JSON.stringify(options)}`, async (t) => {
     const f = await fixture(t, options);
