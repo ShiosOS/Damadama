@@ -8,6 +8,7 @@ Create a private habit with Good, Better and Best definitions and its weekday/re
 - `create-cancel` returns focus after Escape or Close without submitting, retaining an ordinary dismissed draft.
 - `create-validate` preserves an invalid draft and permits a corrected retry.
 - `create-save` waits for acknowledgement, then shows the accepted name, definitions, weekdays and repeat interval before reload.
+- `create-reveal` reveals the saved row after the dialog closes and Today settles, unless another user action invalidates that reveal.
 - `create-accessible` supports keyboard focus, mobile layout and double CSS zoom.
 
 ## How to get to it (user POV)
@@ -25,6 +26,8 @@ node node_modules/@playwright/test/cli.js test --config tests/Browser/playwright
 - Open with `getByRole("button", { name: "Add habit", exact: true })`. Expect the named dialog and focused Name input.
 - Fill labels `Name`, `Good`, `Better` and `Best`. Check `Monday` and `Wednesday`, then fill `Repeat every` with `2`. Choose `Save habit`.
 - Require the dialog to close and region `Saved habits` to display Walking, all three definitions, both weekdays and `Every 2 weeks` before reloading. The existing `saved values appear in the list before any reload` test captures `.audit/habits-immediate.png`.
+- Run the `saved habit reveal` group at its unchanged 1280 by 720 viewport. Require the saved heading and complete repeat interval to enter the viewport without a test scroll. Cover the ineligible October 18 and eligible October 19 dates, normal and reduced motion, and an already populated Today.
+- Hold the real post-save Today response until the dialog closes and focus returns to `Add habit`, then release it and require the saved schedule to be revealed. In the simulated Today 503 case, require the committed saved row to remain visible and Retry to recover Today. Reopening creation, switching accounts, signing out or changing the date invalidates a pending reveal; the delayed completion must not scroll the replacement view.
 - Exercise the no-weekday refusal. Require the focused alert and retained draft, then select weekdays and save successfully. Dismiss the error and require it to clear.
 - Exercise both Escape and Close paths. Require focus to return to `Add habit` and no POST to be submitted. Ordinary dismissal retains the draft; account changes clear it. The [complete map pass](../SKILL.md#drive) explicitly checks retained fields after Escape, saves through the UI and captures immediate and independently reloaded values.
 - Use `save acknowledgement cannot reveal the previous accounts habit`. While the real response is held, require Save and Close to be disabled, Escape to leave the panel open and no saved row to appear. Switch accounts before releasing the response and require the old row to remain absent.
@@ -32,4 +35,4 @@ node node_modules/@playwright/test/cli.js test --config tests/Browser/playwright
 
 ## Gotchas
 
-The UI's weekday names are stable handles; the API's ISO weekday integers are a different boundary. Save success follows the real API acknowledgement. Fixture account switching is a test control and does not exercise Clerk. Check reload persistence through [saved habits](saved-habits.md).
+The UI's weekday names are stable handles; the API's ISO weekday integers are a different boundary. Save success follows the real API acknowledgement. Today can change the page height after that acknowledgement, so require the complete saved row after its refresh and close autofocus settle. The reveal examples own their fixed dates and dedicated `saveVisibility` fixture accounts. Fixture account switching is a test control and does not exercise Clerk. Check reload persistence through [saved habits](saved-habits.md).
