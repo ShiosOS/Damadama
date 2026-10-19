@@ -309,7 +309,10 @@ onBeforeUnmount(() => {
       <section aria-label="Saved habits">
         <h2 class="page-title">Your habits</h2>
         <p v-if="activity.kind === 'loading'" role="status">Loading habits…</p>
-        <p v-if="habits.length === 0" class="empty-habits">
+        <p
+          v-if="activity.kind === 'idle' && habits.length === 0"
+          class="empty-habits"
+        >
           No habits saved yet.
         </p>
         <article

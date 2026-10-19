@@ -76,6 +76,7 @@ test("saved-list loading and authentication refusal retain their observable stat
     expect(initial.status()).toBe(200);
     await expect(saved.getByRole("status")).toContainText("Loading habits");
     await expect(saved.locator("article")).toHaveCount(0);
+    await expect(saved.getByText("No habits saved yet.")).toHaveCount(0);
     emptyWhileLoading = await saved
       .getByText("No habits saved yet.")
       .isVisible();
@@ -98,6 +99,7 @@ test("saved-list loading and authentication refusal retain their observable stat
   await expect(page.getByRole("alert")).toHaveCount(2);
   await expect(saved.locator("article")).toHaveCount(0);
   await expect(saved.getByRole("status")).toHaveCount(0);
+  await expect(saved.getByText("No habits saved yet.")).toHaveCount(0);
   const emptyAfterRefusal = await saved
     .getByText("No habits saved yet.")
     .isVisible();
