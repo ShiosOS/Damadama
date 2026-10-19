@@ -28,7 +28,13 @@ export default [
     linterOptions: { noInlineConfig: true },
     files: ["**/*.{js,mjs,cjs,ts,tsx,mts,cts,vue}"],
     languageOptions: { parser: tsParser },
-    rules: { "no-restricted-syntax": ["error", nestedConditional] },
+    rules: {
+      "no-restricted-syntax": ["error", nestedConditional],
+      "max-lines": [
+        "error",
+        { max: 1000, skipBlankLines: false, skipComments: false },
+      ],
+    },
   },
   ...typedRules.map((config) => ({ ...config, files: typedFiles })),
   {
