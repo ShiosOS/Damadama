@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { gzipSync } from "node:zlib";
+import { inspect } from "node:util";
 import { imageArchives, sha256, tar } from "./supply-frontend-fixtures.mjs";
 import { fileHash } from "./supply-internal.mjs";
 import {
@@ -83,6 +84,175 @@ async function fixture(t, { docker = false, recompress = false } = {}) {
   seal();
   return { image, path, manifest, responses, seal, calls, layers, config };
 }
+
+async function diagnosticFixture(t, operation, respond) {
+  const f = await fixture(t);
+  const fetch = globalThis.fetch;
+  const previous = process.env.GITHUB_TOKEN;
+  process.env.GITHUB_TOKEN = "diagnostic-secret";
+  t.after(() => {
+    if (previous === undefined) delete process.env.GITHUB_TOKEN;
+    else process.env.GITHUB_TOKEN = previous;
+  });
+  const targets = {
+    manifest: `/manifests/${f.image.digest}`,
+    auth: "https://ghcr.io/token?",
+    config: `/blobs/${f.manifest.config.digest}`,
+    layer: `/blobs/${f.manifest.layers[0].digest}`,
+  };
+  globalThis.fetch = async (url, options) => {
+    assert.equal(options.redirect, "error");
+    if (url.includes(targets[operation])) return respond();
+    if (operation === "auth")
+      return new Response("", {
+        status: 401,
+        headers: {
+          "www-authenticate":
+            'Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:shiosos/damadama:pull"',
+        },
+      });
+    return fetch(url, options);
+  };
+  return f;
+}
+
+function diagnosticRefusal(operation, boundary, reason) {
+  return (error) => {
+    assert.match(error.message, /registry (transport|request) refused/);
+    assert(error.message.includes(`operation=${operation}`));
+    assert(error.message.includes(`boundary=${boundary}`));
+    assert(error.message.includes(`reason=${reason}`));
+    assert.equal(error.cause, undefined);
+    assert.deepEqual(Reflect.ownKeys(error).sort(), ["message", "stack"]);
+    assert.doesNotMatch(
+      inspect(error, { showHidden: true, depth: null }),
+      /diagnostic-secret|evil\.invalid|Authorization|Location/,
+    );
+    return true;
+  };
+}
+
+for (const operation of ["manifest", "auth", "config", "layer"])
+  for (const boundary of ["request", "body"])
+    test(`registry diagnoses and redacts ${operation} ${boundary} failures`, async (t) => {
+      const secret = "https://evil.invalid/?token=diagnostic-secret";
+      const failure = Object.assign(new Error(secret), {
+        code: secret,
+        cause: Object.assign(new Error(secret), { code: secret }),
+        Authorization: "diagnostic-secret",
+        Location: secret,
+      });
+      const f = await diagnosticFixture(t, operation, () => {
+        if (boundary === "request") throw failure;
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.error(failure);
+            },
+          }),
+        );
+      });
+      await assert.rejects(
+        compareRegistryArchive(f.image, f.path),
+        diagnosticRefusal(operation, boundary, "unknown"),
+      );
+    });
+
+for (const [label, failure, reason] of [
+  [
+    "redirect",
+    new TypeError("fetch failed", { cause: new Error("unexpected redirect") }),
+    "redirect",
+  ],
+  [
+    "DNS",
+    new TypeError("fetch failed", {
+      cause: Object.assign(new Error(), { code: "ENOTFOUND" }),
+    }),
+    "network",
+  ],
+  [
+    "refused connection",
+    Object.assign(new Error(), { code: "ECONNREFUSED" }),
+    "network",
+  ],
+  [
+    "reset connection",
+    new TypeError("fetch failed", {
+      cause: Object.assign(new Error(), { code: "ECONNRESET" }),
+    }),
+    "socket",
+  ],
+  ["socket", Object.assign(new Error(), { code: "UND_ERR_SOCKET" }), "socket"],
+  [
+    "TLS expiry",
+    new TypeError("fetch failed", {
+      cause: Object.assign(new Error(), { code: "CERT_HAS_EXPIRED" }),
+    }),
+    "tls",
+  ],
+  [
+    "TLS hostname",
+    Object.assign(new Error(), { code: "ERR_TLS_CERT_ALTNAME_INVALID" }),
+    "tls",
+  ],
+  [
+    "unknown TypeError",
+    new TypeError("unexpected redirect diagnostic-secret"),
+    "unknown",
+  ],
+  [
+    "unknown cause",
+    new TypeError("fetch failed", {
+      cause: new Error("unexpected redirect diagnostic-secret"),
+    }),
+    "unknown",
+  ],
+])
+  test(`registry classifies ${label} without relaxing refusal`, async (t) => {
+    const f = await diagnosticFixture(t, "manifest", () => {
+      throw failure;
+    });
+    await assert.rejects(
+      compareRegistryArchive(f.image, f.path),
+      diagnosticRefusal("manifest", "request", reason),
+    );
+  });
+
+for (const operation of ["manifest", "auth", "config", "layer"])
+  test(`registry identifies refused ${operation} redirect status without Location`, async (t) => {
+    const f = await diagnosticFixture(
+      t,
+      operation,
+      () =>
+        new Response("", {
+          status: 307,
+          headers: {
+            Location: "https://evil.invalid/?token=diagnostic-secret",
+          },
+        }),
+    );
+    await assert.rejects(compareRegistryArchive(f.image, f.path), (error) => {
+      diagnosticRefusal(operation, "response", "redirect")(error);
+      assert.match(error.message, /status=307/);
+      return true;
+    });
+  });
+
+test("archive input TypeError remains distinguishable from registry transport", async (t) => {
+  const f = await fixture(t);
+  const failure = new TypeError("invalid archive input");
+  Object.defineProperty(f.image, "archiveSha256", {
+    get() {
+      throw failure;
+    },
+  });
+  await assert.rejects(compareRegistryArchive(f.image, f.path), (error) => {
+    assert.equal(error, failure);
+    assert.equal(f.calls.length, 0);
+    return true;
+  });
+});
 
 for (const options of [{}, { docker: true }, { recompress: true }])
   test(`registry matches authenticated archive ${JSON.stringify(options)}`, async (t) => {
