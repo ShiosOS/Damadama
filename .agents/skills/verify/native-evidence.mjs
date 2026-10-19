@@ -34,10 +34,44 @@ export async function atomicJson(path, value) {
   await rename(temporary, path);
 }
 
+function savedListObservation(result) {
+  const attachments = (result.attachments ?? []).filter(
+    (attachment) => attachment.name === "saved-list-state-observations",
+  );
+  if (attachments.length === 0) return null;
+  const [attachment] = attachments;
+  if (
+    attachments.length !== 1 ||
+    attachment.contentType !== "application/json" ||
+    typeof attachment.body !== "string" ||
+    attachment.body.length > 256
+  )
+    throw new Error("saved-list-observation-invalid");
+  let value;
+  try {
+    value = JSON.parse(Buffer.from(attachment.body, "base64").toString("utf8"));
+  } catch {
+    throw new Error("saved-list-observation-invalid");
+  }
+  if (
+    !value ||
+    Object.keys(value).sort().join(",") !==
+      "emptyAfterRefusal,emptyWhileLoading" ||
+    typeof value.emptyWhileLoading !== "boolean" ||
+    typeof value.emptyAfterRefusal !== "boolean"
+  )
+    throw new Error("saved-list-observation-invalid");
+  return {
+    emptyWhileLoading: value.emptyWhileLoading,
+    emptyAfterRefusal: value.emptyAfterRefusal,
+  };
+}
+
 export function summarizeTests(raw, expectedFiles) {
   if (!Array.isArray(raw.suites) || !Array.isArray(raw.errors))
     throw new Error("selected-test-report-invalid");
   const cases = [];
+  let savedList = null;
   const walk = (suite) => {
     for (const spec of suite.specs ?? []) {
       if (typeof spec.file !== "string")
@@ -68,6 +102,14 @@ export function summarizeTests(raw, expectedFiles) {
               result.duration < 0
             )
               throw new Error("selected-test-result-invalid");
+            if (file === ".agents/skills/verify/observations.spec.mjs") {
+              const observation = savedListObservation(result);
+              if (observation) {
+                if (savedList)
+                  throw new Error("saved-list-observation-duplicate");
+                savedList = observation;
+              }
+            }
             return { status: result.status, duration: result.duration };
           }),
         });
@@ -82,6 +124,7 @@ export function summarizeTests(raw, expectedFiles) {
     expectedFiles.every((file) => files.includes(file));
   const passed =
     complete &&
+    savedList !== null &&
     cases.length > 0 &&
     raw.errors.length === 0 &&
     cases.every(
@@ -90,7 +133,7 @@ export function summarizeTests(raw, expectedFiles) {
         test.results.length === 1 &&
         test.results[0].status === "passed",
     );
-  return { passed, count: cases.length, files, cases };
+  return { passed, count: cases.length, files, cases, savedList };
 }
 
 async function fingerprint(root, relative) {

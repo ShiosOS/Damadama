@@ -192,7 +192,7 @@ test("process identity uses start ticks and boot identity, without command lines
 });
 
 function browserReport() {
-  return {
+  const report = {
     errors: [],
     suites: selectedFiles.map((file) => ({
       specs: [
@@ -209,7 +209,43 @@ function browserReport() {
       ],
     })),
   };
+  report.suites.at(-1).specs[0].tests[0].results[0].attachments = [
+    {
+      name: "saved-list-state-observations",
+      contentType: "application/json",
+      body: Buffer.from(
+        JSON.stringify({ emptyWhileLoading: true, emptyAfterRefusal: false }),
+      ).toString("base64"),
+    },
+  ];
+  return report;
 }
+
+test("saved-list evidence retains exactly two observed booleans and rejects private or missing payloads", () => {
+  assert.deepEqual(summarizeTests(browserReport(), selectedFiles).savedList, {
+    emptyWhileLoading: true,
+    emptyAfterRefusal: false,
+  });
+  const missing = browserReport();
+  missing.suites.at(-1).specs[0].tests[0].results[0].attachments = [];
+  assert.equal(summarizeTests(missing, selectedFiles).passed, false);
+  for (const value of [
+    { emptyWhileLoading: "private-sentinel", emptyAfterRefusal: false },
+    {
+      emptyWhileLoading: true,
+      emptyAfterRefusal: false,
+      token: "private-sentinel",
+    },
+  ]) {
+    const invalid = browserReport();
+    invalid.suites.at(-1).specs[0].tests[0].results[0].attachments[0].body =
+      Buffer.from(JSON.stringify(value)).toString("base64");
+    assert.throws(
+      () => summarizeTests(invalid, selectedFiles),
+      /^Error: saved-list-observation-invalid$/,
+    );
+  }
+});
 
 test("selected-test evidence requires every configured file and actual passing outcomes", () => {
   const good = summarizeTests(browserReport(), selectedFiles);
