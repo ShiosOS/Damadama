@@ -4,85 +4,13 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { gzipSync } from "node:zlib";
-import { imageArchives, sha256, tar } from "./supply-frontend-fixtures.mjs";
 import { fileHash } from "./supply-internal.mjs";
 import {
   compareRegistryArchive,
   registryLimits,
   registryChallenge,
 } from "./supply-registry.mjs";
-
-async function fixture(t, { docker = false, recompress = false } = {}) {
-  const directory = await mkdtemp(join(tmpdir(), "registry-control-"));
-  t.after(() => rm(directory, { recursive: true, force: true }));
-  const layers = [
-    tar([{ name: "a", content: "first layer" }]),
-    tar([{ name: "b", content: "second layer" }]),
-  ];
-  const archive = imageArchives(layers);
-  const path = join(directory, "image.tar");
-  await writeFile(path, archive.docker);
-  const config = Buffer.from(
-    JSON.stringify({
-      os: "linux",
-      architecture: "amd64",
-      rootfs: { type: "layers", diff_ids: archive.descriptor.diffIds },
-    }),
-  );
-  const configType = docker
-    ? "application/vnd.docker.container.image.v1+json"
-    : "application/vnd.oci.image.config.v1+json";
-  const layerType = docker
-    ? "application/vnd.docker.image.rootfs.diff.tar.gzip"
-    : "application/vnd.oci.image.layer.v1.tar+gzip";
-  const blobs = layers.map((bytes) =>
-    gzipSync(bytes, { level: recompress ? 1 : 6 }),
-  );
-  const manifest = {
-    schemaVersion: 2,
-    mediaType: docker
-      ? "application/vnd.docker.distribution.manifest.v2+json"
-      : "application/vnd.oci.image.manifest.v1+json",
-    config: {
-      mediaType: configType,
-      digest: `sha256:${sha256(config)}`,
-      size: config.length,
-    },
-    layers: blobs.map((bytes) => ({
-      mediaType: layerType,
-      digest: `sha256:${sha256(bytes)}`,
-      size: bytes.length,
-    })),
-  };
-  const responses = new Map([
-    [manifest.config.digest, config],
-    ...blobs.map((bytes) => [`sha256:${sha256(bytes)}`, bytes]),
-  ]);
-  const previous = globalThis.fetch;
-  const calls = [];
-  t.after(() => {
-    globalThis.fetch = previous;
-  });
-  globalThis.fetch = async (url, options) => {
-    calls.push({ url, options });
-    assert.equal(options.redirect, "error");
-    assert.match(
-      url,
-      /^https:\/\/ghcr\.io\/v2\/shiosos\/damadama\/(manifests|blobs)\/sha256:[a-f0-9]{64}$/,
-    );
-    return new Response(responses.get(url.split("/").at(-1)) ?? "absent");
-  };
-  const image = { archiveSha256: sha256(archive.docker) };
-  const seal = () => {
-    const bytes = Buffer.from(JSON.stringify(manifest));
-    image.digest = `sha256:${sha256(bytes)}`;
-    image.reference = `ghcr.io/shiosos/damadama@${image.digest}`;
-    responses.set(image.digest, bytes);
-  };
-  seal();
-  return { image, path, manifest, responses, seal, calls, layers, config };
-}
+import { fixture } from "./supply-registry-fixtures.mjs";
 
 for (const options of [{}, { docker: true }, { recompress: true }])
   test(`registry matches authenticated archive ${JSON.stringify(options)}`, async (t) => {
@@ -277,7 +205,10 @@ test("private registry exchange scopes the ephemeral token and refuses redirects
   const fetch = globalThis.fetch;
   let authorized = false;
   globalThis.fetch = async (url, options) => {
-    assert.equal(options.redirect, "error");
+    assert.equal(
+      options.redirect,
+      url.includes("/blobs/") ? "manual" : "error",
+    );
     if (url.startsWith("https://ghcr.io/token?")) {
       assert.equal(
         options.headers.Authorization,
