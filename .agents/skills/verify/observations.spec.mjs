@@ -107,6 +107,18 @@ test("saved-list loading and authentication refusal retain their observable stat
     path: ".audit/verification-skill/saved-list-refused.png",
     fullPage: true,
   });
+  await page.getByRole("button", { name: "Add habit", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Create a habit" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("No habits saved yet.", { exact: true }),
+  ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("dialog", { name: "Create a habit" }),
+  ).toHaveCount(0);
+  await expect(saved.getByText("No habits saved yet.")).toHaveCount(0);
   await testInfo.attach("saved-list-state-observations", {
     body: JSON.stringify({ emptyWhileLoading, emptyAfterRefusal }),
     contentType: "application/json",

@@ -7,7 +7,7 @@ The saved list shows the account's accepted name, Good, Better and Best definiti
 - `list-values` displays each habit and its definitions/schedule once.
 - `list-reveal` brings the newly saved row into view after Today settles without restoring a cancelled reveal.
 - `list-persist` preserves the displayed values after reload.
-- `list-empty-error` shows empty prose only after a successful empty read and keeps loading, authentication refusal and failed reads distinct.
+- `list-empty-error` shows empty prose only after a successful empty read and keeps loading, authentication refusal and failed reads distinct, including after the creation panel opens and closes.
 - `list-owner` removes the previous account's private rows on account change.
 
 ## How to get to it (user POV)
