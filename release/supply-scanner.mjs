@@ -1,30 +1,78 @@
-import { databaseMetadata, insist, same } from "./supply-internal.mjs";
+import { databaseMetadata, instant, insist, same } from "./supply-internal.mjs";
+
+function databaseIdentity(identity) {
+  insist(
+    identity &&
+      same(Object.keys(identity).sort(), [
+        "archiveSha256",
+        "built",
+        "schemaVersion",
+        "sha256",
+      ]) &&
+      /^[a-f0-9]{64}$/.test(identity.sha256) &&
+      /^[a-f0-9]{64}$/.test(identity.archiveSha256),
+    "invalid database comparison identity",
+  );
+  return {
+    ...databaseMetadata({
+      valid: true,
+      schemaVersion: identity.schemaVersion,
+      built: identity.built,
+    }),
+    archiveSha256: identity.archiveSha256,
+    sha256: identity.sha256,
+  };
+}
+
+export function databaseDistribution(status) {
+  const metadata = databaseMetadata(status);
+  const source =
+    /^https:\/\/grype\.anchore\.io\/databases\/v6\/vulnerability-db_(v6\.\d+\.\d+)_(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)_([1-9]\d*)\.tar\.zst\?checksum=sha256%3A([a-f0-9]{64})$/.exec(
+      status.from,
+    );
+  insist(
+    source && source[1] === metadata.schemaVersion,
+    "untrusted database distribution source",
+  );
+  instant(source[2], "database archive time");
+  return { ...metadata, archiveSha256: source[4] };
+}
 
 export function requireSameDatabase(expected, observed) {
-  const identities = [expected, observed].map((identity) => {
-    insist(
-      identity &&
-        same(Object.keys(identity).sort(), [
-          "built",
-          "schemaVersion",
-          "sha256",
-        ]) &&
-        /^[a-f0-9]{64}$/.test(identity.sha256),
-      "invalid database comparison identity",
-    );
-    return {
-      ...databaseMetadata({
-        valid: true,
-        schemaVersion: identity.schemaVersion,
-        built: identity.built,
-      }),
-      sha256: identity.sha256,
-    };
-  });
+  const identities = [expected, observed].map(databaseIdentity);
   insist(
-    same(identities[0], identities[1]),
+    identities[0].schemaVersion === identities[1].schemaVersion &&
+      identities[0].built === identities[1].built &&
+      identities[0].archiveSha256 === identities[1].archiveSha256,
     `database changed since scan; rescan exact archive and sign new evidence; expected=${JSON.stringify(identities[0])}; observed=${JSON.stringify(identities[1])}`,
   );
+}
+
+export function requireScanDatabase(database, scans, reports) {
+  databaseIdentity(database);
+  for (const entries of [scans, reports])
+    insist(
+      Array.isArray(entries) &&
+        same(
+          entries.map((entry) => entry.kind),
+          ["runtime", "frontend"],
+        ),
+      "complete ordered runtime/frontend scans required",
+    );
+  for (const [index, tagged] of reports.entries()) {
+    insist(
+      same(scans[index].before, database) && same(scans[index].after, database),
+      "frozen database checkpoint differs",
+    );
+    insist(
+      same(databaseDistribution(tagged.report.descriptor?.db?.status), {
+        schemaVersion: database.schemaVersion,
+        built: database.built,
+        archiveSha256: database.archiveSha256,
+      }),
+      "database distribution differs from raw scan",
+    );
+  }
 }
 
 const effectiveScannerProfile = {

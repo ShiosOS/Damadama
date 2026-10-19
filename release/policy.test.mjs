@@ -20,8 +20,8 @@ const facts = () => ({
   },
   promotionAuthority: { sha: source.commit, runId: 55, attempt: 1 },
 });
-test("automatic schema 2 record needs no staging human approval", () =>
-  assert.equal(requireVerifiedRecord(record()).schema, 2));
+test("automatic schema 3 record needs no staging human approval", () =>
+  assert.equal(requireVerifiedRecord(record()).schema, 3));
 test("production promotes the exact tested digest after bound approval", () =>
   assert.equal(requirePromotion(record(), facts()), record().image.reference));
 for (const key of Object.keys(record().evidence.automated))
@@ -34,7 +34,7 @@ test("old schema and PR source are refused", () => {
   const r = record();
   r.schema = 1;
   assert.throws(() => requireVerifiedRecord(r), /record/);
-  r.schema = 2;
+  r.schema = 3;
   r.source.pr = 11;
   assert.throws(() => requireVerifiedRecord(r), /source/);
 });
@@ -83,3 +83,65 @@ test("canonical record hash binds values but ignores key order", () => {
   assert.equal(recordHash({ a: 1, b: 2 }), recordHash({ b: 2, a: 1 }));
   assert.notEqual(recordHash({ a: 1 }), recordHash({ a: 2 }));
 });
+
+for (const [name, change] of [
+  [
+    "old schema2",
+    (r) => {
+      r.schema = 2;
+    },
+  ],
+  [
+    "missing supply",
+    (r) => {
+      delete r.evidence.supply;
+    },
+  ],
+  [
+    "extra authority flag",
+    (r) => {
+      r.evidence.supply.accepted = true;
+    },
+  ],
+  [
+    "wrong attempt",
+    (r) => {
+      r.evidence.supply.artifact.name = "supply-release-2";
+    },
+  ],
+  [
+    "unsafe artifact ID",
+    (r) => {
+      r.evidence.supply.artifact.id = Number.MAX_SAFE_INTEGER + 1;
+    },
+  ],
+  [
+    "empty artifact",
+    (r) => {
+      r.evidence.supply.artifact.size = 0;
+    },
+  ],
+  [
+    "unprefixed transport digest",
+    (r) => {
+      r.evidence.supply.artifact.digest = "c".repeat(64);
+    },
+  ],
+  [
+    "wrong signer",
+    (r) => {
+      r.evidence.supply.signer.name = "proof-sign";
+    },
+  ],
+  [
+    "wrong manifest hash",
+    (r) => {
+      r.evidence.supply.manifestSha256 = "sha256:" + "d".repeat(64);
+    },
+  ],
+])
+  test(`signed record refuses ${name}`, () => {
+    const value = record();
+    change(value);
+    assert.throws(() => requireVerifiedRecord(value), /record|supply/);
+  });

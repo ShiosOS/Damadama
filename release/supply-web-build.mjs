@@ -25,25 +25,34 @@ function docker(args, options = {}) {
   });
 }
 
-export async function buildApplicationWithWebEvidence(directory, identity) {
-  return buildPaired(directory, identity);
+export async function buildApplicationWithWebEvidence(
+  directory,
+  identity,
+  application = {},
+) {
+  return buildPaired(directory, identity, undefined, application);
 }
 
 export async function buildTinyWithWebEvidence(directory, identity, context) {
   return buildPaired(directory, identity, context);
 }
 
-async function buildPaired(directory, identity, fixtureContext) {
+async function buildPaired(
+  directory,
+  identity,
+  fixtureContext,
+  application = {},
+) {
   const output = resolve(directory);
   await mkdir(output, { recursive: true });
   const builder = `damadama-application-${process.pid}`;
   const dockerfile = fixtureContext
     ? join(fixtureContext, "Dockerfile")
-    : join(root, "Dockerfile");
-  const context = fixtureContext ?? ".";
+    : (application.dockerfile ?? join(root, "Dockerfile"));
+  const context = fixtureContext ?? application.context ?? ".";
   const releaseMetadata = fixtureContext
     ? join(fixtureContext, "src/server/wwwroot/release.json")
-    : ".damadama-release.json";
+    : join(context, ".damadama-release.json");
   await copyFile(releaseMetadata, join(output, "release-metadata.json"));
   const finalOptions = fixtureContext
     ? ["--target", "final", "--network", "none"]
@@ -123,6 +132,7 @@ async function buildPaired(directory, identity, fixtureContext) {
         "--file",
         dockerfile,
         ...finalOptions,
+        ...(application.tag ? ["--tag", application.tag] : []),
         "--build-context",
         `web=${reference}`,
         "--provenance=false",

@@ -190,3 +190,102 @@ for (const [failure, message] of [
     });
   }
 }
+
+for (const operation of ["stage", "production"]) {
+  const points = operation === "stage" ? [2, 3, 4, 5] : [4, 5, 6];
+  for (const refusal of ["signed", "native"])
+    for (const [index, point] of points.entries())
+      test(`${operation} actual Railway waits for ${refusal} refusal at admission ${point}`, (t) => {
+        const result = operate(t, `${operation}-real-${refusal}-${point}`);
+        assert.equal(result.status, 1, result.stderr);
+        let expectedError = /signed admission refused/;
+        if (refusal === "native")
+          expectedError = new RegExp(
+            operation === "stage"
+              ? "main advanced"
+              : "main superseded the selected source",
+          );
+        assert.match(result.stderr, expectedError);
+        const eventsPath = join(result.dir, "events.jsonl");
+        const events = existsSync(eventsPath)
+          ? readFileSync(eventsPath, "utf8").trim().split("\n").map(JSON.parse)
+          : [];
+        const mutations = events.filter((event) =>
+          ["source", "deploy"].includes(event.type),
+        );
+        assert.equal(mutations.length, Math.min(index, 2));
+        assert.equal(
+          existsSync(
+            join(
+              result.dir,
+              operation === "stage" ? "verified.json" : "production.json",
+            ),
+          ),
+          false,
+        );
+        if (index > 0) {
+          const outcome = result.read("runtime-evidence/provider-outcome.json");
+          assert.equal(outcome.status, "applied-but-unverified");
+          assert.equal(outcome.image, record().image.reference);
+          assert.equal(
+            outcome.deployment.environmentId,
+            operation === "stage" ? "stage-1" : "prod-env",
+          );
+          let expectedId = operation === "stage" ? "deploy-1" : "prod-1";
+          if (index === 1) expectedId = null;
+          assert.equal(outcome.deployment.id, expectedId);
+          assert.match(result.stderr, /No rollback was performed/);
+        }
+        if (operation === "production")
+          assert.deepEqual(result.read("verified.json"), record());
+      });
+  test(`${operation} actual Railway completes both awaited signed callbacks`, (t) => {
+    const result = operate(t, `${operation}-real-success`);
+    assert.equal(result.status, 0, result.stderr);
+    const events = readFileSync(join(result.dir, "events.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map(JSON.parse);
+    const effects = events.filter((event) =>
+      ["source", "deploy"].includes(event.type),
+    );
+    assert.deepEqual(
+      effects.map((event) => event.signedCalls),
+      operation === "stage" ? [2, 3] : [4, 5],
+    );
+  });
+}
+
+for (const operation of ["preflight", "production"])
+  for (const result of [
+    "failure",
+    "skipped",
+    "cancelled",
+    "missing",
+    "duplicate",
+    "over100",
+  ])
+    test(`${operation} native staging loader refuses ${result} barrier evidence`, (t) => {
+      const observed = operate(t, `${operation}-barrier-${result}`);
+      assert.equal(observed.status, 1);
+      assert.match(
+        observed.stderr,
+        result === "over100"
+          ? /ambiguous workflow jobs/
+          : /CI release-controls/,
+      );
+      assert.equal(existsSync(join(observed.dir, "production.json")), false);
+      assert.equal(
+        existsSync(join(observed.dir, "promotion-plan.json")),
+        false,
+      );
+      assert.equal(existsSync(join(observed.dir, "events.jsonl")), false);
+    });
+
+test("preflight freezes schema2 plan with the verified supply identity", (t) => {
+  const result = operate(t, "preflight-success");
+  assert.equal(result.status, 0, result.stderr);
+  const plan = result.read("promotion-plan.json");
+  assert.equal(plan.schema, 2);
+  assert.deepEqual(plan.supply, record().evidence.supply);
+});

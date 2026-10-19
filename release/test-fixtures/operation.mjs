@@ -10,8 +10,10 @@ import { record, source, authority, run, jobs } from "../fixtures.mjs";
 import { recordHash } from "../policy.mjs";
 
 const scenario = process.argv[2];
-const production = scenario.startsWith("production-");
+const preflight = scenario.startsWith("preflight-");
+const production = scenario.startsWith("production-") || preflight;
 process.argv[2] = production ? "promote" : "stage";
+if (preflight) process.argv[2] = "preflight";
 Object.assign(process.env, {
   GH_TOKEN: "fixture",
   GITHUB_REF: "refs/heads/main",
@@ -23,6 +25,11 @@ Object.assign(process.env, {
     ? "https://prod.damadama.app"
     : "https://staging.damadama.app",
   GITHUB_STEP_SUMMARY: "summary.md",
+  GITHUB_OUTPUT: "outputs.txt",
+  STAGING_RUN_ID: "42",
+  RELEASE_VERSION: "v1.2.3",
+  RELEASE_NOTES: "Controlled promotion",
+  RECOVERY_EVIDENCE: "{}",
 });
 mkdirSync("runtime-evidence");
 if (["stage-summary", "production-both-sinks"].includes(scenario))
@@ -62,7 +69,8 @@ const metadata = artifact(2, "candidate-metadata", 42, {
 });
 const selected = ({ id, name, digest }) => ({ id, name, digest });
 const plan = {
-  schema: 1,
+  schema: 2,
+  supply: staged.evidence.supply,
   authority: { ...authority, runId: 43 },
   stagingAuthority: authority,
   artifacts: { receipt: selected(receipt), metadata: selected(metadata) },
@@ -88,6 +96,8 @@ process.env.PLAN_HASH = recordHash(plan);
 process.env.PLAN_ARTIFACT_ID = "3";
 globalThis.operationFixture = {
   image: staged.image,
+  supply: staged.evidence.supply,
+  signedCalls: 0,
   deployment: {
     ...staged.deployment,
     id: production ? "prod-1" : "deploy-1",
@@ -121,7 +131,106 @@ function assertUpload(command, args) {
   if (command !== "gh" || args[0] !== "release" || args[1] !== "upload")
     throw Error(`unexpected subprocess ${command} ${args}`);
 }
+const realRailway = scenario.includes("-real-");
+if (realRailway) {
+  const policies = Object.fromEntries(
+    ["staging", "production"].map((name) => [
+      name,
+      {
+        railwayProjectId: "project",
+        railwayEnvironmentId: name === "staging" ? "stage-1" : "prod-env",
+        appServiceId: "app",
+        databaseServiceId: "postgres",
+        volumeId: name + "-volume",
+        backupBucket: name + "-backup",
+        databaseName: name + "-db",
+        databaseUser: name + "-user",
+        clerkApplicationId: name + "-clerk",
+        clerkIssuer: "https://" + name + ".clerk.example.com",
+        clerkPublishableKey: "pk_live_" + name,
+        origin:
+          name === "staging"
+            ? "https://staging.damadama.app"
+            : "https://prod.damadama.app",
+      },
+    ]),
+  );
+  Object.assign(process.env, {
+    RELEASE_ENVIRONMENTS: JSON.stringify(policies),
+    RAILWAY_TOKEN: "synthetic-provider",
+    RAILWAY_PROJECT_ID: "project",
+    RAILWAY_ENVIRONMENT_ID: operationFixture.deployment.environmentId,
+    RAILWAY_SERVICE_ID: "app",
+    RAILWAY_DEPLOYMENT_IMAGE_PATH: "image",
+  });
+  operationFixture.policy = policies[production ? "production" : "staging"];
+  operationFixture.providerDeployed = false;
+}
 globalThis.fetch = async (url, options = {}) => {
+  if (url === "https://backboard.railway.com/graphql/v2") {
+    if (!realRailway) throw Error("unexpected provider transport");
+    const { query, variables } = JSON.parse(options.body);
+    const fixture = operationFixture;
+    let data;
+    if (query.includes("serviceInstanceUpdate(")) {
+      fixture.event({
+        type: "source",
+        image: variables.input.source.image,
+        signedCalls: fixture.signedCalls,
+      });
+      data = { serviceInstanceUpdate: true };
+    } else if (query.includes("serviceInstanceDeployV2(")) {
+      fixture.providerDeployed = true;
+      fixture.event({
+        type: "deploy",
+        image: fixture.image.reference,
+        signedCalls: fixture.signedCalls,
+      });
+      data = { serviceInstanceDeployV2: fixture.deployment.id };
+    } else if (query.includes("projectToken")) {
+      data = {
+        projectToken: {
+          projectId: "project",
+          environmentId: fixture.deployment.environmentId,
+        },
+        serviceInstance: {
+          source: { image: fixture.image.reference },
+          numReplicas: 1,
+          sleepApplication: false,
+          healthcheckPath: "/health/ready",
+          hasEverDeployed: fixture.providerDeployed,
+          activeDeployments: fixture.providerDeployed
+            ? [
+                {
+                  id: fixture.deployment.id,
+                  status: "SUCCESS",
+                  meta: { image: fixture.image.reference },
+                },
+              ]
+            : [],
+        },
+      };
+    } else if (query.includes("deploymentLogs")) data = { deploymentLogs: [] };
+    else if (query.includes("deployment(id:"))
+      data = { deployment: { id: fixture.deployment.id, status: "SUCCESS" } };
+    else if (query.includes("variables(")) {
+      const policy = fixture.policy;
+      data = {
+        variables: {
+          Clerk__Issuer: policy.clerkIssuer,
+          Clerk__PublishableKey: policy.clerkPublishableKey,
+          Clerk__AuthorizedParties__0: policy.origin,
+          ConnectionStrings__habits:
+            "Host=db.railway.internal;Database=" +
+            policy.databaseName +
+            ";Username=" +
+            policy.databaseUser +
+            ";Password=synthetic",
+        },
+      };
+    } else throw Error("unexpected provider query");
+    return new Response(JSON.stringify({ data }));
+  }
   const path = new URL(url).pathname;
   let value;
   if (path.endsWith("/zip"))
@@ -142,10 +251,19 @@ globalThis.fetch = async (url, options = {}) => {
       },
     ];
   else if (path.endsWith("/jobs")) {
-    const list = path.includes("/runs/43/")
+    let list = path.includes("/runs/43/")
       ? jobs(["preflight"]).map((j) => ({ ...j, run_id: 43 }))
       : jobs();
-    value = { total_count: list.length, jobs: list };
+    if (!path.includes("/runs/43/") && scenario.includes("-barrier-")) {
+      const result = scenario.split("-").at(-1);
+      if (result === "missing") list = list.slice(1);
+      else if (result === "duplicate") list.push(list[0]);
+      else list[0].conclusion = result;
+    }
+    value = {
+      total_count: scenario.endsWith("-over100") ? 101 : list.length,
+      jobs: list,
+    };
   } else if (path.endsWith("/artifacts")) {
     let list = [];
     if (path.includes("/runs/43/")) list = [planArtifact];
@@ -165,7 +283,18 @@ globalThis.fetch = async (url, options = {}) => {
   return new Response(JSON.stringify(value));
 };
 const adapters = {
-  "images.mjs": `export async function prepareArchive(){} export function publishArchive(){return operationFixture.image}`,
+  "supply-release.mjs": `
+    export async function locateRelease(){ return {image:operationFixture.image,supply:operationFixture.supply}; }
+    export async function authenticateRelease(){
+      operationFixture.signedCalls++;
+      await new Promise(resolve => setImmediate(resolve));
+      const target = Number(operationFixture.scenario.split('-').at(-1));
+      if(operationFixture.signedCalls === target){
+        if(operationFixture.scenario.includes('-signed-')) throw Error('signed admission refused');
+        if(operationFixture.scenario.includes('-native-')) operationFixture.stale=true;
+      }
+    }
+  `,
   "railway.mjs": `
     export async function requireEnvironment(){}
     export async function inspectRailway(){return {hasEverDeployed:false,activeId:null}}
@@ -199,6 +328,7 @@ const adapters = {
   `,
   "node:child_process": `export function execFileSync(command,args){return operationFixture.exec(command,args)}`,
 };
+if (realRailway) delete adapters["railway.mjs"];
 registerHooks({
   load(url, context, next) {
     const adapter = adapters[url.split("/").pop()];

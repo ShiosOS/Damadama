@@ -29,7 +29,7 @@ export const jobs = (names = ["release-controls", "check", "build", "stage"]) =>
     completed_at: "2026-10-14T12:05:00Z",
   }));
 export const record = () => ({
-  schema: 2,
+  schema: 3,
   source: { ...source },
   authority: { ...authority },
   image: {
@@ -45,6 +45,17 @@ export const record = () => ({
     image: `ghcr.io/shiosos/damadama@sha256:${"a".repeat(64)}`,
   },
   evidence: {
+    supply: {
+      schema: 1,
+      artifact: {
+        id: 90,
+        name: "supply-release-1",
+        digest: `sha256:${"c".repeat(64)}`,
+        size: 100,
+      },
+      signer: { id: 80, name: "sign" },
+      manifestSha256: "d".repeat(64),
+    },
     ci: jobs().slice(0, 2),
     automated: {
       readiness: true,

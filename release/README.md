@@ -1,6 +1,8 @@
 # Stage main and promote the tested image
 
-Merge reviewed PRs after their real `release-controls` and `check` jobs pass. A main push runs the same checks, builds one image without deployment credentials, and stages it automatically.
+Merge reviewed PRs after their real `release-controls` and `check` jobs pass. A main push runs the required security and application checks, builds one image, scans its original evidence, publishes its digest, and signs it in a separate job. Staging requires fresh production verification before provider effects.
+
+The signed integration and shared CI graph are implemented in this source. Postmerge main execution, exact-head native issuance, registry access, cold timing, and final repository validation remain required before activation.
 Production uses `https://prod.damadama.app`. Preserve the existing apex site at `https://damadama.app`.
 
 ## Prepare the two hosting environments
@@ -62,7 +64,7 @@ Service source settings alone never count as running-image evidence. A previousl
 ## Observe automatic staging
 
 1. Open **Main staging** for the merged main commit.
-2. Wait for its control tests, application checks, isolated build, and staging job.
+2. Wait for the security callers, control tests, application checks, build, scan, publication, signer, verifier, and staging jobs.
 3. Inspect `verified-record-<attempt>` and the runtime evidence. A successful setup-only run has no verified record and cannot promote.
 
 Staging has no human approval. The job verifies readiness, embedded commit and tree, ordinary Clerk sessions, saved values before reload, separate reload values, an owner's successful detail read before another account's refusal, sign-out, and invite-only signup refusal.
@@ -71,24 +73,24 @@ The outsider browser opens Clerk's ordinary signup component without an invitati
 The two CI accounts use short-lived Clerk tickets to obtain ordinary sessions. This tests neither inbox delivery nor email-code login. Production approval includes that separate human attestation. No fixture authentication enters the image.
 Test habits remain sample data because the current application has no permanent-delete endpoint.
 
-`source` contains `{repository, commit, tree}`. `authority` contains `{sha, runId, attempt}`. Schema 1 PR records and old image-publication receipts cannot promote.
+`source` contains `{repository, commit, tree}`. `authority` contains `{sha, runId, attempt}`. Verified records use schema 3 and contain `evidence.supply`, which freezes the capsule artifact, signer job, and manifest hash. Older verified records cannot promote.
 The controller checks current main before publication, before each provider mutation, and after runtime observation. The staging queue serializes deployments through final observation and never cancels an active deployment.
 
-The build job has contents-read permission, no environment, and no provider or registry credentials. A fresh staging runner validates the archive and executes pinned main controls. Only that runner publishes the fixed repository image and calls Railway.
+The build job has contents-read permission, no environment, and no provider or registry credentials. Only the publisher receives package-write permission. The isolated signer receives package-read, OIDC, and attestation-write permissions. The verifier and deployment jobs receive package-read permission. Every deployment admission reacquires original artifacts, verifies production signatures and registry content, and checks the current vulnerability database. The signer does not build, scan, or acquire a database.
 The first provider metadata observation remains a separate approved setup task. The adapter cannot claim success from configured service source alone. Keep already published recovery image digests as historical setup artifacts. `package-recovery.mjs` and the recovery role of `images.mjs` retain the trusted recovery packaging and publication primitives.
 
 ## Approve production
 
-1. Select a successful **Main staging** run for current main. Retain its image and artifacts for at least 90 days and for every supported rollback version.
+1. Select a successful **Main staging** run for current main while its original artifacts remain available and its scan and database remain current.
 2. Complete an ordinary email-code login with a real inbox. Review the saved values, migrations, and rollback compatibility.
 3. Take a production backup and verify the measured isolated restore and seven-day retention.
 4. Dispatch **Promote verified release** with the staging run ID, semantic version, short notes, and recovery evidence.
-5. Read the preflight summary and `promotion-plan-1`. Compare the source, image digest, staging attempt, record hash, plan hash, migrations, and recovery evidence.
+5. Read the preflight summary and `promotion-plan-1`. Compare the source, image digest, staging attempt, supply identity, record hash, plan hash, migrations, and recovery evidence.
 6. Approve the protected `production` environment for that plan.
 7. Inspect the deployment receipt, then complete production email login and save/reload checks.
 
-The secretless preflight authenticates the successful main-push workflow, exact attempt jobs, artifact run membership, immutable IDs, and ZIP transport digests. It freezes the plan before the approval gate.
-The protected job rereads the plan and staging artifacts after approval. It compares the canonical plan and record hashes and deploys the same registry digest without rebuilding.
+The secretless preflight authenticates the successful main-push workflow, exact attempt jobs, artifact run membership, immutable IDs, and ZIP transport digests. It performs full signed admission and freezes the schema 2 plan before the approval gate.
+The protected job rereads the plan and staging artifacts after approval. It repeats native authority checks, full signed admission, and native authority checks at every protected boundary. It compares the canonical plan and record hashes and deploys the same registry digest without rebuilding.
 GitHub artifacts have no native attempt field. Attempt names, actual producer jobs, and their creation intervals establish attempt membership. A ZIP digest is not the canonical record hash.
 Environment approval authorizes a run and environment. The workflow binds that approval to the frozen plan through the dependency graph and postapproval readback. Rerun promotion attempts refuse because the approval API does not identify attempts. Dispatch a new promotion instead.
 
@@ -120,9 +122,9 @@ If main advances after a provider write, the run fails with an **applied-but-unv
 Use the workflow summary's deployment ID to open Railway deployment logs. Inspect migration startup failures, schema readiness, and app trace IDs.
 The backend emits JSON logs; store neither connection strings nor Clerk tokens in PR evidence.
 Public workflow artifacts retain a sanitized deployment summary and synthetic habit screenshots, not raw production logs.
-Failed browser reports and large image-transfer archives last three days. Source, migration metadata, and verified records last 90 days.
-Expired transfer archives fail closed. Production uses the same retained registry digest and matching metadata without downloading or rebuilding the image.
-Preserve release assets and retained digests beyond 90 days if rollback support requires it.
+Build originals, scan originals, publication evidence, signed capsules, and runtime reports have three-day retention. Source, migration metadata, verified records, and promotion plans have 90-day retention.
+Admission can end sooner when main advances, an artifact is deleted, a scan reaches 24 hours, a database reaches 120 hours, or the current upstream database changes. Every admission downloads the original evidence again.
+These retention periods do not promise a 90-day promotion or rollback window. This controller provides no rescan or reissue lifecycle and never silently rebuilds a selected promotion candidate.
 
 App rollback redeploys a previously verified digest after explicit approval and proof that it reads and writes the current schema.
 It does not run EF `Down`. The initial migration's `Down` deletes both habit tables.

@@ -50,6 +50,22 @@ export const evidenceFiles = Object.freeze(
     roles.map((name) => `${group}/${name}`),
   ),
 );
+export const releaseMembers = Object.freeze([
+  ...evidenceFiles,
+  "manifest.json",
+  "manifest.bundle.json",
+]);
+
+export function productionUploadPaths(kind, directory) {
+  const roles = {
+    build: buildRoles,
+    scan: scanRoles,
+    publish: ["image.json"],
+    release: releaseMembers,
+  };
+  insist(Object.hasOwn(roles, kind), "unknown production artifact role");
+  return roles[kind].map((name) => join(directory, name));
+}
 
 export async function manifestFiles(directory) {
   const hashes = {};
