@@ -318,7 +318,7 @@ test("producer authentication streams complete ZIPs and refuses transport or pro
     const artifacts=['build','scan'].map((role,i)=>({id:i+1,name:'supply-proof-'+role+'-2',digest:'sha256:'+hash(bytes[role]),size_in_bytes:bytes[role].length,expired:false,workflow_run:{id:123,head_sha:source.commit},created_at:'2026-10-18T00:01:00Z'}));
     let mode='good', downloads=0;
     const diagnostics=[];
-    mock.method(console,'error',line=>diagnostics.push(JSON.parse(line.slice('release-phase '.length))));
+    mock.method(console,'error',line=>{if(typeof line==='string' && line.startsWith('release-phase '))diagnostics.push(JSON.parse(line.slice('release-phase '.length)));});
     mock.module('./release/github.mjs',{namedExports:{...github,github:async()=>({...workflow,...(mode==='source'?{head_sha:'f'.repeat(40)}:{})}),attemptJobs:async()=>mode==='application'?jobs.slice(0,2):jobs,runArtifacts:async()=>artifacts.map((item,index)=>index===0?{...item,...(mode==='digest'?{digest:'sha256:'+'f'.repeat(64)}:{}),...(mode==='size'?{size_in_bytes:item.size_in_bytes-1}:{}),...(mode==='expired'?{expired:true}:{}),...(mode==='created'?{created_at:'2026-10-17T00:00:00Z'}:{})}:item)}});
     globalThis.fetch=async url=>{
       downloads++;
@@ -386,7 +386,7 @@ test("production publication and capsule use canonical bounded transport and nat
     const artifacts=['published-image-2','supply-release-2'].map((name,i)=>({id:i+1,name,digest:'sha256:'+hash(bytes[i]),size_in_bytes:bytes[i].length,expired:false,workflow_run:{id:123,head_sha:source.commit},created_at:'2026-10-18T00:01:00Z'}));
     let mode='good';
     const diagnostics=[];
-    mock.method(console,'error',line=>diagnostics.push(JSON.parse(line.slice('release-phase '.length))));
+    mock.method(console,'error',line=>{if(typeof line==='string' && line.startsWith('release-phase '))diagnostics.push(JSON.parse(line.slice('release-phase '.length)));});
     mock.module('./release/github.mjs',{namedExports:{...github,
       github:async()=>mode==='run'?{...workflow,run_attempt:3}:workflow,
       attemptJobs:async()=>jobs.map(j=>mode==='job'?{...j,conclusion:'failure'}:j),
