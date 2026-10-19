@@ -538,7 +538,7 @@ test("a failed saved-list read shows its error without empty prose", async ({
       body: JSON.stringify({ title: "Habits unavailable." }),
     });
   });
-  await page.goto("/?account=other");
+  await page.goto("/?account=listRecovery");
   await expect(page.getByRole("alert")).toContainText("Habits unavailable.");
   const saved = page.getByRole("region", { name: "Saved habits", exact: true });
   await expect(saved.locator("article")).toHaveCount(0);
