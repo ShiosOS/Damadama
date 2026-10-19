@@ -58,7 +58,7 @@ jobs:
           RELEASE_NOTES: ${{ inputs.notes }}
           RECOVERY_EVIDENCE: ${{ inputs.recovery }}
       - id: upload
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: promotion-plan-${{ github.run_attempt }}
           path: |
@@ -104,7 +104,7 @@ jobs:
           RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
           APP_ORIGIN: ${{ vars.APP_ORIGIN }}
           CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: failure()
         with:
           name: production-failure-${{ github.run_attempt }}
