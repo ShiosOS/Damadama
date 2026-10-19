@@ -92,6 +92,9 @@ export async function main() {
   };
   const execute = async (field, program, args, observe) => {
     const child = spawn(program, args, { cwd: root, stdio: "inherit" });
+    const command = [program, ...args];
+    active = { child, identity: null };
+    session[field] = { state: "running", process: null, command };
     let completion;
     child.once("error", () => {
       completion = { state: "exited", code: 127 };
@@ -99,13 +102,15 @@ export async function main() {
     child.once("exit", (code, signal) => {
       completion = { state: "exited", code, signal };
     });
-    const identity = await processIdentity(child.pid);
-    const command = [program, ...args];
-    active = { child, identity };
-    session[field] = { state: "running", process: identity, command };
-    await atomicJson(join(directory, "session.json"), session);
+    const identity = await processIdentity(child.pid).catch((error) => {
+      fail(error);
+      return null;
+    });
+    active.identity = identity;
+    session[field].process = identity;
+    await atomicJson(join(directory, "session.json"), session).catch(fail);
     while (!completion) {
-      if (observe) await observe(child.pid).catch(fail);
+      if (observe && identity) await observe(child.pid).catch(fail);
       await delay(500);
     }
     active = null;
