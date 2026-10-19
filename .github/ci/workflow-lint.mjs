@@ -62,6 +62,14 @@ function run(command, args) {
   };
 }
 
+function runActionlint(actionlint, args) {
+  return run(actionlint, [
+    "-config-file",
+    join(root, ".github", "actionlint.yaml"),
+    ...args,
+  ]);
+}
+
 async function install(name) {
   const release = releases[name];
   const asset = release.assets[platformKey];
@@ -109,7 +117,14 @@ function expectFailure(label, result, pattern) {
 
 async function selfTest(actionlint, zizmor) {
   for (const [runtime, args] of [
-    [process.execPath, ["test", "./.github/ci/security-policy.test.mjs"]],
+    [
+      process.execPath,
+      [
+        "test",
+        "./.github/ci/security-policy.test.mjs",
+        "./.github/ci/workflow-guards.test.mjs",
+      ],
+    ],
     ["node", ["--test", ".github/ci/monitor-conformance.test.mjs"]],
   ]) {
     const result = run(runtime, args);
@@ -117,7 +132,7 @@ async function selfTest(actionlint, zizmor) {
   }
   const fixture = (name) => join(fixturesDirectory, `${name}.yml`);
   const valid = fixture("valid-queue");
-  const validActionlint = run(actionlint, ["-oneline", valid]);
+  const validActionlint = runActionlint(actionlint, ["-oneline", valid]);
   const validZizmor = run(zizmor, ["--no-online-audits", valid]);
   const validQueue = await queueErrors([valid]);
   if (
@@ -132,7 +147,7 @@ async function selfTest(actionlint, zizmor) {
 
   expectFailure(
     "actionlint syntax",
-    run(actionlint, ["-oneline", fixture("invalid-actionlint")]),
+    runActionlint(actionlint, ["-oneline", fixture("invalid-actionlint")]),
     /unexpected key "bogus".*\[syntax-check\]/,
   );
   expectFailure(
@@ -372,7 +387,7 @@ async function selfTest(actionlint, zizmor) {
   }
   expectFailure(
     "pinned actionlint self-repository compatibility",
-    run(actionlint, [
+    runActionlint(actionlint, [
       "-oneline",
       join(root, ".github", "workflows", "release-controls.yml"),
     ]),
@@ -380,7 +395,7 @@ async function selfTest(actionlint, zizmor) {
   );
   expectFailure(
     "actionlint still rejects unrelated syntax with compatibility ignore",
-    run(actionlint, [
+    runActionlint(actionlint, [
       "-oneline",
       "-ignore",
       actionlintSelfRepositoryCompatibility,
@@ -403,7 +418,7 @@ async function selfTest(actionlint, zizmor) {
     );
     expectFailure(
       `actionlint rejects unregistered target ${target}`,
-      run(actionlint, [
+      runActionlint(actionlint, [
         "-oneline",
         "-ignore",
         actionlintSelfRepositoryCompatibility,
@@ -443,7 +458,7 @@ if (process.argv[2] === "--self-test") {
   const files = (await readdir(directory))
     .filter((file) => /\.ya?ml$/.test(file))
     .map((file) => join(directory, file));
-  const actionlintResult = run(actionlint, [
+  const actionlintResult = runActionlint(actionlint, [
     "-oneline",
     "-ignore",
     actionlintSelfRepositoryCompatibility,
