@@ -14,7 +14,7 @@ Use the integrated browser mode for habit and entry behavior. It mounts the prod
 1. Select this checkout's runtimes from [dev/README.md](../../../dev/README.md) and the current manifests. Keep runtime selection process-local.
 2. Run `bun run doctor browser`. Use distinct free `DAMADAMA_BROWSER_PORT` and `DAMADAMA_API_PORT` overrides when the defaults are occupied.
 3. Run `bun run test:browser`. This is the canonical preparation and full integrated run. [scripts/developer.ts](../../../scripts/developer.ts) owns locked installation, production and fixture builds, BrowserHost restoration/build and pinned Chromium installation. A completed `bun run check` also prepares these inputs through [scripts/check.ts](../../../scripts/check.ts).
-4. After either preparation succeeds, use the Drive command for a complete map pass or a feature file's command for a focused replay. Prepare again when product sources, dependencies or build inputs change.
+4. After either preparation succeeds, use the Linux native Drive command for a complete map pass or a feature file's command for a focused replay. Prepare again when product sources, dependencies or build inputs change.
 
 The session is one canonical Playwright invocation. [playwright.config.ts](../../../tests/Browser/playwright.config.ts) owns BrowserHost and Vite preview, serial driving and teardown. It refuses existing servers. Each invocation gets a fresh PostgreSQL Testcontainer. Keep one invocation active per checkout because build and result paths are shared.
 
@@ -32,13 +32,15 @@ After a failed drive or unexpected UI state, let that invocation exit and finish
 
 ## Drive
 
-Use the production controls named by the feature map. After canonical preparation, run the complete map in one serial session:
+Use the production controls named by the feature map. After canonical preparation, run the complete map in one serial Linux session from a clean checkout:
 
 ```sh
-node node_modules/@playwright/test/cli.js test --config .agents/skills/verify/playwright.config.mjs
+node .agents/skills/verify/native-session.mjs
 ```
 
-[The skill config](playwright.config.mjs) reuses canonical startup, readiness, serial driving and browser settings. It selects `habits.spec.ts`, `today.spec.ts`, `entries.spec.ts` and `accessibility.spec.ts`, plus [focused observations](observations.spec.mjs) for cancelled-draft retention with immediate/reloaded values, initial unfiltered saved-list loading/authentication refusal and the actual past-date `Today` button. It adds no application server or fixture account. The creation observation uses the existing `performance` account because the performance spec is excluded from this invocation. The other observations use the empty `other` account without writing rows.
+The [native wrapper](native-session.mjs) requires Linux `/proc`, `ps`, `lsof` and the prepared Docker prerequisites. It runs its receipt tests, literal `bun run doctor browser`, then `node node_modules/@playwright/test/cli.js test --config .agents/skills/verify/playwright.config.mjs`. It records each actual exit separately and refuses unsupported platforms before doctor or Docker. Do not repeat a known-blocked Windows Docker or fullcheck attempt. Use the current source's Linux CI for the complete native proof.
+
+[The skill config](playwright.config.mjs) reuses canonical startup, readiness, serial driving and browser settings. It selects `habits.spec.ts`, `today.spec.ts`, `entries.spec.ts` and `accessibility.spec.ts`, plus [focused observations](observations.spec.mjs) for cancelled-draft retention with immediate/reloaded values, initial unfiltered saved-list loading/authentication refusal and the actual past-date `Today` button. It stops after the first failure and bounds the invocation to five minutes. It adds no application server or fixture account. The creation observation uses the existing `performance` account because the performance spec is excluded from this invocation. The other observations use the empty `other` account without writing rows.
 
 The provider branch of session access needs its separately authorized workflow. Read the selected spec before attributing results. A routed failure response proves the UI's refusal/retry handling; it does not prove a real storage outage. Seeding through the real API establishes a precondition and does not replace driving the feature under test.
 
@@ -48,19 +50,21 @@ Retain the source identities and diff, actual command, stdout/stderr, exit code,
 
 Existing specs write named synthetic screenshots under `.audit/`, browser output under `test-results/`, and the HTML report under `tests/Browser/playwright-report/`. Copy only the run's named non-secret evidence before another invocation can replace it. Record the full source revision separately from any deployed source or controls revision.
 
-The complete-map command writes its HTML report and failure output under `.audit/verification-skill/`. Its observations add `habit-immediate.png`, `habit-reloaded.png`, `saved-list-loading.png`, `saved-list-refused.png`, `calendar-past.png` and `calendar-today.png` there. The saved-list attachment records only whether empty prose was visible alongside loading or refusal. Retain that actual observation before deciding whether a separate product issue exists.
+The complete-map command writes raw JSON, an HTML report and failure output under `.audit/verification-skill/`. Its observations add `habit-immediate.png`, `habit-reloaded.png`, `saved-list-loading.png`, `saved-list-refused.png`, `calendar-past.png` and `calendar-today.png` there. The saved-list attachment records only whether empty prose was visible alongside loading or refusal. Retain that actual observation before deciding whether a separate product issue exists.
+
+Each native attempt retains `.audit/verification-skill/retained/<run UUID>/`, including failed or incomplete attempts. `session.json` records source and build fingerprints, doctor and invocation outcomes, baseline metadata, and observed process starts, listeners and container identity. `cleanup.json` records the separate cleanup outcome and retained-media hashes. `selected-tests.json` contains actual names and statuses without raw output, errors or attachments. Only thirteen fixed synthetic screenshots/recordings listed in [native-evidence.mjs](native-evidence.mjs) can be copied there, and only when fresh for that invocation. The distinct CI upload includes this retained directory. Raw JSON and HTML reports are outside that upload.
 
 Keep `fixture.json`, `.env` files, JWTs, connection strings, storage state and provider browser captures out of retained proof. Synthetic account controls are never evidence of Clerk sign-in or provider sign-out. [The provider runbook](../../../tests/Provider/README.md) defines its sanitized receipt and email/MFA limits.
 
 ## Cleanup
 
-Let Playwright stop the two servers it started and let BrowserHost dispose its Testcontainer. On a failed or interrupted invocation, inspect only the recorded invocation and its children. Finish their teardown before retrying. Use owned process/container identities for any residual cleanup. Preserve the persistent Aspire volume and unrelated sessions.
+Let Playwright stop the two servers it started and let BrowserHost dispose its Testcontainer. The wrapper observes invocation descendants and listener ancestry while they run, including PID, process start ticks and boot identity, plus exactly one new PostgreSQL container relative to its baseline. After exit it waits at most fifteen seconds for those exact processes, both listeners and that container to be absent. A failed OS query cannot prove absence. It forwards received cancellation only to its exact active child and does not kill residue or prune containers.
 
-After owned processes exit, remove this run's generated `tests/Browser/fixture.json` and `.audit/browser-build/fixture.json`. Keep the evidence directory outside those paths. Confirm the run's listeners and processes are gone and the retained evidence files still exist. An interrupted session with unknown ownership is blocked until ownership is reconciled.
+After verified absence, the wrapper removes only this run's fresh `tests/Browser/fixture.json` and `.audit/browser-build/fixture.json`. It rechecks file and parent identity immediately before deletion through an open directory handle, rejects links or replacements, and verifies retained evidence hashes afterward. Unknown ownership or residue keeps cleanup unverified and preserves the checkout's `.audit/verification-skill/native.lock`. Reconcile its recorded owner and resources before retrying. Never remove an unknown lock, persistent Aspire volume or unrelated session to make a retry pass.
 
 ## Helpers
 
-The skill's Playwright config and observation spec run through the Drive command. The maintained developer command and canonical Playwright configuration own preparation and server lifecycle. The observation spec covers map gaps without changing product code or shared configuration.
+The native wrapper owns fixed execution and receipts. [owned-resources.mjs](owned-resources.mjs) observes Linux identities and checks the two generated files; [native-evidence.mjs](native-evidence.mjs) fingerprints prepared inputs and stages sanitized evidence. Portable refusal tests run with `node --test .agents/skills/verify/owned-resources.test.mjs`. The wrapper also runs [native-linux.test.mjs](native-linux.test.mjs) against actual child/listener and filesystem effects. These helper tests do not replace live application proof. The maintained developer command and canonical Playwright configuration own preparation and server lifecycle. The observation spec covers map gaps without changing product code or shared configuration.
 
 ## Maintain
 
