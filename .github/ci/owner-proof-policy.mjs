@@ -120,7 +120,7 @@ function browser(workflows) {
         checkout(head),
         node(),
         action("actions/setup-dotnet", { "global-json-file": "global.json" }),
-        action("oven-sh/setup-bun", { "bun-version": "1.3.14" }),
+        action("oven-sh/setup-bun", { "bun-version": "1.4.3" }),
         { run: "bun install --frozen-lockfile" },
         { run: "bun test tests/Browser/visual-support.test.ts" },
         {

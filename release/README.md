@@ -67,6 +67,8 @@ Service source settings alone never count as running-image evidence. A previousl
 2. Wait for the security callers, control tests, application checks, build, scan, publication, signer, verifier, and staging jobs.
 3. Inspect `verified-record-<attempt>` and the runtime evidence. A successful setup-only run has no verified record and cannot promote.
 
+The Stage job has a 20-minute deadline. Successful jobs took 12 minutes 33 seconds and 12 minutes 40 seconds, while the failed job spent 11 minutes 38 seconds before its first deployment status. Combining that observed interval with the successful remaining work estimates 16 minutes 34 seconds. The bounded job budget covers that work without changing operation deadlines, signed admission, scanning, or authentication assertions. [Issue #108](https://github.com/ShiosOS/Damadama/issues/108) retains the original runs and timing evidence. Phase records identify where future runs spend time.
+
 Staging has no human approval. The job verifies readiness, embedded commit and tree, ordinary Clerk sessions, saved values before reload, separate reload values, an owner's successful detail read before another account's refusal, sign-out, and invite-only signup refusal.
 The outsider browser opens Clerk's ordinary signup component without an invitation and must observe **Access restricted** with no session. Public sign-in pages can remain visible. Application data still requires a valid ordinary Clerk JWT on every origin.
 

@@ -346,7 +346,7 @@ jobs:
   stage:
     needs: [build, verify]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     environment:
       name: staging
       url: ${{ vars.APP_ORIGIN }}
