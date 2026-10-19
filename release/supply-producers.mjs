@@ -13,6 +13,7 @@ import {
 } from "./github.mjs";
 import { requireCIEvidence } from "./policy.mjs";
 import { producerLayout, releaseMembers } from "./supply-evidence.mjs";
+import { observePhase } from "./diagnostics.mjs";
 import {
   insist,
   proof,
@@ -112,17 +113,31 @@ async function materializeProductionArtifact(
     "artifact ZIP metadata size exceeds bound",
   );
   const artifact = { ...selected, size };
+  const phases =
+    kind === "publication"
+      ? {
+          download: "supply.publication.download",
+          extract: "supply.publication.extract",
+        }
+      : {
+          download: "supply.capsule.download",
+          extract: "supply.capsule.extract",
+        };
   await mkdir(directory, { recursive: true });
   await isolated(async (scratch) => {
     const archive = join(scratch, "artifact.zip");
-    await downloadArtifact(artifact, archive);
-    const members = await zipMembers(archive, layout.members);
-    for (const name of layout.members)
-      await extractMember(archive, members.get(name), join(directory, name));
-    insist(
-      `sha256:${await fileHash(archive)}` === artifact.digest,
-      "artifact ZIP changed during extraction",
+    await observePhase(phases.download, () =>
+      downloadArtifact(artifact, archive),
     );
+    await observePhase(phases.extract, async () => {
+      const members = await zipMembers(archive, layout.members);
+      for (const name of layout.members)
+        await extractMember(archive, members.get(name), join(directory, name));
+      insist(
+        `sha256:${await fileHash(archive)}` === artifact.digest,
+        "artifact ZIP changed during extraction",
+      );
+    });
   });
   return { artifact, signer: { id: job.id, name: job.name } };
 }
@@ -414,19 +429,33 @@ export async function materializeProducers(
   for (const producer of producers)
     await isolated(async (scratch) => {
       const archive = join(scratch, "artifact.zip");
-      await downloadArtifact(producer.artifact, archive);
-      insist(
-        (await stat(archive)).size === producer.artifact.size,
-        "artifact ZIP size changed",
+      const phases =
+        producer.role === "build"
+          ? {
+              download: "supply.build.download",
+              extract: "supply.build.extract",
+            }
+          : {
+              download: "supply.scan.download",
+              extract: "supply.scan.extract",
+            };
+      await observePhase(phases.download, () =>
+        downloadArtifact(producer.artifact, archive),
       );
-      await extractProducerZip(
-        archive,
-        producer.role,
-        trust,
-        directory,
-        source,
-        authority,
-      );
+      await observePhase(phases.extract, async () => {
+        insist(
+          (await stat(archive)).size === producer.artifact.size,
+          "artifact ZIP size changed",
+        );
+        await extractProducerZip(
+          archive,
+          producer.role,
+          trust,
+          directory,
+          source,
+          authority,
+        );
+      });
     });
   return producers;
 }

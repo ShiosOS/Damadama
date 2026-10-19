@@ -114,10 +114,10 @@ test("stage CLI identifies every full admission and final verification boundary"
       ["stage.release.recheck", "complete"],
       ["stage.release.recheck", "start"],
       ["stage.release.recheck", "complete"],
-      ["stage.provider.observe.before-checks", "start"],
-      ["stage.provider.observe.before-checks", "complete"],
-      ["stage.provider.observe.after-browser", "start"],
-      ["stage.provider.observe.after-browser", "complete"],
+      ["deployment.provider.observe.before-checks", "start"],
+      ["deployment.provider.observe.before-checks", "complete"],
+      ["deployment.provider.observe.after-checks", "start"],
+      ["deployment.provider.observe.after-checks", "complete"],
       ["stage.release.recheck", "start"],
       ["stage.release.recheck", "complete"],
       ["stage.deployment.summary", "start"],
@@ -144,7 +144,10 @@ test("stage CLI identifies every full admission and final verification boundary"
     assert.ok(Number.isFinite(complete.elapsedMs) && complete.elapsedMs >= 0);
   }
   assert.equal(new Set(markers.map((marker) => marker.invocation)).size, 10);
-  assert.deepEqual(result.read("verified.json").evidence.supply, record().evidence.supply);
+  assert.deepEqual(
+    result.read("verified.json").evidence.supply,
+    record().evidence.supply,
+  );
 });
 
 test("production records its public checks and preserves the original staging receipt", (t) => {
@@ -238,6 +241,23 @@ for (const [failure, message] of [
         readFileSync(join(result.dir, "summary.md"), "utf8"),
         /No rollback was performed/,
       );
+      if (
+        operation === "stage" &&
+        ["log", "log-write", "write"].includes(failure)
+      ) {
+        const markers = result.stderr
+          .split("\n")
+          .filter((line) => line.startsWith("release-phase "))
+          .map((line) => JSON.parse(line.slice("release-phase ".length)));
+        const last = markers.at(-1);
+        assert.equal(
+          last.phase,
+          failure === "write"
+            ? "stage.verified.write"
+            : "stage.deployment.summary",
+        );
+        assert.equal(last.event, "failed");
+      }
     });
   }
 }
@@ -289,6 +309,14 @@ for (const operation of ["stage", "production"]) {
         }
         if (operation === "production")
           assert.deepEqual(result.read("verified.json"), record());
+        else {
+          const markers = result.stderr
+            .split("\n")
+            .filter((line) => line.startsWith("release-phase "))
+            .map((line) => JSON.parse(line.slice("release-phase ".length)));
+          assert.equal(markers.at(-1).phase, "stage.release.recheck");
+          assert.equal(markers.at(-1).event, "failed");
+        }
       });
   test(`${operation} actual Railway completes both awaited signed callbacks`, (t) => {
     const result = operate(t, `${operation}-real-success`);
