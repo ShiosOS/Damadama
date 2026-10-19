@@ -1,5 +1,6 @@
 name: Developer experience
 on:
+  workflow_call:
   pull_request:
     paths:
       - .editorconfig
@@ -19,7 +20,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: developer-experience-${{ github.event.pull_request.number }}
+  group: developer-experience-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 env:
   GIT_CONFIG_COUNT: "1"

@@ -1,10 +1,11 @@
 name: Railway tracing proof
 on:
+  workflow_call:
   pull_request:
 permissions:
   contents: read
 concurrency:
-  group: railway-tracing-${{ github.event.pull_request.number }}
+  group: railway-tracing-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   tracing:

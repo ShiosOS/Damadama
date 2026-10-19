@@ -1,6 +1,7 @@
 name: Browser compatibility
 
 on:
+  workflow_call:
   pull_request:
     paths:
       - tests/Browser/**
@@ -23,6 +24,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: browser-compatibility-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   browser-compatibility:

@@ -1,4 +1,5 @@
 import "./preflight-proof.test.mjs";
+import "./owner-proof-policy.test.mjs";
 import assert from "node:assert/strict";
 import { test } from "bun:test";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
@@ -308,21 +309,9 @@ for (const [name, commands] of [
     );
 }
 
-const security = readSecurityContract(workflows);
-const mandatory = [
-  ...security.coverage.analysis.map(({ language }) => [
-    "analysis-" + language,
-    "security-codeql",
-  ]),
-  ...security.coverage.uploads.map((language) => [
-    "upload-" + language,
-    "security-codeql",
-  ]),
-  [security.bunAudit.argv.join(" "), "security-dependencies"],
-];
-for (const [leaf, callable] of mandatory)
+for (const callable of ["security-codeql", "security-dependencies"])
   for (const result of ["failure", "skipped", "cancelled", undefined])
-    test(`main controlled ${leaf} ${String(result)} fails helper and actual native admissions`, async () => {
+    test(`main controlled ${callable} ${String(result)} fails helper and actual native admissions`, async () => {
       assert.deepEqual(gateGraphErrors(workflows), []);
       const needs = Object.fromEntries(
         gates["main-release-controls"].needs.map((name) => [

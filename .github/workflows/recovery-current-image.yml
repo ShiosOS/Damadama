@@ -1,5 +1,6 @@
 name: Current image recovery
 on:
+  workflow_call:
   pull_request:
   workflow_dispatch:
   schedule:
@@ -7,7 +8,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: recovery-current-image-${{ github.event.pull_request.number || github.ref }}
+  group: recovery-current-image-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   current-image-recovery:

@@ -1,10 +1,11 @@
 name: Railway platform
 on:
+  workflow_call:
   pull_request:
 permissions:
   contents: read
 concurrency:
-  group: railway-platform-${{ github.event.pull_request.number }}
+  group: railway-platform-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   definition:

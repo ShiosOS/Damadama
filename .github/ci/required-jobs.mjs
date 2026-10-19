@@ -35,9 +35,53 @@ export const releaseCallables = {
     permissions: { contents: "read" },
     kind: "security",
   },
+  "browser-compatibility": {
+    workflow: "browser-compatibility.yml",
+    permissions: { contents: "read" },
+    kind: "owner-proof",
+  },
+  "developer-experience": {
+    workflow: "developer-experience.yml",
+    permissions: { contents: "read" },
+    kind: "owner-proof",
+  },
+  "current-image-recovery": {
+    workflow: "recovery-current-image.yml",
+    permissions: { contents: "read" },
+    kind: "owner-proof",
+  },
+  "metadata-publication": {
+    workflow: "recovery-metadata-publication.yml",
+    permissions: { contents: "read" },
+    kind: "owner-proof",
+  },
+  "supply-pr": {
+    workflow: "supply-pr-proof.yml",
+    permissions: { contents: "read" },
+    kind: "owner-proof",
+  },
+  tracing: {
+    workflow: "railway-tracing-check.yml",
+    permissions: { contents: "read" },
+    kind: "owner-proof",
+  },
+  preview: {
+    workflow: "railway-platform-check.yml",
+    permissions: { contents: "read" },
+    kind: "owner-proof",
+  },
 };
 
 export const gates = {
+  "supply-pr": {
+    workflow: "supply-pr-proof.yml",
+    needs: [
+      "origin-probe",
+      "proof-build",
+      "proof-scan",
+      "proof-application-scan",
+    ],
+  },
   "main-release-controls": {
     workflow: "stage.yml",
     job: "release-controls",

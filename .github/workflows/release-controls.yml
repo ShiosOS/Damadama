@@ -36,6 +36,34 @@ jobs:
     uses: $/.github/workflows/security-fixtures.yml
     permissions:
       contents: read
+  browser-compatibility:
+    uses: $/.github/workflows/browser-compatibility.yml
+    permissions:
+      contents: read
+  developer-experience:
+    uses: $/.github/workflows/developer-experience.yml
+    permissions:
+      contents: read
+  current-image-recovery:
+    uses: $/.github/workflows/recovery-current-image.yml
+    permissions:
+      contents: read
+  metadata-publication:
+    uses: $/.github/workflows/recovery-metadata-publication.yml
+    permissions:
+      contents: read
+  supply-pr:
+    uses: $/.github/workflows/supply-pr-proof.yml
+    permissions:
+      contents: read
+  tracing:
+    uses: $/.github/workflows/railway-tracing-check.yml
+    permissions:
+      contents: read
+  preview:
+    uses: $/.github/workflows/railway-platform-check.yml
+    permissions:
+      contents: read
   release-controls:
     needs:
       - runtime-policy
@@ -44,6 +72,13 @@ jobs:
       - security-codeql
       - security-dependencies
       - security-fixtures
+      - browser-compatibility
+      - developer-experience
+      - current-image-recovery
+      - metadata-publication
+      - supply-pr
+      - tracing
+      - preview
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 3
