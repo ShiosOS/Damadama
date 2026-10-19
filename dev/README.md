@@ -6,7 +6,7 @@ Use the [README](../README.md) for application behavior, configuration, and migr
 
 ## Prepare a checkout
 
-Install Git, Bun **1.3.14**, Node.js **24**, the .NET SDK selected by `global.json`, and Docker with a Linux container engine.
+Install Git, Bun **1.4.3**, Node.js **24**, the .NET SDK selected by `global.json`, and Docker with a Linux container engine.
 The .NET pin is **10.0.112** with `latestPatch`, which also accepts **10.0.113** but not **10.0.200**.
 Keep runtime selection scoped to this project. Do not replace another project's global Node installation.
 For managed runtimes, prepend the chosen runtime directories to the current process's `PATH`.

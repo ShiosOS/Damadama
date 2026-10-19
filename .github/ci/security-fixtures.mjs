@@ -50,7 +50,6 @@ export async function exerciseBunAudit(contract) {
       severity: "error",
       scope: "runtime",
       code: 1,
-      message: "audit request failed (status 503)",
     },
   ];
 
@@ -146,8 +145,12 @@ export async function exerciseBunAudit(contract) {
       assert.equal(requests[0].method, "POST");
       assert.equal(requests[0].path, "/-/npm/v1/security/advisories/bulk");
       assert.deepEqual(requests[0].payload, { "fixture-package": ["1.0.0"] });
+      const diagnostic =
+        scenario.severity === "error"
+          ? `error: POST http://127.0.0.1:${port}/-/npm/v1/security/advisories/bulk - 503`
+          : scenario.message;
       assert.ok(
-        output.includes(scenario.message),
+        output.includes(diagnostic),
         `${scenario.name}: missing diagnostic\n${output}`,
       );
       if (scenario.severity === "high" || scenario.severity === "critical") {

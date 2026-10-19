@@ -4,7 +4,7 @@ defineProps<{ setupMessage: string | null }>();
 </script>
 
 <template>
-  <UApp>
+  <UApp :toaster="null">
     <SignedInApp v-if="setupMessage === null" />
     <main v-else class="max-w-3xl mx-auto p-6 space-y-4">
       <h1 class="text-3xl font-semibold">Damadama</h1>

@@ -8,7 +8,7 @@ Use the [local setup and contribution guide](dev/README.md) for Windows and Linu
 
 ## Start locally
 
-Install .NET SDK 10.0.112, Bun 1.3.14, Node.js 24 LTS, and Docker with a running Linux container engine.
+Install .NET SDK 10.0.112, Bun 1.4.3, Node.js 24 LTS, and Docker with a running Linux container engine.
 Node.js runs Playwright. Bun manages the frontend dependencies and scripts.
 Trust your .NET development certificate with `dotnet dev-certs https --trust` if you use the HTTPS Aspire dashboard.
 
