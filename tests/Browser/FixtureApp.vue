@@ -28,7 +28,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <UApp>
+  <UApp :toaster="null">
     <nav class="fixture-controls" aria-label="Test fixture account controls">
       <button @click="account = null">Fixture sign out</button>
       <button @click="account = 'other'">Fixture other account</button>

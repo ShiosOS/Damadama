@@ -26,7 +26,7 @@ bash .codex/cloud/setup.sh
 bash .codex/cloud/verify.sh
 ```
 
-The script pins .NET SDK 10.0.112, Bun 1.3.14, and Node.js 24.21.0.
+The script pins .NET SDK 10.0.112, Bun 1.4.3, and Node.js 24.21.0.
 The shared `runtime.sh` puts runtimes, .NET CLI state, and package/browser caches under `.audit/codex-cloud-runtime`.
 That directory is excluded from Git and the application's existing lint rules.
 To use another writable volume, export an absolute `DAMADAMA_CLOUD_ROOT` consistently for both commands.

@@ -235,7 +235,7 @@ export function readSecurityContract(workflows) {
   action(
     auditSteps[1],
     "oven-sh/setup-bun",
-    { "bun-version": "1.3.14" },
+    { "bun-version": "1.4.3" },
     auditLocation + ".steps[1]",
   );
   const command = auditSteps[2].run;
@@ -455,7 +455,7 @@ export function readSecurityContract(workflows) {
   action(
     bunFixture[2],
     "oven-sh/setup-bun",
-    { "bun-version": "1.3.14" },
+    { "bun-version": "1.4.3" },
     bunFixtureLocation + ".steps[2]",
   );
   step(
@@ -495,7 +495,7 @@ export function readSecurityContract(workflows) {
   action(
     reviewFixture[3],
     "oven-sh/setup-bun",
-    { "bun-version": "1.3.14" },
+    { "bun-version": "1.4.3" },
     reviewFixtureLocation + ".steps[3]",
   );
   step(

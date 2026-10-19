@@ -1,7 +1,7 @@
 # Browser accessibility checks
 
 `bun run check` builds the actual application and optimized browser fixture, then runs `tests/Browser/accessibility.spec.ts` with every other browser spec.
-The accessibility spec uses pinned `@axe-core/playwright` 4.13.0 and its locked axe-core dependency.
+The accessibility spec uses pinned `@axe-core/playwright` 4.14.0 and its locked axe-core dependency.
 It audits the entire page with the installed engine's WCAG 2.0 A and AA, 2.1 A and AA, and 2.2 AA tags.
 Any detected violation fails the check. The suite disables no rules and excludes no elements.
 
