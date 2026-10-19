@@ -5,7 +5,9 @@ import {
   readFile,
   realpath,
   readdir,
+  rmdir,
   rm,
+  unlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -14,6 +16,7 @@ import test from "node:test";
 import {
   atomicJson,
   mediaFiles,
+  preparedInputs,
   retainMedia,
   summarizeTests,
   verifyMedia,
@@ -60,6 +63,41 @@ async function temporary(run) {
     await rm(root, { recursive: true, force: true });
   }
 }
+
+test("prepared fingerprints use canonical production output and refuse a stale legacy directory", async () =>
+  temporary(async (root) => {
+    await mkdir(join(root, "server/wwwroot"), { recursive: true });
+    await mkdir(join(root, ".audit/check-build/bin/BrowserHost/debug"), {
+      recursive: true,
+    });
+    await writeFile(join(root, "bun.lock"), "locked-input");
+    await writeFile(join(root, "server/wwwroot/index.html"), "production");
+    await writeFile(join(root, ".audit/browser-build/index.html"), "fixture");
+    await writeFile(
+      join(root, ".audit/check-build/bin/BrowserHost/debug/BrowserHost.dll"),
+      "host",
+    );
+    const before = await preparedInputs(root);
+    assert.deepEqual(
+      before.map((input) => input.path),
+      [
+        "bun.lock",
+        "server/wwwroot",
+        ".audit/browser-build",
+        ".audit/check-build/bin/BrowserHost",
+      ],
+    );
+    for (const path of fixtureFiles)
+      await writeFile(join(root, path), "private-sentinel");
+    assert.deepEqual(await preparedInputs(root), before);
+    await writeFile(join(root, "server/wwwroot/index.html"), "changed");
+    assert.notDeepEqual(await preparedInputs(root), before);
+    await mkdir(join(root, "web/dist"), { recursive: true });
+    await writeFile(join(root, "web/dist/index.html"), "stale");
+    await unlink(join(root, "server/wwwroot/index.html"));
+    await rmdir(join(root, "server/wwwroot"));
+    await assert.rejects(preparedInputs(root), { code: "ENOENT" });
+  }));
 
 test("failed commands and diagnostics never become successful empty observations", () => {
   assert.equal(successfulOutput(result("observed\n"), "probe"), "observed");

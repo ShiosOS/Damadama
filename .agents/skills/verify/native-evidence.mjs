@@ -160,7 +160,7 @@ export async function preparedInputs(root) {
   return Promise.all(
     [
       "bun.lock",
-      "web/dist",
+      "server/wwwroot",
       ".audit/browser-build",
       ".audit/check-build/bin/BrowserHost",
     ].map((path) => fingerprint(root, path)),
