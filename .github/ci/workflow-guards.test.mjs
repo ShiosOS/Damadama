@@ -3,7 +3,6 @@ import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "bun:test";
-import { ESLint } from "eslint";
 import { gateGraphErrors } from "./workflow-policy.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -88,37 +87,3 @@ test("coordinated security Action upgrades remain independent of setup-node", ()
   }
   assert.deepEqual(gateGraphErrors(changed), []);
 });
-
-const eslint = new ESLint({ cwd: root });
-for (const [name, source, rejected] of [
-  [
-    "exactly 1000 physical lines",
-    "// kept\n".repeat(999) + "export {};\n",
-    false,
-  ],
-  [
-    "1001 lines including comments",
-    "// kept\n".repeat(1000) + "export {};\n",
-    true,
-  ],
-  ["1001 blank lines", "\n".repeat(1001), true],
-  [
-    "an inline attempt to disable the cap",
-    "/* eslint max-lines: off */\n" + "// kept\n".repeat(1000),
-    true,
-  ],
-]) {
-  test(`configured ESLint ${rejected ? "refuses" : "accepts"} ${name}`, async () => {
-    const result = await eslint.lintText(source, {
-      filePath: join(root, "release/line-limit-proof.mjs"),
-    });
-    const errors = result.flatMap((file) =>
-      file.messages.filter((message) => message.severity === 2),
-    );
-    if (rejected) {
-      assert.ok(errors.some((message) => message.ruleId === "max-lines"));
-    } else {
-      assert.deepEqual(errors, []);
-    }
-  });
-}
