@@ -204,7 +204,7 @@ public class EntryPersistenceTests
             existing ? EntryWriteOperation.Update : EntryWriteOperation.Insert,
             atCommit ? EntryFailureTiming.AtCommit : EntryFailureTiming.BeforeWrite))
         {
-            var failure = Assert.ThrowsAsync<PostgresException>(async () =>
+            var failure = await Assert.ThrowsAsync<PostgresException>(async () =>
                 await Save(habit, Day, EntryResult.Best, Instant.AddTicks(1)));
             Assert.That(failure!.MessageText, Is.EqualTo("test-owned entry failure"));
             Assert.That(await Read(habit.Id, Day), Is.EqualTo(before));
