@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdir, writeFile, rm } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { ESLint } from "eslint";
 
 const root = resolve(import.meta.dirname, "..");
 
@@ -409,3 +410,37 @@ test("coverage rejects tracked files outside compiler and typed lint", async () 
     },
   );
 });
+
+const eslint = new ESLint({ cwd: root });
+for (const [name, source, rejected] of [
+  [
+    "exactly 1000 physical lines",
+    "// kept\n".repeat(999) + "export {};\n",
+    false,
+  ],
+  [
+    "1001 lines including comments",
+    "// kept\n".repeat(1000) + "export {};\n",
+    true,
+  ],
+  ["1001 blank lines", "\n".repeat(1001), true],
+  [
+    "an inline attempt to disable the cap",
+    "/* eslint max-lines: off */\n" + "// kept\n".repeat(1000),
+    true,
+  ],
+]) {
+  test(`configured ESLint ${rejected ? "refuses" : "accepts"} ${name}`, async () => {
+    const result = await eslint.lintText(source, {
+      filePath: join(root, "release/line-limit-proof.mjs"),
+    });
+    const errors = result.flatMap((file) =>
+      file.messages.filter((message) => message.severity === 2),
+    );
+    if (rejected) {
+      assert.ok(errors.some((message) => message.ruleId === "max-lines"));
+    } else {
+      assert.deepEqual(errors, []);
+    }
+  });
+}
