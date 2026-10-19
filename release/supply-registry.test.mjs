@@ -67,7 +67,10 @@ async function fixture(t, { docker = false, recompress = false } = {}) {
   });
   globalThis.fetch = async (url, options) => {
     calls.push({ url, options });
-    assert(["error", "manual"].includes(options.redirect));
+    assert.equal(
+      options.redirect,
+      url.includes("/blobs/") ? "manual" : "error",
+    );
     assert.match(
       url,
       /^https:\/\/ghcr\.io\/v2\/shiosos\/damadama\/(manifests|blobs)\/sha256:[a-f0-9]{64}$/,
@@ -101,7 +104,10 @@ async function diagnosticFixture(t, operation, respond) {
     layer: `/blobs/${f.manifest.layers[0].digest}`,
   };
   globalThis.fetch = async (url, options) => {
-    assert(["error", "manual"].includes(options.redirect));
+    assert.equal(
+      options.redirect,
+      url.includes("/blobs/") ? "manual" : "error",
+    );
     if (url.includes(targets[operation])) return respond();
     if (operation === "auth")
       return new Response("", {
@@ -513,7 +519,10 @@ test("private registry exchange scopes the ephemeral token and refuses redirects
   const fetch = globalThis.fetch;
   let authorized = false;
   globalThis.fetch = async (url, options) => {
-    assert(["error", "manual"].includes(options.redirect));
+    assert.equal(
+      options.redirect,
+      url.includes("/blobs/") ? "manual" : "error",
+    );
     if (url.startsWith("https://ghcr.io/token?")) {
       assert.equal(
         options.headers.Authorization,
@@ -639,7 +648,13 @@ const signedBlob = (digest) =>
 
 async function redirectedFixture(
   t,
-  { location = signedBlob, status = 307, respond, authenticate = false } = {},
+  {
+    location = signedBlob,
+    status = 307,
+    respond,
+    authenticate = false,
+    cancel,
+  } = {},
 ) {
   const f = await fixture(t);
   const fetch = globalThis.fetch;
@@ -681,6 +696,7 @@ async function redirectedFixture(
           new ReadableStream({
             cancel() {
               cancellations++;
+              cancel?.();
             },
           }),
           { status, headers },
@@ -830,6 +846,41 @@ for (const boundary of ["request", "body"])
     );
     assert.equal(f.delivery.length, 1);
   });
+
+test("CDN authentication refusal cannot trigger a registry credential exchange", async (t) => {
+  const f = await redirectedFixture(t, {
+    respond: () =>
+      new Response("", {
+        status: 401,
+        headers: {
+          "www-authenticate":
+            'Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:shiosos/damadama:pull"',
+        },
+      }),
+  });
+  await assert.rejects(
+    compareRegistryArchive(f.image, f.path),
+    diagnosticRefusal("config", "response", "http"),
+  );
+  assert.equal(f.delivery.length, 1);
+  assert.equal(
+    f.registry.some(({ url }) => url.startsWith("https://ghcr.io/token?")),
+    false,
+  );
+});
+
+test("registry redacts blob redirect cancellation failure before CDN delivery", async (t) => {
+  const f = await redirectedFixture(t, {
+    cancel: () => {
+      throw new Error(signedBlob("diagnostic-secret"));
+    },
+  });
+  await assert.rejects(
+    compareRegistryArchive(f.image, f.path),
+    diagnosticRefusal("config", "body", "unknown"),
+  );
+  assert.equal(f.delivery.length, 0);
+});
 
 for (const [name, mutate, limits, pattern] of [
   [

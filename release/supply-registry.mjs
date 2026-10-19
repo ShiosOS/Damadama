@@ -74,7 +74,25 @@ function transportFailure(error, operation, boundary) {
   );
 }
 
-async function transfer(response, path, maximum, signal, operation) {
+function blobDestination(location, operation) {
+  try {
+    if (
+      typeof location === "string" &&
+      /^https:\/\/pkg-containers\.githubusercontent\.com(?:\/|\?|$)/.test(
+        location,
+      ) &&
+      !/[\u0000-\u0020\u007f\\#]/.test(location)
+    )
+      return new URL(location);
+  } catch {
+    // URL parser errors can contain the signed Location.
+  }
+  throw new Error(
+    `registry request refused (operation=${operation}, boundary=response, reason=redirect, status=307)`,
+  );
+}
+
+function requireSuccess(response, operation) {
   if (!response.ok || response.status !== 200) {
     let status = "unknown";
     if (
@@ -90,6 +108,10 @@ async function transfer(response, path, maximum, signal, operation) {
       `registry request refused (operation=${operation}, boundary=response, reason=${reason}, status=${status})`,
     );
   }
+}
+
+async function transfer(response, path, maximum, signal, operation) {
+  requireSuccess(response, operation);
   assert(
     !response.headers.get("content-encoding") ||
       response.headers.get("content-encoding") === "identity",
@@ -153,13 +175,33 @@ export async function compareRegistryArchive(
       let bearer;
       const request = async (operation, url, headers = {}) => {
         signal.throwIfAborted();
-        return fetch(url, {
+        const blob = operation === "config" || operation === "layer";
+        const response = await fetch(url, {
           headers: { "Accept-Encoding": "identity", ...headers },
+          redirect: blob ? "manual" : "error",
+          signal,
+        }).catch((error) => {
+          throw transportFailure(error, operation, "request");
+        });
+        if (!blob || response.status !== 307) return response;
+        await response.body?.cancel().catch((error) => {
+          throw transportFailure(error, operation, "body");
+        });
+        const destination = blobDestination(
+          response.headers.get("location"),
+          operation,
+        );
+        signal.throwIfAborted();
+        const delivered = await fetch(destination, {
+          headers: { Accept: headers.Accept, "Accept-Encoding": "identity" },
+          credentials: "omit",
           redirect: "error",
           signal,
         }).catch((error) => {
           throw transportFailure(error, operation, "request");
         });
+        requireSuccess(delivered, operation);
+        return delivered;
       };
       const get = async (operation, suffix, path, maximum, accept) => {
         const url = `${repository}/${suffix}`;
