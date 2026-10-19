@@ -23,10 +23,10 @@ const recipes = [
         run: 'bun .github/diagnostics/artifact-policy.mjs prepare "${WORKFLOW}" "${RUNNER_TEMP}/diagnostics/source"',
       },
       {
-        uses: "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+        uses: "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
       },
       {
-        uses: "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
+        uses: "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333",
       },
       {
         run: 'bun .github/diagnostics/artifact-policy.mjs verify "${WORKFLOW}" "${RUNNER_TEMP}/diagnostics/download"',
