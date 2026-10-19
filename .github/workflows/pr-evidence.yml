@@ -22,7 +22,7 @@ jobs:
             const recording = evidence.split(/^### Screen recording[ \t]*\r?$/m)[1]?.split(/^###?[ \t]/m)[0] ?? "";
             const hasLink = /https:\/\/[^\s<>()]+/.test(evidence);
             const screenshotImages = [...screenshots.matchAll(/!\[[^\]]*\]\((https:\/\/[^\s)]+)\)/g)];
-            const artifactImage = screenshotImages.some(match => {
+            const artifactImage = [...screenshots.matchAll(/!\[[^\]]*\]\(\s*<?(https:\/\/[^\s>)]+)/gi)].some(match => {
               const url = URL.parse(match[1]);
               return url?.hostname === "github.com" && /^\/[^/]+\/[^/]+\/actions\/(?:runs\/[^/]+\/)?artifacts\//i.test(url.pathname);
             });

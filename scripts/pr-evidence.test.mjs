@@ -127,6 +127,27 @@ for (const url of [
   }
 }
 
+for (const [name, image] of [
+  ["an angle target", `![Bundle](<${screenshotArtifact}>)`],
+  ["a title", `![Bundle](${screenshotArtifact} "Download bundle")`],
+  [
+    "uppercase HTTPS",
+    `![Bundle](${screenshotArtifact.replace("https:", "HTTPS:")})`,
+  ],
+]) {
+  test(`refuses artifact images with ${name} beside an attachment`, async () => {
+    assert.deepEqual(
+      await failures(
+        uiEvidence.replace(
+          `![Desktop](${screenshot})`,
+          `${image}\n\n![Desktop](${screenshot})`,
+        ),
+      ),
+      [artifactImage],
+    );
+  });
+}
+
 for (const [name, proof] of [
   [
     "no Download label",
