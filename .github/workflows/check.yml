@@ -56,7 +56,7 @@ jobs:
         with:
           node-version: 24
       - if: steps.application.outputs.state == 'application'
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
@@ -64,7 +64,7 @@ jobs:
       - if: steps.application.outputs.state == 'application'
         run: bun install --frozen-lockfile
       - if: steps.application.outputs.state == 'application'
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         id: playwright
         with:
           path: ~/.cache/ms-playwright
