@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { nextTick, reactive, ref, watch } from "vue";
+import {
+  nextTick,
+  onBeforeUnmount,
+  reactive,
+  ref,
+  useTemplateRef,
+  watch,
+} from "vue";
 import { ApiError, habitsApi } from "./habits";
 import { weekdays, type Habit, type NewHabit } from "./habits.schema";
 import HabitDetails from "./HabitDetails.vue";
 import CheckeredD from "./CheckeredD.vue";
 import TodayView from "./TodayView.vue";
+import type { TodayHandle } from "./TodayView.types";
 
 type Props = {
   accountId: string | null;
@@ -20,7 +28,13 @@ type Activity =
   | { kind: "error"; message: string };
 const activity = ref<Activity>({ kind: "idle" });
 const adding = ref(false);
-const savedRevision = ref(0);
+const today = useTemplateRef<TodayHandle>("today");
+type PendingReveal = {
+  habitId: Habit["id"];
+  accountGeneration: number;
+  layout: ReturnType<TodayHandle["refreshAfterCreate"]>;
+};
+let pendingReveal: PendingReveal | null = null;
 const blank = (): Omit<NewHabit, "timeZone"> => ({
   name: "",
   good: "",
@@ -52,6 +66,7 @@ watch(
   () => props.accountId,
   async (account) => {
     generation++;
+    pendingReveal = null;
     habits.value = [];
     adding.value = false;
     Object.assign(form, blank());
@@ -77,7 +92,8 @@ function setDay(day: number, selected: boolean): void {
     : form.weekdays.filter((value) => value !== day);
 }
 
-function clearError(): void {
+function updateOpen(open: boolean): void {
+  if (open) pendingReveal = null;
   if (activity.value.kind === "error") activity.value = { kind: "idle" };
 }
 
@@ -86,8 +102,27 @@ function focusName(event: Event): void {
   document.getElementById("name")?.focus();
 }
 
+async function revealSavedHabit(): Promise<void> {
+  const pending = pendingReveal;
+  if (!pending) return;
+  const isCurrent = await pending.layout;
+  await nextTick();
+  if (
+    pending !== pendingReveal ||
+    pending.accountGeneration !== generation ||
+    adding.value
+  )
+    return;
+  pendingReveal = null;
+  if (isCurrent?.())
+    document
+      .getElementById(`habit-${pending.habitId}`)
+      ?.scrollIntoView({ block: "nearest" });
+}
+
 async function save(): Promise<void> {
   const current = generation;
+  pendingReveal = null;
   activity.value = { kind: "saving" };
   try {
     const saved = await api.create({
@@ -96,15 +131,12 @@ async function save(): Promise<void> {
     });
     if (current !== generation) return;
     habits.value.push(saved);
-    savedRevision.value++;
+    const layout = today.value?.refreshAfterCreate();
+    if (layout)
+      pendingReveal = { habitId: saved.id, accountGeneration: current, layout };
     adding.value = false;
     Object.assign(form, blank());
     activity.value = { kind: "idle" };
-    await nextTick();
-    if (current === generation)
-      document
-        .getElementById(`habit-${saved.id}`)
-        ?.scrollIntoView({ block: "nearest" });
   } catch (error) {
     if (current !== generation) return;
     showError(error);
@@ -113,6 +145,11 @@ async function save(): Promise<void> {
       document.getElementById("habit-creation-error")?.focus();
   }
 }
+
+onBeforeUnmount(() => {
+  generation++;
+  pendingReveal = null;
+});
 </script>
 
 <template>
@@ -124,10 +161,13 @@ async function save(): Promise<void> {
       <div class="flex items-center gap-3">
         <USlideover
           v-model:open="adding"
-          @update:open="clearError"
+          @update:open="updateOpen"
           title="Create a habit"
           :dismissible="activity.kind !== 'saving'"
-          :content="{ onOpenAutoFocus: focusName }"
+          :content="{
+            onOpenAutoFocus: focusName,
+            onCloseAutoFocus: revealSavedHabit,
+          }"
           :ui="{
             overlay: 'z-40',
             content: 'z-50 w-full max-w-full sm:max-w-[420px]',
@@ -261,10 +301,10 @@ async function save(): Promise<void> {
         :description="activity.message"
       />
       <TodayView
+        ref="today"
         :key="accountId ?? ''"
         :account-id="accountId"
         :get-token="getToken"
-        :saved-revision="savedRevision"
       />
       <section aria-label="Saved habits">
         <h2 class="page-title">Your habits</h2>
