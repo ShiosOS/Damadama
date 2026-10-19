@@ -1,0 +1,61 @@
+name: Recovery metadata publication
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: recovery-metadata-publication-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  synthetic-publication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: bef623aa440feeb9a697f610693122889ffc56e4
+          path: .audit/ops-consumer
+          sparse-checkout: ops/monitoring/monitor.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Check publication boundaries and launcher refusal
+        run: python3 -m unittest discover -s ops/recovery -p '*_test.py' -v
+      - name: Check opt-in shell syntax
+        run: sh -n ops/recovery/backup-with-metadata.sh
+      - name: Build isolated packaged helper
+        run: docker build --platform linux/amd64 --file ops/recovery/Dockerfile --tag damadama-recovery-metadata-proof .
+      - name: Publish and read back synthetic metadata through actual backup helper
+        run: python3 ops/recovery/prove_completion_publication.py
+      - name: Verify actual published consumer against produced synthetic metadata and labeled fixtures
+        run: node ops/recovery/verify-completion-consumer.mjs .audit/ops-consumer/ops/monitoring/monitor.mjs .audit/metadata-envelope.json .audit/consumer-compatibility.json
+      - name: Bind consumer input to the produced synthetic envelope
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { readFileSync } from "node:fs";
+          const producer = JSON.parse(readFileSync(".audit/completion-publication-proof.json", "utf8"));
+          const consumer = JSON.parse(readFileSync(".audit/consumer-compatibility.json", "utf8"));
+          assert.equal(producer.outcome, "passed");
+          assert.equal(consumer.outcome, "passed");
+          assert.match(producer.publishedEnvelopeSha256, /^[a-f0-9]{64}$/, "Producer envelope hash is required");
+          assert.equal(consumer.inputEnvelopeSha256, producer.publishedEnvelopeSha256, "Consumer must inspect the produced envelope bytes");
+          NODE
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: ${{ !cancelled() }}
+        with:
+          name: synthetic-metadata-publication-summaries
+          include-hidden-files: true
+          path: |
+            .audit/completion-publication-proof.json
+            .audit/consumer-compatibility.json
+          if-no-files-found: warn
+          retention-days: 7

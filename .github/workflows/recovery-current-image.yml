@@ -1,0 +1,58 @@
+name: Current image recovery
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "37 3 * * *"
+permissions:
+  contents: read
+concurrency:
+  group: recovery-current-image-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  current-image-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+      - name: Check image identity contracts
+        run: node --test ops/recovery/current-image.test.mjs ops/recovery/image-archives.test.mjs ops/recovery/application-proof.test.mjs
+      - name: Build isolated recovery helper
+        id: helper
+        run: docker build --platform linux/amd64 --file ops/recovery/Dockerfile --tag damadama-recovery-proof .
+      - name: Build exact source application without publishing
+        run: node ops/recovery/current-image.mjs build .audit/current-image.json
+      - name: Accept actual image and refuse mismatched archive SQL and source
+        id: image-verification
+        run: node ops/recovery/verify-current-image.mjs .audit/current-image.json
+      - name: Restore current image schema and saved synthetic data
+        run: node ops/recovery/prove.mjs --require-app .audit/current-image.json
+      - name: Preserve legacy fixture proof
+        if: ${{ !cancelled() && steps.helper.outcome == 'success' }}
+        run: node ops/recovery/prove.mjs
+      - name: Exercise optional image readiness restart and anonymous refusal
+        if: ${{ !cancelled() && steps.image-verification.outcome == 'success' }}
+        run: |
+          node --input-type=module -e '
+            import { execFileSync } from "node:child_process";
+            import { readFileSync } from "node:fs";
+            const { image } = JSON.parse(readFileSync(".audit/current-image.json", "utf8"));
+            execFileSync(process.execPath, ["ops/recovery/prove.mjs", image.configId], { stdio: "inherit" });
+          '
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: ${{ !cancelled() }}
+        with:
+          name: synthetic-recovery-receipts
+          include-hidden-files: true
+          path: |
+            .audit/current-image.json
+            .audit/current-image-verification.json
+            .audit/recovery-proof-*/receipt.json
+          if-no-files-found: warn
+          retention-days: 7

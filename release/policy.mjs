@@ -106,7 +106,7 @@ export function requireStageRun(run, authority, completed = true) {
 }
 
 export function requireVerifiedRecord(record) {
-  requireThat(record?.schema === 2, "missing or unsupported release record");
+  requireThat(record?.schema === 3, "missing or unsupported release record");
   requireSource(record.source);
   requireCIEvidence(record.source, record.evidence?.ci, record.authority);
   requireThat(
@@ -126,6 +126,7 @@ export function requireVerifiedRecord(record) {
       record.authority.attempt > 0,
     "invalid run attempt",
   );
+  requireSupplyIdentity(record.evidence?.supply, record.authority);
   const image = record.image;
   requireThat(
     /^sha256:[a-f0-9]{64}$/.test(image?.digest),
@@ -168,6 +169,39 @@ export function requireVerifiedRecord(record) {
     );
   }
   return record;
+}
+
+export function requireSupplyIdentity(supply, authority) {
+  const keys = (value, expected) =>
+    value &&
+    typeof value === "object" &&
+    Object.keys(value).sort().join(",") === [...expected].sort().join(",");
+  const positive = (value) => Number.isSafeInteger(value) && value > 0;
+  requireThat(
+    keys(supply, ["schema", "artifact", "signer", "manifestSha256"]) &&
+      supply.schema === 1,
+    "invalid supply identity fields",
+  );
+  requireThat(
+    keys(supply.artifact, ["id", "name", "digest", "size"]) &&
+      positive(supply.artifact.id) &&
+      positive(supply.artifact.size) &&
+      positive(authority?.attempt) &&
+      supply.artifact.name === `supply-release-${authority.attempt}` &&
+      /^sha256:[a-f0-9]{64}$/.test(supply.artifact.digest),
+    "invalid supply artifact identity",
+  );
+  requireThat(
+    keys(supply.signer, ["id", "name"]) &&
+      positive(supply.signer.id) &&
+      supply.signer.name === "sign",
+    "invalid supply signer identity",
+  );
+  requireThat(
+    /^[a-f0-9]{64}$/.test(supply.manifestSha256),
+    "invalid supply manifest hash",
+  );
+  return supply;
 }
 
 export function requirePromotion(record, current) {

@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "blockedSeverities": ["High", "Critical"],
+  "maximumScanAgeHours": 24,
+  "maximumDatabaseAgeHours": 120,
+  "exceptions": []
+}

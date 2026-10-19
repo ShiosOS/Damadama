@@ -6,183 +6,602 @@ import {
   environmentPlan,
   assertConfigured,
 } from "./configure-github.mjs";
-import { mainRules } from "./policy.mjs";
 
-test("staging is automatic and production requires protected approval", async () => {
-  const plan = await configure("plan", { reviewerId: 123 });
-  assert.deepEqual(Object.keys(plan.environments), ["staging", "production"]);
-  assert.deepEqual(plan.environments.staging.reviewers, []);
-  assert.deepEqual(plan.environments.production.reviewers, [
-    { type: "User", id: 123 },
-  ]);
-});
-function configured() {
-  const plan = {
-    ruleset: mainRules(),
-    environments: { staging: environmentPlan(123) },
+function noRequests() {
+  assert.fail("plan must not contact GitHub");
+}
+
+function environmentSettings(body) {
+  return {
+    ...structuredClone(body),
+    protection_rules: [
+      {
+        type: "required_reviewers",
+        reviewers: body.reviewers.map(({ type, id }) => ({
+          type,
+          reviewer: { id },
+        })),
+      },
+    ],
   };
+}
+
+async function configured() {
+  const plan = await configure("plan", {
+    reviewerId: 123,
+    request: noRequests,
+  });
   const observed = {
     ruleset: structuredClone(plan.ruleset),
-    environments: {
-      staging: {
-        settings: {
-          ...environmentPlan(123),
-          protection_rules: [
-            {
-              type: "required_reviewers",
-              reviewers: [{ type: "User", reviewer: { id: 123 } }],
-            },
-          ],
+    environments: Object.fromEntries(
+      Object.entries(plan.environments).map(([name, body]) => [
+        name,
+        {
+          settings: environmentSettings(body),
+          policies: { branch_policies: [{ name: "main", type: "branch" }] },
         },
-        policies: { branch_policies: [{ name: "main", type: "branch" }] },
-      },
-    },
+      ]),
+    ),
   };
   return { plan, observed };
 }
 
-test("readback accepts the intended approval and gate policy", () => {
-  const { plan, observed } = configured();
+test("plan declares the finite native rule and preserves main and environment policy without requests", async () => {
+  const plan = await configure("plan", {
+    reviewerId: 123,
+    request: noRequests,
+  });
+  assert.deepEqual(plan.ruleset, {
+    name: "Damadama main",
+    target: "branch",
+    enforcement: "active",
+    bypass_actors: [],
+    conditions: { ref_name: { include: ["refs/heads/main"], exclude: [] } },
+    rules: [
+      { type: "deletion" },
+      { type: "non_fast_forward" },
+      {
+        type: "pull_request",
+        parameters: {
+          required_approving_review_count: 0,
+          dismiss_stale_reviews_on_push: true,
+          require_code_owner_review: false,
+          require_last_push_approval: false,
+          require_extra_approval_for_unattributed_changes: false,
+          required_review_thread_resolution: true,
+          allowed_merge_methods: ["merge", "squash"],
+          required_reviewers: [],
+        },
+      },
+      {
+        type: "required_status_checks",
+        parameters: {
+          strict_required_status_checks_policy: true,
+          do_not_enforce_on_create: false,
+          required_status_checks: [
+            { context: "release-controls", integration_id: 15368 },
+            { context: "check", integration_id: 15368 },
+          ],
+        },
+      },
+      {
+        type: "code_scanning",
+        parameters: {
+          code_scanning_tools: [
+            {
+              tool: "CodeQL",
+              security_alerts_threshold: "high_or_higher",
+              alerts_threshold: "none",
+            },
+          ],
+        },
+      },
+    ],
+  });
+  assert.deepEqual(plan.environments, {
+    staging: {
+      wait_timer: 0,
+      prevent_self_review: false,
+      can_admins_bypass: false,
+      reviewers: [],
+      deployment_branch_policy: {
+        protected_branches: false,
+        custom_branch_policies: true,
+      },
+    },
+    production: {
+      wait_timer: 0,
+      prevent_self_review: false,
+      can_admins_bypass: false,
+      reviewers: [{ type: "User", id: 123 }],
+      deployment_branch_policy: {
+        protected_branches: false,
+        custom_branch_policies: true,
+      },
+    },
+  });
+});
+
+test("plan returns fresh nested configuration data", async () => {
+  const first = await configure("plan", {
+    reviewerId: 123,
+    request: noRequests,
+  });
+  const second = await configure("plan", {
+    reviewerId: 123,
+    request: noRequests,
+  });
+  const untouched = structuredClone(second);
+  first.ruleset.rules
+    .find((rule) => rule.type === "pull_request")
+    .parameters.required_reviewers.push({ id: 456 });
+  first.ruleset.rules.find(
+    (rule) => rule.type === "required_status_checks",
+  ).parameters.required_status_checks[0].integration_id = 1;
+  first.ruleset.rules.find(
+    (rule) => rule.type === "code_scanning",
+  ).parameters.code_scanning_tools[0].tool = "other";
+  first.environments.production.reviewers[0].id = 456;
+  assert.deepEqual(second, untouched);
+});
+
+test("readback accepts automatic staging and protected production", async () => {
+  const { plan, observed } = await configured();
   assert.doesNotThrow(() => assertConfigured(plan, observed));
 });
-for (const [change, expected] of [
+
+for (const [name, change, expected] of [
   [
-    (o) => {
-      o.ruleset.bypass_actors.push({ actor_id: 1 });
-    },
+    "inactive enforcement",
+    (o) => (o.ruleset.enforcement = "evaluate"),
     /bypass/,
   ],
   [
+    "bypass actor",
+    (o) => o.ruleset.bypass_actors.push({ actor_id: 1 }),
+    /bypass/,
+  ],
+  [
+    "changed main conditions",
+    (o) => o.ruleset.conditions.ref_name.include.push("refs/heads/other"),
+    /bypass/,
+  ],
+  [
+    "missing status rule",
     (o) => {
-      o.ruleset.rules.pop();
+      o.ruleset.rules = o.ruleset.rules.filter(
+        (rule) => rule.type !== "required_status_checks",
+      );
     },
     /required_status_checks/,
   ],
   [
+    "environment administrator bypass",
+    (o) => (o.environments.staging.settings.can_admins_bypass = true),
+    /approval/,
+  ],
+  [
+    "protected branches instead of custom policies",
     (o) => {
-      o.environments.staging.settings.can_admins_bypass = true;
+      o.environments.production.settings.deployment_branch_policy = {
+        protected_branches: true,
+        custom_branch_policies: false,
+      };
     },
     /approval/,
   ],
   [
-    (o) => {
+    "extra deployment branch",
+    (o) =>
       o.environments.staging.policies.branch_policies.push({
         name: "*",
         type: "tag",
-      });
-    },
+      }),
     /only main/,
   ],
   [
+    "wrong production reviewer",
     (o) => {
-      o.environments.staging.settings.protection_rules[0].reviewers[0].reviewer.id = 456;
+      o.environments.production.settings.protection_rules[0].reviewers[0].reviewer.id = 456;
     },
     /reviewer/,
   ],
+  [
+    "extra production reviewer",
+    (o) =>
+      o.environments.production.settings.protection_rules[0].reviewers.push({
+        type: "User",
+        reviewer: { id: 456 },
+      }),
+    /reviewer/,
+  ],
+  [
+    "staging human reviewer",
+    (o) =>
+      o.environments.staging.settings.protection_rules[0].reviewers.push({
+        type: "User",
+        reviewer: { id: 456 },
+      }),
+    /reviewer/,
+  ],
+  [
+    "blocking staging protection",
+    (o) =>
+      o.environments.staging.settings.protection_rules.push({
+        type: "wait_timer",
+      }),
+    /blocking deployment protection/,
+  ],
 ]) {
-  test(`readback detects a weakened policy (${expected.source})`, () => {
-    const { plan, observed } = configured();
+  test(`readback refuses ${name}`, async () => {
+    const { plan, observed } = await configured();
     change(observed);
     assert.throws(() => assertConfigured(plan, observed), expected);
   });
 }
+
+for (const [type, field, staleValue] of [
+  ["pull_request", "required_approving_review_count", 1],
+  ["pull_request", "dismiss_stale_reviews_on_push", false],
+  ["pull_request", "require_code_owner_review", true],
+  ["pull_request", "require_last_push_approval", true],
+  ["pull_request", "require_extra_approval_for_unattributed_changes", true],
+  ["pull_request", "required_review_thread_resolution", false],
+  ["pull_request", "allowed_merge_methods", ["merge", "squash", "rebase"]],
+  ["pull_request", "required_reviewers", [{ type: "User", id: 456 }]],
+  ["required_status_checks", "strict_required_status_checks_policy", false],
+  ["required_status_checks", "do_not_enforce_on_create", true],
+  ["required_status_checks", "required_status_checks", []],
+]) {
+  test(`readback refuses changed ${field}`, async () => {
+    const { plan, observed } = await configured();
+    observed.ruleset.rules.find((rule) => rule.type === type).parameters[
+      field
+    ] = staleValue;
+    assert.throws(() => assertConfigured(plan, observed), new RegExp(field));
+  });
+}
+
+for (const [field, wrongValue] of [
+  ["context", "other"],
+  ["integration_id", 15369],
+]) {
+  test(`readback refuses changed Actions status ${field}`, async () => {
+    const { plan, observed } = await configured();
+    const checks = observed.ruleset.rules.find(
+      (rule) => rule.type === "required_status_checks",
+    ).parameters.required_status_checks;
+    checks[0][field] = wrongValue;
+    assert.throws(
+      () => assertConfigured(plan, observed),
+      /required_status_checks/,
+    );
+  });
+}
+
+test("readback reports a missing expected parameter", async () => {
+  const { plan, observed } = await configured();
+  delete observed.ruleset.rules.find((rule) => rule.type === "pull_request")
+    .parameters;
+  assert.throws(
+    () => assertConfigured(plan, observed),
+    /required_approving_review_count/,
+  );
+});
+
 test("environment plan requires a concrete human reviewer", () => {
-  assert.throws(() => environmentPlan(0), /reviewer/);
+  for (const id of [0, -1, 1.5, undefined]) {
+    assert.throws(() => environmentPlan(id), /reviewer/);
+  }
   assert.equal(environmentPlan(123).can_admins_bypass, false);
 });
 
-test("readback rejects an extra environment approver", () => {
-  const { plan, observed } = configured();
-  observed.environments.staging.settings.protection_rules[0].reviewers.push({
-    type: "User",
-    reviewer: { id: 456 },
-  });
-  assert.throws(() => assertConfigured(plan, observed), /reviewer/);
+test("readback refuses a missing native rule", async () => {
+  const { plan, observed } = await configured();
+  observed.ruleset.rules = observed.ruleset.rules.filter(
+    (rule) => rule.type !== "code_scanning",
+  );
+  assert.throws(
+    () => assertConfigured(plan, observed),
+    /missing code_scanning/,
+  );
 });
 
-function provider(drift = false) {
-  const writes = [];
-  const requests = [];
-  const ruleset = { ...mainRules(), id: 45 };
-  const request = async (path, options = {}) => {
-    requests.push({ path, method: options.method ?? "GET" });
-    if (options.method) {
-      writes.push({ path, method: options.method });
-      if (path.endsWith("/rulesets/45")) return ruleset;
-      return {};
-    }
-    if (path.endsWith("/rulesets?per_page=100"))
-      return [{ name: ruleset.name, id: 45 }];
-    if (path.endsWith("/rulesets/45")) {
-      const read = structuredClone(ruleset);
-      if (
-        drift &&
-        writes.some((write) => write.path.endsWith("/rulesets/45"))
-      ) {
-        read.rules.find(
-          (rule) => rule.type === "required_status_checks",
-        ).parameters.required_status_checks = [];
-      }
-      return read;
-    }
-    if (path.endsWith("/deployment-branch-policies?per_page=100")) {
-      return { branch_policies: [{ name: "main", type: "branch" }] };
-    }
-    const name = path.endsWith("/staging") ? "staging" : "production";
-    const settings = environmentPlan(123, name === "staging");
-    return {
-      ...settings,
-      protection_rules:
-        name === "staging"
-          ? []
-          : [
-              {
-                type: "required_reviewers",
-                reviewers: [{ type: "User", reviewer: { id: 123 } }],
-              },
-            ],
-    };
-  };
-  return { request, requests, writes };
+for (const reverse of [false, true]) {
+  test(`readback refuses duplicate native rules with the weaker rule ${reverse ? "first" : "last"}`, async () => {
+    const { plan, observed } = await configured();
+    const weaker = structuredClone(
+      observed.ruleset.rules.find((rule) => rule.type === "code_scanning"),
+    );
+    weaker.parameters.code_scanning_tools[0].security_alerts_threshold = "none";
+    if (reverse) observed.ruleset.rules.unshift(weaker);
+    else observed.ruleset.rules.push(weaker);
+    assert.throws(() => assertConfigured(plan, observed), /one code_scanning/);
+  });
 }
 
-test("apply rejects a stale write echo when fresh ruleset readback drifts", async () => {
-  const api = provider(true);
-  await assert.rejects(
-    configure("apply", { reviewerId: 123, request: api.request }),
+for (const [name, change] of [
+  ["missing parameters", (rule) => delete rule.parameters],
+  ["missing tools", (rule) => delete rule.parameters.code_scanning_tools],
+  ["invalid tools", (rule) => (rule.parameters.code_scanning_tools = {})],
+  ["empty tools", (rule) => (rule.parameters.code_scanning_tools = [])],
+  [
+    "duplicate tools",
+    (rule) =>
+      rule.parameters.code_scanning_tools.push(
+        structuredClone(rule.parameters.code_scanning_tools[0]),
+      ),
+  ],
+  [
+    "extra tool",
+    (rule) => rule.parameters.code_scanning_tools.push({ tool: "other" }),
+  ],
+]) {
+  test(`readback refuses native ${name}`, async () => {
+    const { plan, observed } = await configured();
+    change(
+      observed.ruleset.rules.find((rule) => rule.type === "code_scanning"),
+    );
+    assert.throws(
+      () => assertConfigured(plan, observed),
+      /code_scanning.*one tool/,
+    );
+  });
+}
+
+for (const [field, wrongValue] of [
+  ["tool", "other"],
+  ["security_alerts_threshold", "none"],
+  ["alerts_threshold", "errors"],
+  ["extra", true],
+]) {
+  test(`readback refuses changed native tool ${field}`, async () => {
+    const { plan, observed } = await configured();
+    observed.ruleset.rules.find(
+      (rule) => rule.type === "code_scanning",
+    ).parameters.code_scanning_tools[0][field] = wrongValue;
+    assert.throws(
+      () => assertConfigured(plan, observed),
+      /code_scanning configuration/,
+    );
+  });
+}
+
+for (const field of ["tool", "security_alerts_threshold", "alerts_threshold"]) {
+  test(`readback refuses missing native tool ${field}`, async () => {
+    const { plan, observed } = await configured();
+    delete observed.ruleset.rules.find((rule) => rule.type === "code_scanning")
+      .parameters.code_scanning_tools[0][field];
+    assert.throws(
+      () => assertConfigured(plan, observed),
+      /code_scanning configuration/,
+    );
+  });
+}
+
+test("readback refuses an extra native parameter", async () => {
+  const { plan, observed } = await configured();
+  observed.ruleset.rules.find(
+    (rule) => rule.type === "code_scanning",
+  ).parameters.extra = true;
+  assert.throws(
+    () => assertConfigured(plan, observed),
+    /code_scanning configuration/,
+  );
+});
+
+test("readback accepts reordered object keys and legitimate unrelated semantics", async () => {
+  const { plan, observed } = await configured();
+  const status = observed.ruleset.rules.find(
+    (rule) => rule.type === "required_status_checks",
+  );
+  status.parameters.required_status_checks =
+    status.parameters.required_status_checks.map(
+      ({ context, integration_id }) => ({
+        integration_id,
+        context,
+      }),
+    );
+  status.parameters.extra = true;
+  observed.ruleset.rules.push({ type: "unrelated" });
+  observed.ruleset.rules.push({
+    type: "required_status_checks",
+    parameters: {},
+  });
+  const native = observed.ruleset.rules.find(
+    (rule) => rule.type === "code_scanning",
+  );
+  native.parameters.code_scanning_tools = [
+    {
+      alerts_threshold: "none",
+      security_alerts_threshold: "high_or_higher",
+      tool: "CodeQL",
+    },
+  ];
+  native.id = 99;
+  observed.ruleset.id = 45;
+  assert.doesNotThrow(() => assertConfigured(plan, observed));
+  status.parameters.required_status_checks.reverse();
+  assert.throws(
+    () => assertConfigured(plan, observed),
     /required_status_checks/,
   );
-  assert.deepEqual(
-    api.requests
-      .filter((item) => item.path.endsWith("/rulesets/45"))
-      .map((item) => item.method),
-    ["GET", "PUT", "GET"],
-  );
 });
 
-test("apply accepts a fresh ruleset readback", async () => {
-  const api = provider();
-  const result = await configure("apply", {
-    reviewerId: 123,
-    request: api.request,
-  });
-  assert.equal(result.observed.ruleset.id, 45);
-  assert.equal(
-    api.writes.filter((item) => item.path.endsWith("/rulesets/45")).length,
-    1,
+function provider(
+  plan,
+  { nativePresent = false, afterWrite, absentPolicies = false } = {},
+) {
+  const base = "repos/ShiosOS/Damadama";
+  const requests = [];
+  let saved = false;
+  let ruleset = structuredClone({ ...plan.ruleset, id: 45 });
+  if (!nativePresent)
+    ruleset.rules = ruleset.rules.filter(
+      (rule) => rule.type !== "code_scanning",
+    );
+  const environments = Object.fromEntries(
+    Object.entries(plan.environments).map(([name, body]) => [
+      name,
+      {
+        settings: environmentSettings(body),
+        policies: {
+          branch_policies: absentPolicies
+            ? []
+            : [{ name: "main", type: "branch" }],
+        },
+      },
+    ]),
   );
+  const request = async (path, { method = "GET", body } = {}) => {
+    requests.push({
+      path: path.slice(base.length),
+      method,
+      body: structuredClone(body),
+    });
+    if (path === `${base}/rulesets?per_page=100`)
+      return [{ name: ruleset.name, id: 45 }];
+    if (path === `${base}/rulesets/45`) {
+      if (method === "PUT") {
+        ruleset = { ...structuredClone(body), id: 45 };
+        saved = true;
+        return { id: 45 };
+      }
+      const read = structuredClone(ruleset);
+      if (saved && afterWrite) afterWrite(read);
+      return read;
+    }
+    for (const [name, environment] of Object.entries(environments)) {
+      if (path === `${base}/environments/${name}`) {
+        if (method === "PUT") {
+          environment.settings = environmentSettings(body);
+          return {};
+        }
+        return structuredClone(environment.settings);
+      }
+      if (
+        path ===
+        `${base}/environments/${name}/deployment-branch-policies?per_page=100`
+      )
+        return structuredClone(environment.policies);
+      if (
+        path === `${base}/environments/${name}/deployment-branch-policies` &&
+        method === "POST"
+      ) {
+        environment.policies.branch_policies.push(structuredClone(body));
+        return {};
+      }
+    }
+    assert.fail(`unexpected mock request ${method} ${path}`);
+  };
+  return { request, requests, environments };
+}
+
+for (const [type, field, value] of [
+  ["required_status_checks", "required_status_checks", []],
+  [
+    "code_scanning",
+    "code_scanning_tools",
+    [
+      {
+        tool: "CodeQL",
+        security_alerts_threshold: "none",
+        alerts_threshold: "none",
+      },
+    ],
+  ],
+]) {
+  test(`apply refuses fresh ${type} drift despite a successful write echo`, async () => {
+    const { plan } = await configured();
+    const api = provider(plan, {
+      afterWrite: (read) => {
+        read.rules.find((rule) => rule.type === type).parameters[field] = value;
+      },
+    });
+    await assert.rejects(
+      configure("apply", { reviewerId: 123, request: api.request }),
+      new RegExp(type),
+    );
+    assert.deepEqual(
+      api.requests
+        .filter((item) => item.path === "/rulesets/45")
+        .map((item) => item.method),
+      ["GET", "PUT", "GET"],
+    );
+    assert.deepEqual(
+      api.requests.find(
+        (item) => item.method === "PUT" && item.path === "/rulesets/45",
+      ).body,
+      plan.ruleset,
+    );
+  });
+}
+
+for (const absentPolicies of [false, true]) {
+  test(`apply persists the complete plan after environment writes${absentPolicies ? " and creates missing branch policies" : ""}`, async () => {
+    const { plan } = await configured();
+    const api = provider(plan, { absentPolicies });
+    const result = await configure("apply", {
+      reviewerId: 123,
+      request: api.request,
+    });
+    assert.deepEqual(result.observed.ruleset, { ...plan.ruleset, id: 45 });
+    const writes = api.requests.filter((item) => item.method !== "GET");
+    const expected = [
+      {
+        path: "/environments/staging",
+        method: "PUT",
+        body: plan.environments.staging,
+      },
+      {
+        path: "/environments/production",
+        method: "PUT",
+        body: plan.environments.production,
+      },
+      { path: "/rulesets/45", method: "PUT", body: plan.ruleset },
+    ];
+    if (absentPolicies) {
+      expected.splice(1, 0, {
+        path: "/environments/staging/deployment-branch-policies",
+        method: "POST",
+        body: { name: "main", type: "branch" },
+      });
+      expected.splice(3, 0, {
+        path: "/environments/production/deployment-branch-policies",
+        method: "POST",
+        body: { name: "main", type: "branch" },
+      });
+    }
+    assert.deepEqual(writes, expected);
+  });
+}
+
+test("apply refuses an unexpected existing environment branch policy before writing", async () => {
+  const { plan } = await configured();
+  const api = provider(plan);
+  api.environments.staging.policies.branch_policies[0].name = "other";
+  await assert.rejects(
+    configure("apply", { reviewerId: 123, request: api.request }),
+    /unexpected staging branch policy/,
+  );
+  assert.ok(api.requests.every((item) => item.method === "GET"));
 });
 
-test("inspect verifies readback without writing", async () => {
-  const api = provider();
-  const result = await configure("inspect", {
-    reviewerId: 123,
-    request: api.request,
-    verify: true,
+for (const nativePresent of [false, true]) {
+  test(`inspect verifies ${nativePresent ? "matching" : "missing native"} readback using GET only`, async () => {
+    const { plan } = await configured();
+    const api = provider(plan, { nativePresent });
+    const inspection = configure("inspect", {
+      reviewerId: 123,
+      request: api.request,
+      verify: true,
+    });
+    if (nativePresent) assert.equal((await inspection).observed.ruleset.id, 45);
+    else await assert.rejects(inspection, /missing code_scanning/);
+    assert.equal(api.requests.length, 6);
+    assert.ok(api.requests.every((item) => item.method === "GET"));
   });
-  assert.equal(result.observed.ruleset.id, 45);
-  assert.deepEqual(api.writes, []);
-});
+}
 
 test("CLI rejects invalid verification options before contacting GitHub", () => {
   for (const args of [
@@ -205,16 +624,3 @@ test("CLI rejects invalid verification options before contacting GitHub", () => 
     assert.doesNotMatch(result.stderr, /HTTP|gh|fetch failed/);
   }
 });
-for (const [field, staleValue] of [
-  ["required_approving_review_count", 1],
-  ["require_last_push_approval", true],
-  ["require_extra_approval_for_unattributed_changes", true],
-]) {
-  test(`readback rejects a stale second-reviewer requirement (${field})`, () => {
-    const { plan, observed } = configured();
-    observed.ruleset.rules.find(
-      (rule) => rule.type === "pull_request",
-    ).parameters[field] = staleValue;
-    assert.throws(() => assertConfigured(plan, observed), new RegExp(field));
-  });
-}

@@ -1,18 +1,29 @@
 import { spawn } from "bun";
 import { rm } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { prettierCommand } from "./developer";
 
-await Promise.all([
-  rm(".audit/api-contract/openapi.json", { force: true }),
-  rm(".audit/api-contract/responses.json", { force: true }),
-]);
+type Command = readonly [string, ...string[]];
+type CheckStep =
+  | { kind: "command"; argv: Command }
+  | { kind: "backend-and-receiver"; backend: Command };
+type Execute = (command: Command, root: string) => Promise<number>;
 
-const commands = [
+const beforeBackend: Command[] = [
   ["node", "--test", "scripts/pr-evidence.test.mjs"],
   ["bun", "install", "--frozen-lockfile"],
   ["bun", "run", "check:types"],
   ["bun", "run", "check:railway"],
-  ["bun", "test", "scripts/doctor.test.ts", "scripts/developer.test.ts"],
+  [
+    "bun",
+    "test",
+    "scripts/doctor.test.ts",
+    "scripts/developer.test.ts",
+    "scripts/check.test.ts",
+  ],
+  ["node", "--test", "tests/Provider/*.test.mjs"],
+  ["node", "--test", "ops/monitoring/monitor.test.mjs"],
   ["bun", "run", "doctor", "backend"],
   ["docker", "info", "--format", "{{.ServerVersion}}"],
   [
@@ -50,19 +61,8 @@ const commands = [
     "--config",
     "tests/Browser/vite.config.ts",
   ],
-  [
-    "dotnet",
-    "test",
-    "tests/Backend",
-    "--no-build",
-    "--artifacts-path",
-    ".audit/check-build",
-    "--logger",
-    "trx",
-    "--results-directory",
-    ".audit/TestResults",
-  ],
-
+];
+const afterBackend: Command[] = [
   ["node", "scripts/api-contract.mjs"],
   ["node", "node_modules/@playwright/test/cli.js", "install", "chromium"],
   [
@@ -73,12 +73,68 @@ const commands = [
     "tests/Browser/playwright.config.ts",
   ],
 ];
-for (const command of commands) {
-  console.info(`Checking ${command.join(" ")}`);
-  const result = await spawn(command, {
+const steps: CheckStep[] = [
+  ...beforeBackend.map((argv): CheckStep => ({ kind: "command", argv })),
+  {
+    kind: "backend-and-receiver",
+    backend: [
+      "dotnet",
+      "test",
+      "tests/Backend",
+      "--no-build",
+      "--artifacts-path",
+      ".audit/check-build",
+      "--logger",
+      "trx",
+      "--results-directory",
+      ".audit/TestResults",
+    ],
+  },
+  ...afterBackend.map((argv): CheckStep => ({ kind: "command", argv })),
+];
+
+async function execute(command: Command, root: string): Promise<number> {
+  return await spawn([...command], {
+    cwd: root,
     stdin: "inherit",
     stdout: "inherit",
     stderr: "inherit",
   }).exited;
-  if (result !== 0) process.exit(result);
 }
+
+export async function runCheck(options: {
+  root: string;
+  execute?: Execute;
+}): Promise<void> {
+  const run = options.execute ?? execute;
+  const { root } = options;
+  await Promise.all([
+    rm(join(root, ".audit/api-contract/openapi.json"), { force: true }),
+    rm(join(root, ".audit/api-contract/responses.json"), { force: true }),
+  ]);
+  async function requireSuccess(command: Command): Promise<void> {
+    console.info(`Checking ${command.join(" ")}`);
+    const exit = await run(command, root);
+    if (exit !== 0)
+      throw new Error(`Check failed (${exit}): ${command.join(" ")}`);
+  }
+  for (const step of steps) {
+    if (step.kind === "command") {
+      await requireSuccess(step.argv);
+    } else {
+      await rm(join(root, ".audit/receiver-console-fixture.json"), {
+        force: true,
+      });
+      await requireSuccess(step.backend);
+      await requireSuccess([
+        "node",
+        "--test",
+        "ops/diagnostics/receiver.test.mjs",
+        "ops/diagnostics/receiver-handshake.test.mjs",
+      ]);
+    }
+  }
+}
+
+if (import.meta.main)
+  await runCheck({ root: fileURLToPath(new URL("../", import.meta.url)) });

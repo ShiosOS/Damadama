@@ -5,6 +5,41 @@ import {
   deployedImage,
 } from "./runtime.mjs";
 
+class ActiveDeploymentOverlap extends Error {
+  constructor(active, config) {
+    super("multiple active deployments must drain before verification");
+    this.active = active;
+    this.environmentId = config.environmentId;
+    this.serviceId = config.serviceId;
+  }
+}
+
+function isExpectedHandoff(overlap, previous, applied, serviceId) {
+  if (
+    typeof previous.activeId !== "string" ||
+    !previous.activeId ||
+    !previous.image ||
+    previous.activeId === applied.id ||
+    overlap.environmentId !== previous.environmentId ||
+    overlap.environmentId !== applied.environmentId ||
+    overlap.serviceId !== previous.serviceId ||
+    overlap.serviceId !== serviceId ||
+    overlap.active.length !== 2
+  )
+    return false;
+  return (
+    overlap.active.filter(
+      (deployment) =>
+        deployment.id === previous.activeId &&
+        deployment.image === previous.image,
+    ).length === 1 &&
+    overlap.active.filter(
+      (deployment) =>
+        deployment.id === applied.id && deployment.image === applied.image,
+    ).length === 1
+  );
+}
+
 function configuration() {
   const {
     RAILWAY_TOKEN: token,
@@ -64,8 +99,19 @@ export async function inspectRailway() {
     (deployment) => deployment.status === "SUCCESS",
   );
   if (active.length > 1)
-    throw new Error(
-      "multiple active deployments must drain before verification",
+    throw new ActiveDeploymentOverlap(
+      active.map((deployment) => {
+        if (typeof deployment.id !== "string" || !deployment.id)
+          throw new Error("active deployment identity is unavailable");
+        return {
+          id: deployment.id,
+          image: deployedImage(
+            deployment.meta,
+            process.env.RAILWAY_DEPLOYMENT_IMAGE_PATH,
+          ),
+        };
+      }),
+      config,
     );
   return {
     image: active[0]
@@ -162,7 +208,7 @@ export async function observeDeployment(expected) {
 export async function deployImage(image, beforeMutation = async () => {}) {
   if (!/^ghcr\.io\/shiosos\/damadama@sha256:[a-f0-9]{64}$/.test(image))
     throw new Error("deployment requires an immutable Damadama digest");
-  await inspectRailway();
+  const previous = await inspectRailway();
   if (!process.env.RAILWAY_DEPLOYMENT_IMAGE_PATH)
     throw new Error(
       "verify Railway immutable deployment metadata during approved setup before automated deployment",
@@ -201,6 +247,8 @@ export async function deployImage(image, beforeMutation = async () => {}) {
         "query($id:String!){deployment(id:$id){id status}}",
         { id },
       );
+      if (result.deployment.id !== id)
+        throw new Error("Railway returned another deployment identity");
       console.log(`Deployment ${id}: ${result.deployment.status}`);
       if (
         ["FAILED", "CRASHED", "REMOVED", "SLEEPING", "SKIPPED"].includes(
@@ -209,8 +257,16 @@ export async function deployImage(image, beforeMutation = async () => {}) {
       )
         throw new Error("deployment failed; inspect Railway runtime logs");
       if (result.deployment.status === "SUCCESS") {
-        await observeDeployment({ id, image });
-        return { id, environmentId: config.environmentId, image };
+        try {
+          await observeDeployment({ id, image });
+          return { id, environmentId: config.environmentId, image };
+        } catch (error) {
+          if (
+            !(error instanceof ActiveDeploymentOverlap) ||
+            !isExpectedHandoff(error, previous, applied, config.serviceId)
+          )
+            throw error;
+        }
       }
       await setTimeout(5_000);
     }

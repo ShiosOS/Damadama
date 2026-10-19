@@ -1,4 +1,15 @@
 set -eu
+restore_max_seconds=${RESTORE_MAX_SECONDS-1800}
+case "$restore_max_seconds" in
+  ''|*[!0-9]*) echo 'RESTORE_MAX_SECONDS must be a positive whole number of seconds' >&2; exit 2 ;;
+  *[1-9]*) ;;
+  *) echo 'RESTORE_MAX_SECONDS must be a positive whole number of seconds' >&2; exit 2 ;;
+esac
+if [ "${RESTORE_DEADLINE_ACTIVE-}" != 1 ]; then
+  RESTORE_DEADLINE_ACTIVE=1
+  export RESTORE_DEADLINE_ACTIVE
+  exec timeout --signal=TERM --kill-after=5s "$restore_max_seconds" sh "$0" "$@"
+fi
 umask 077
 : "${RESTORE_TARGET_ACK:?Set isolated-empty-target only after inspecting the target}"
 [ "$RESTORE_TARGET_ACK" = isolated-empty-target ] || exit 2

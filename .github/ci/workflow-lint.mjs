@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { gateGraphErrors, queueErrors } from "./workflow-policy.mjs";
 import { releaseCallables } from "./required-jobs.mjs";
 import { verifyReceiverWorkflow } from "./receiver-conformance.mjs";
+import { verifyMonitorWorkflow } from "./monitor-conformance.mjs";
 
 const root = resolve(import.meta.dir, "../..");
 const toolsDirectory = join(root, ".audit", "workflow-tools");
@@ -107,6 +108,13 @@ function expectFailure(label, result, pattern) {
 }
 
 async function selfTest(actionlint, zizmor) {
+  for (const [runtime, args] of [
+    [process.execPath, ["test", "./.github/ci/security-policy.test.mjs"]],
+    ["node", ["--test", ".github/ci/monitor-conformance.test.mjs"]],
+  ]) {
+    const result = run(runtime, args);
+    if (result.code !== 0) throw new Error(result.output);
+  }
   const fixture = (name) => join(fixturesDirectory, `${name}.yml`);
   const valid = fixture("valid-queue");
   const validActionlint = run(actionlint, ["-oneline", valid]);
@@ -161,6 +169,7 @@ async function selfTest(actionlint, zizmor) {
   }
   const workflows = await loadWorkflows();
   await verifyReceiverWorkflow(workflows["ops-request-errors.yml"], root);
+  await verifyMonitorWorkflow(workflows["ops-monitor.yml"], root);
   const validGraph = gateGraphErrors(workflows);
   if (validGraph.length)
     throw new Error(`Real gate graph failed: ${validGraph.join("\n")}`);
