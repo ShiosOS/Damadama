@@ -8,7 +8,7 @@ const target = {
   source: "f7b7f964d2c1d36d851c0f6bc657636d8cf9dd1f",
   runId: 39178994019,
   attempt: 1,
-  tag: "main-f7b7f964d2c1",
+  tag: "main-f7b7f964d2c1-39178994019-1",
 };
 const destinations = new Set([
   "https://ghcr.io",
