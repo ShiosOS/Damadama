@@ -218,9 +218,31 @@ function preflightProofErrors(workflow) {
   return errors;
 }
 
+function setupNodeCohortErrors(workflows) {
+  const refs = new Map();
+  for (const [filename, workflow] of Object.entries(workflows)) {
+    for (const [job, definition] of Object.entries(workflow.jobs ?? {})) {
+      for (const [index, step] of (definition.steps ?? []).entries()) {
+        if (!step.uses?.startsWith("actions/setup-node@")) continue;
+        const ref = step.uses.slice("actions/setup-node@".length);
+        if (!refs.has(ref)) refs.set(ref, []);
+        refs.get(ref).push(`${filename}:jobs.${job}.steps[${index}]`);
+      }
+    }
+  }
+  if (refs.size <= 1) return [];
+  const locations = [...refs]
+    .map(([ref, sites]) => `${ref}: ${sites.join(", ")}`)
+    .join("; ");
+  return [
+    `Direct actions/setup-node calls use multiple refs. Choose one reviewed full SHA and update every direct setup-node call together, including new jobs. ${locations}`,
+  ];
+}
+
 export function gateGraphErrors(workflows) {
   const errors = preflightProofErrors(workflows["release-preflight-proof.yml"]);
   errors.push(...ownerProofErrors(workflows));
+  errors.push(...setupNodeCohortErrors(workflows));
   try {
     errors.push(...acceptedSecurityErrors(readSecurityContract(workflows)));
   } catch (error) {
