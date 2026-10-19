@@ -21,7 +21,21 @@ jobs:
             const screenshots = evidence.split(/^### Screenshots[ \t]*\r?$/m)[1]?.split(/^###?[ \t]/m)[0] ?? "";
             const recording = evidence.split(/^### Screen recording[ \t]*\r?$/m)[1]?.split(/^###?[ \t]/m)[0] ?? "";
             const hasLink = /https:\/\/[^\s<>()]+/.test(evidence);
-            const hasScreenshot = /!\[[^\]]*\]\(https:\/\/[^\s)]+\)/.test(screenshots);
+            const screenshotImages = [...screenshots.matchAll(/!\[[^\]]*\]\((https:\/\/[^\s)]+)\)/g)];
+            const artifactImage = [...screenshots.matchAll(/!\[[^\]]*\]\(\s*<?(https:\/\/[^\s>)]+)/gi)].some(match => {
+              const url = URL.parse(match[1]);
+              return url?.hostname === "github.com" && /^\/[^/]+\/[^/]+\/actions\/(?:runs\/[^/]+\/)?artifacts\//i.test(url.pathname);
+            });
+            const screenshotDownload = screenshots.split(/\r?\n[ \t]*\r?\n/).some(paragraph => {
+              if (!/`(?:[a-z0-9_-][a-z0-9._-]*\/)*[a-z0-9_-][a-z0-9._-]*\.png`/i.test(paragraph)) return false;
+              return [...paragraph.matchAll(/(?<!!)\[([^\]]+)\]\((https:\/\/[^\s)]+)\)/g)].some(([, label, link]) => {
+                const artifact = link.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/actions\/runs\/[1-9][0-9]*\/artifacts\/[1-9][0-9]*$/);
+                return /^Download(?:\s|$)/i.test(label.trim()) && artifact &&
+                  artifact[1].toLowerCase() === context.repo.owner.toLowerCase() &&
+                  artifact[2].toLowerCase() === context.repo.repo.toLowerCase();
+              });
+            });
+            const hasScreenshot = screenshotImages.length > 0 || screenshotDownload;
             const hasRecording = /https:\/\/[^\s<>()]+/.test(recording);
             const isVisual = files.some(file => file.filename.startsWith("web/") || file.previous_filename?.startsWith("web/"));
             const explained = /Visual evidence does not apply because [^\r\n]+/i.test(evidence);
@@ -31,7 +45,7 @@ jobs:
               /(?:^|\/)(?:\.audit|test-results|playwright-report)\//i.test(file.filename)
             ));
             const mediaLinks = [
-              ...screenshots.matchAll(/!\[[^\]]*\]\((https:\/\/[^\s)]+)\)/g),
+              ...screenshots.matchAll(/(https:\/\/[^\s<>()]+)/g),
               ...recording.matchAll(/(https:\/\/[^\s<>()]+)/g),
             ].map(match => match[1]);
             const repositoryMedia = mediaLinks.some(link => {
@@ -43,8 +57,10 @@ jobs:
             });
             if (!evidence.trim() || !hasLink) {
               core.setFailed("Add an ## Evidence section with an HTTPS link to actual verification output.");
+            } else if (artifactImage) {
+              core.setFailed("Do not embed GitHub Actions artifact bundles as images. Use an ordinary [Download screenshots](https://github.com/<owner>/<repo>/actions/runs/123/artifacts/456) link and name relative PNG paths in code spans in the same paragraph.");
             } else if (isVisual && (!hasScreenshot || !hasRecording)) {
-              core.setFailed("UI changes require an HTTPS Markdown image under ### Screenshots and an HTTPS recording link under ### Screen recording.");
+              core.setFailed("UI changes require an HTTPS Markdown image or a same-repository Actions screenshot download under ### Screenshots, and an HTTPS recording link under ### Screen recording. Example: [Download screenshots](https://github.com/<owner>/<repo>/actions/runs/123/artifacts/456) containing `desktop.png` in the same paragraph.");
             } else if (!isVisual && !(hasScreenshot && hasRecording) && !explained) {
               core.setFailed("Include screenshots and a recording, or explain 'Visual evidence does not apply because ...' and link actual verification output.");
             } else if (!testedRevision || testedRevision.toLowerCase() !== context.payload.pull_request.head.sha.toLowerCase()) {

@@ -20,7 +20,7 @@ type Props = {
 };
 const props = defineProps<Props>();
 const api = habitsApi(() => props.getToken());
-const habits = ref<Habit[]>([]);
+const habits = ref<Habit[] | null>(null);
 type Activity =
   | { kind: "idle" }
   | { kind: "loading" }
@@ -50,7 +50,7 @@ function showError(error: unknown): void {
   let message =
     "Could not reach the service. Check your connection and try again.";
   if (error instanceof ApiError && error.status === 401) {
-    habits.value = [];
+    habits.value = null;
     adding.value = false;
     message = "Sign in to continue.";
   } else if (error instanceof ApiError) {
@@ -67,7 +67,7 @@ watch(
   async (account) => {
     generation++;
     pendingReveal = null;
-    habits.value = [];
+    habits.value = null;
     adding.value = false;
     Object.assign(form, blank());
     activity.value = { kind: "idle" };
@@ -130,7 +130,7 @@ async function save(): Promise<void> {
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     });
     if (current !== generation) return;
-    habits.value.push(saved);
+    habits.value = [...(habits.value ?? []), saved];
     const layout = today.value?.refreshAfterCreate();
     if (layout)
       pendingReveal = { habitId: saved.id, accountGeneration: current, layout };
@@ -309,11 +309,11 @@ onBeforeUnmount(() => {
       <section aria-label="Saved habits">
         <h2 class="page-title">Your habits</h2>
         <p v-if="activity.kind === 'loading'" role="status">Loading habits…</p>
-        <p v-if="habits.length === 0" class="empty-habits">
+        <p v-if="habits?.length === 0" class="empty-habits">
           No habits saved yet.
         </p>
         <article
-          v-for="habit in habits"
+          v-for="habit in habits ?? []"
           :id="`habit-${habit.id}`"
           :key="habit.id"
           class="habit-row"

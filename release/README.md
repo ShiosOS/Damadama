@@ -67,6 +67,8 @@ Service source settings alone never count as running-image evidence. A previousl
 2. Wait for the security callers, control tests, application checks, build, scan, publication, signer, verifier, and staging jobs.
 3. Inspect `verified-record-<attempt>` and the runtime evidence. A successful setup-only run has no verified record and cannot promote.
 
+The Stage job has a 20-minute deadline. Successful jobs took 12 minutes 33 seconds and 12 minutes 40 seconds, while the failed job spent 11 minutes 38 seconds before its first deployment status. Combining that observed interval with the successful remaining work estimates 16 minutes 34 seconds. The bounded job budget covers that work without changing operation deadlines, signed admission, scanning, or authentication assertions. [Issue #108](https://github.com/ShiosOS/Damadama/issues/108) retains the original runs and timing evidence. Phase records identify where future runs spend time.
+
 Staging has no human approval. The job verifies readiness, embedded commit and tree, ordinary Clerk sessions, saved values before reload, separate reload values, an owner's successful detail read before another account's refusal, sign-out, and invite-only signup refusal.
 The outsider browser opens Clerk's ordinary signup component without an invitation and must observe **Access restricted** with no session. Public sign-in pages can remain visible. Application data still requires a valid ordinary Clerk JWT on every origin.
 
@@ -118,6 +120,13 @@ A previously deployed unhealthy service cannot use the initial-release exception
 If main advances after a provider write, the run fails with an **applied-but-unverified** outcome and the actual deployment ID when available. The GitHub release stays draft. No automatic rollback is claimed.
 
 ## Diagnose and recover
+
+Release commands emit `release-phase ` records to stderr around signed admission, provider observation, browser cleanup, and final Stage writes.
+Each JSON record contains only a fixed `phase`, a numeric `invocation`, an `event` of `start`, `complete`, or `failed`, and monotonic `elapsedMs`.
+Match a start and terminal record by invocation within the same process. A cancellation can leave a start without a terminal record.
+Nested phases overlap, so their durations must not be added together.
+Failed records omit exception details and preserve the original refusal. Diagnostic output is best effort and does not change admission or cleanup outcomes.
+The last unfinished phase identifies an execution boundary. It does not establish the timeout's cause or Stage acceptance.
 
 Use the workflow summary's deployment ID to open Railway deployment logs. Inspect migration startup failures, schema readiness, and app trace IDs.
 The backend emits JSON logs; store neither connection strings nor Clerk tokens in PR evidence.

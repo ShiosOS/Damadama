@@ -10,14 +10,21 @@ function run(gate, needs) {
   });
 }
 
-test("release gate includes all six required callable outcomes", () => {
+test("release gate includes all thirteen required callable outcomes", () => {
   assert.deepEqual([...gates["release-controls"].needs].sort(), [
+    "browser-compatibility",
+    "current-image-recovery",
+    "developer-experience",
     "evidence",
+    "metadata-publication",
+    "preview",
     "recovery",
     "runtime-policy",
     "security-codeql",
     "security-dependencies",
     "security-fixtures",
+    "supply-pr",
+    "tracing",
   ]);
 });
 

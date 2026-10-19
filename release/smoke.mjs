@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
+import { observePhase } from "./diagnostics.mjs";
 
 export async function publicChecks(record) {
   const origin = new URL(record.deployment.url);
@@ -252,7 +253,9 @@ export async function stagingBrowserChecks(record) {
     );
     return evidence;
   } finally {
-    for (const context of contexts) await context.close();
-    await browser.close();
+    await observePhase("stage.browser.contexts.close", async () => {
+      for (const context of contexts) await context.close();
+    });
+    await observePhase("stage.browser.close", () => browser.close());
   }
 }

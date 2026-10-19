@@ -1,25 +1,10 @@
 name: Developer experience
 on:
-  pull_request:
-    paths:
-      - .editorconfig
-      - .vscode/**
-      - .github/workflows/developer-experience.yml
-      - scripts/**
-      - dev/README.md
-      - README.md
-      - package.json
-      - bun.lock
-      - global.json
-      - Damadama.slnx
-      - "**/*.csproj"
-      - "**/packages*.lock.json"
-      - tsconfig.base.json
-      - eslint.config.mjs
+  workflow_call:
 permissions:
   contents: read
 concurrency:
-  group: developer-experience-${{ github.event.pull_request.number }}
+  group: developer-experience-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 env:
   GIT_CONFIG_COUNT: "1"

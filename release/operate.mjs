@@ -32,6 +32,7 @@ import {
 } from "./railway.mjs";
 import { requireRecovery } from "./runtime.mjs";
 import { applicationState } from "./application.mjs";
+import { observePhase } from "./diagnostics.mjs";
 
 const operation = process.argv[2];
 const read = async (path) => JSON.parse(await readFile(path, "utf8"));
@@ -103,9 +104,13 @@ async function stageEvidence(runId) {
 }
 
 async function verifyDeployment(record, recheck, verify) {
-  await observeDeployment(record.deployment);
+  await observePhase("deployment.provider.observe.before-checks", () =>
+    observeDeployment(record.deployment),
+  );
   const automated = await verify(record);
-  await observeDeployment(record.deployment);
+  await observePhase("deployment.provider.observe.after-checks", () =>
+    observeDeployment(record.deployment),
+  );
   await recheck();
   return automated;
 }
@@ -160,13 +165,16 @@ if (operation === "snapshot") {
   )
     throw new Error("unexpected preexisting staging receipt");
   await requireEnvironment("staging");
-  const { image, supply } = await locateRelease(record);
+  const { image, supply } = await observePhase("stage.release.locate", () =>
+    locateRelease(record),
+  );
   record.image = image;
-  const recheck = async () => {
-    await requireFreshCandidate(record);
-    await authenticateRelease(record, image, supply);
-    return requireFreshCandidate(record);
-  };
+  const recheck = async () =>
+    observePhase("stage.release.recheck", async () => {
+      await requireFreshCandidate(record);
+      await authenticateRelease(record, image, supply);
+      return requireFreshCandidate(record);
+    });
   const ci = await recheck();
   try {
     record.deployment = {
@@ -190,12 +198,16 @@ if (operation === "snapshot") {
       observedAt: new Date().toISOString(),
     };
     requireVerifiedRecord(record);
-    await write(
-      "runtime-evidence/deployment-summary.json",
-      await logSummary(record.deployment.id),
+    await observePhase("stage.deployment.summary", async () =>
+      write(
+        "runtime-evidence/deployment-summary.json",
+        await logSummary(record.deployment.id),
+      ),
     );
     await recheck();
-    await write("verified.json", record);
+    await observePhase("stage.verified.write", () =>
+      write("verified.json", record),
+    );
     await summary(
       `Automatically staged ${record.source.commit}. Image ${record.image.reference}. Record SHA-256 ${recordHash(record)}. Email delivery, migration review, and recovery remain production approval attestations.`,
     );

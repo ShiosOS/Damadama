@@ -502,6 +502,65 @@ test("saved values appear once with a non-interactive habit name", async ({
   );
 });
 
+test("the saved list shows empty prose only after its initial read succeeds", async ({
+  page,
+}) => {
+  const received = Promise.withResolvers<number>();
+  const release = Promise.withResolvers<void>();
+  await page.route("**/api/habits", async (route) => {
+    const response = await route.fetch();
+    received.resolve(response.status());
+    await release.promise;
+    await route.fulfill({ response });
+  });
+  await page.goto("/?account=other");
+  const saved = page.getByRole("region", { name: "Saved habits", exact: true });
+  try {
+    expect(await received.promise).toBe(200);
+    await expect(saved.getByRole("status")).toContainText("Loading habits");
+    await expect(saved.locator("article")).toHaveCount(0);
+    await expect(saved.getByText("No habits saved yet.")).toHaveCount(0);
+  } finally {
+    release.resolve();
+  }
+  await expect(saved.getByRole("status")).toHaveCount(0);
+  await expect(saved.getByText("No habits saved yet.")).toBeVisible();
+});
+
+test("a failed saved-list read shows its error without empty prose", async ({
+  page,
+}) => {
+  await page.route("**/api/habits", (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    return route.fulfill({
+      status: 503,
+      contentType: "application/problem+json",
+      body: JSON.stringify({ title: "Habits unavailable." }),
+    });
+  });
+  await page.goto("/?account=listRecovery");
+  await expect(page.getByRole("alert")).toContainText("Habits unavailable.");
+  const saved = page.getByRole("region", { name: "Saved habits", exact: true });
+  await expect(saved.locator("article")).toHaveCount(0);
+  await expect(saved.getByRole("status")).toHaveCount(0);
+  await expect(saved.getByText("No habits saved yet.")).toHaveCount(0);
+  await page.getByRole("button", { name: "Add habit", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Create a habit" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("No habits saved yet.", { exact: true }),
+  ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("dialog", { name: "Create a habit" }),
+  ).toHaveCount(0);
+  await expect(saved.getByText("No habits saved yet.")).toHaveCount(0);
+  await createWalking(page);
+  await expectWalking(page);
+  await expect(saved.getByText("No habits saved yet.")).toHaveCount(0);
+});
+
 test("expired authentication explains how to continue", async ({ page }) => {
   await page.goto("/?account=expired");
   await expect(
@@ -509,6 +568,27 @@ test("expired authentication explains how to continue", async ({ page }) => {
   ).toHaveCount(2);
   await expect(
     page.getByRole("region", { name: "Saved habits" }).locator("article"),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("region", { name: "Saved habits" })
+      .getByText("No habits saved yet."),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Add habit", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Create a habit" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("No habits saved yet.", { exact: true }),
+  ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("dialog", { name: "Create a habit" }),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("region", { name: "Saved habits" })
+      .getByText("No habits saved yet."),
   ).toHaveCount(0);
 });
 

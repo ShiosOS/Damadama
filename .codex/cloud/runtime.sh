@@ -7,7 +7,7 @@ fi
 
 node_version=24.21.0
 dotnet_version=10.0.112
-bun_version=1.3.14
+bun_version=1.4.3
 export DAMADAMA_CLOUD_ROOT="${DAMADAMA_CLOUD_ROOT:-$PWD/.audit/codex-cloud-runtime}"
 if [[ "$DAMADAMA_CLOUD_ROOT" != /* ]]; then
   echo 'DAMADAMA_CLOUD_ROOT must be an absolute writable path.' >&2

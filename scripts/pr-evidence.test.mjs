@@ -47,13 +47,22 @@ Visual evidence does not apply because this change only updates server validatio
 const missingEvidence =
   "Add an ## Evidence section with an HTTPS link to actual verification output.";
 const missingMedia =
-  "UI changes require an HTTPS Markdown image under ### Screenshots and an HTTPS recording link under ### Screen recording.";
+  "UI changes require an HTTPS Markdown image or a same-repository Actions screenshot download under ### Screenshots, and an HTTPS recording link under ### Screen recording. Example: [Download screenshots](https://github.com/<owner>/<repo>/actions/runs/123/artifacts/456) containing `desktop.png` in the same paragraph.";
 const missingExplanation =
   "Include screenshots and a recording, or explain 'Visual evidence does not apply because ...' and link actual verification output.";
 const missingRevision =
   "Include 'Tested revision: <full 40-character SHA>' in ## Evidence matching the current PR head. Update it after testing each push.";
 const committedMedia =
   "Use PR attachments or CI artifacts for screenshot and recording evidence, not repository blob or raw URLs.";
+const artifactImage =
+  "Do not embed GitHub Actions artifact bundles as images. Use an ordinary [Download screenshots](https://github.com/<owner>/<repo>/actions/runs/123/artifacts/456) link and name relative PNG paths in code spans in the same paragraph.";
+const screenshotArtifact =
+  "https://github.com/ShiosOS/Damadama/actions/runs/123/artifacts/456";
+const artifactScreenshots = `[Download screenshots](${screenshotArtifact}) containing \`desktop-creation.png\`, \`desktop-saved.png\`, \`mobile-layout.png\`.`;
+const artifactEvidence = uiEvidence.replace(
+  `![Desktop](${screenshot})`,
+  artifactScreenshots,
+);
 
 async function failures(
   body = uiEvidence,
@@ -86,6 +95,145 @@ async function failures(
 test("accepts UI attachment proof and a current tested revision", async () => {
   assert.deepEqual(await failures(), []);
 });
+
+test("accepts labeled screenshot downloads with associated relative PNG paths", async () => {
+  assert.deepEqual(await failures(artifactEvidence), []);
+  assert.deepEqual(
+    await failures(
+      uiEvidence.replace(
+        `![Desktop](${screenshot})`,
+        `[Download screenshots](${screenshotArtifact}) containing \`desktop/creation.png\`.`,
+      ),
+    ),
+    [],
+  );
+});
+
+for (const url of [
+  "https://github.com/ShiosOS/Damadama/actions/runs/39189443915/artifacts/12159348121",
+  "https://github.com/ShiosOS/Damadama/actions/runs/39192892379/artifacts/12160294907",
+]) {
+  for (const [name, proof] of [
+    ["alone", `![Bundle](${url})`],
+    ["beside an attachment", `![Bundle](${url})\n\n![Desktop](${screenshot})`],
+    ["beside a valid download", `![Bundle](${url})\n\n${artifactScreenshots}`],
+  ]) {
+    test(`refuses artifact image ${url} ${name}`, async () => {
+      assert.deepEqual(
+        await failures(uiEvidence.replace(`![Desktop](${screenshot})`, proof)),
+        [artifactImage],
+      );
+    });
+  }
+}
+
+for (const [name, image] of [
+  ["an angle target", `![Bundle](<${screenshotArtifact}>)`],
+  ["a title", `![Bundle](${screenshotArtifact} "Download bundle")`],
+  [
+    "uppercase HTTPS",
+    `![Bundle](${screenshotArtifact.replace("https:", "HTTPS:")})`,
+  ],
+]) {
+  test(`refuses artifact images with ${name} beside an attachment`, async () => {
+    assert.deepEqual(
+      await failures(
+        uiEvidence.replace(
+          `![Desktop](${screenshot})`,
+          `${image}\n\n![Desktop](${screenshot})`,
+        ),
+      ),
+      [artifactImage],
+    );
+  });
+}
+
+for (const [name, proof] of [
+  [
+    "no Download label",
+    artifactScreenshots.replace("Download screenshots", "Screenshots"),
+  ],
+  ["no PNG paths", `[Download screenshots](${screenshotArtifact})`],
+  [
+    "non-PNG member",
+    `[Download screenshots](${screenshotArtifact}) containing \`recording.webm\`.`,
+  ],
+  [
+    "absolute PNG path",
+    `[Download screenshots](${screenshotArtifact}) containing \`/desktop.png\`.`,
+  ],
+  [
+    "parent PNG path",
+    `[Download screenshots](${screenshotArtifact}) containing \`../desktop.png\`.`,
+  ],
+  [
+    "URL as PNG path",
+    `[Download screenshots](${screenshotArtifact}) containing \`https://example.invalid/desktop.png\`.`,
+  ],
+  [
+    "PNG in another paragraph",
+    `[Download screenshots](${screenshotArtifact})\n\nContains \`desktop.png\`.`,
+  ],
+  [
+    "PNG outside Screenshots",
+    `[Download screenshots](${screenshotArtifact})\n\n### Other\n\nContains \`desktop.png\`.`,
+  ],
+]) {
+  test(`refuses screenshot downloads with ${name}`, async () => {
+    assert.deepEqual(
+      await failures(uiEvidence.replace(`![Desktop](${screenshot})`, proof)),
+      [missingMedia],
+    );
+  });
+}
+
+for (const url of [
+  "https://github.com/another/Damadama/actions/runs/123/artifacts/456",
+  "https://github.com/ShiosOS/another/actions/runs/123/artifacts/456",
+  "https://github.com/ShiosOS/Damadama/actions/runs/latest/artifacts/456",
+  "https://github.com/ShiosOS/Damadama/actions/runs/123/artifacts/screenshots",
+  "https://github.com/ShiosOS/Damadama/actions/runs/0123/artifacts/456",
+  "https://github.com/ShiosOS/Damadama/actions/runs/123/artifacts/0",
+  `${screenshotArtifact}/`,
+  `${screenshotArtifact}?download=1`,
+  `${screenshotArtifact}#desktop.png`,
+  "https://user:password@github.com/ShiosOS/Damadama/actions/runs/123/artifacts/456",
+  "https://github.com:443/ShiosOS/Damadama/actions/runs/123/artifacts/456",
+]) {
+  test(`refuses noncanonical screenshot artifact ${url}`, async () => {
+    assert.deepEqual(
+      await failures(artifactEvidence.replace(screenshotArtifact, url)),
+      [missingMedia],
+    );
+  });
+}
+
+for (const [name, body, expected] of [
+  [
+    "recording",
+    artifactEvidence.replace(`[Changed flow](${recording})`, ""),
+    missingMedia,
+  ],
+  [
+    "current revision",
+    artifactEvidence.replace(revision, "f".repeat(40)),
+    missingRevision,
+  ],
+  [
+    "full revision",
+    artifactEvidence.replace(revision, revision.slice(0, 7)),
+    missingRevision,
+  ],
+  [
+    "revision",
+    artifactEvidence.replace(`Tested revision: ${revision}`, ""),
+    missingRevision,
+  ],
+]) {
+  test(`screenshot downloads still require ${name}`, async () => {
+    assert.deepEqual(await failures(body), [expected]);
+  });
+}
 
 test("accepts nonvisual proof with the required explanation", async () => {
   assert.deepEqual(
@@ -260,6 +408,17 @@ for (const mediaURL of [
   "https://raw.githubusercontent.com/ShiosOS/Damadama/main/docs/screen.png",
   "https://raw.github.com/ShiosOS/Damadama/main/docs/screen.png",
 ]) {
+  test(`refuses repository media disguised as a screenshot download ${mediaURL}`, async () => {
+    assert.deepEqual(
+      await failures(
+        uiEvidence.replace(
+          `![Desktop](${screenshot})`,
+          `![Desktop](${screenshot})\n\n[Download screenshots](${mediaURL}) containing \`desktop.png\`.`,
+        ),
+      ),
+      [committedMedia],
+    );
+  });
   for (const [name, original] of [
     ["screenshot", screenshot],
     ["recording", recording],

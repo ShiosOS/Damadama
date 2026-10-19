@@ -1,0 +1,4 @@
+interface:
+  display_name: "Verify Damadama"
+  short_description: "Drive Damadama features and record proof"
+  default_prompt: "Use $verify to check the affected Damadama feature and retain its evidence."

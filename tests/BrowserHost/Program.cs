@@ -31,6 +31,7 @@ var fixture = JsonSerializer.Serialize(new
     other = app.Token("other-account"),
     reload = app.Token("reload-account"),
     list = app.Token("list-account"),
+    listRecovery = app.Token("list-recovery-account"),
     expired = app.Token("expired-account", expired: true),
     errors = app.Token("errors-account"),
     cleanup = app.Token("cleanup-account"),

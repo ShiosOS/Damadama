@@ -64,24 +64,13 @@ test("both native promotion consumers and fresh candidate refuse causal security
     return new Response(JSON.stringify(value));
   });
   assert.equal((await requireFreshCandidate({ source, authority })).length, 2);
-  const leaves = [
-    "analysis-csharp",
-    "analysis-javascript",
-    "analysis-actions",
-    "upload-csharp",
-    "upload-javascript",
-    "upload-actions",
-    "audit",
-  ];
-  for (const leaf of leaves)
+  for (const callable of ["security-codeql", "security-dependencies"])
     for (const result of ["failure", "skipped", "cancelled", undefined]) {
       const needs = {
         "security-codeql": { result: "success" },
         "security-dependencies": { result: "success" },
       };
-      needs[
-        leaf === "audit" ? "security-dependencies" : "security-codeql"
-      ].result = result;
+      needs[callable].result = result;
       assert.throws(
         () => requireJobs("main-release-controls", needs),
         /result must be success/,

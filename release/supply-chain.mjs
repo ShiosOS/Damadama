@@ -16,6 +16,7 @@ import {
 import { prepareArchive } from "./images.mjs";
 import { compareRegistryArchive } from "./supply-registry.mjs";
 import { materializeProducers } from "./supply-producers.mjs";
+import { observePhase } from "./diagnostics.mjs";
 import { manifestFiles, evidenceGroups } from "./supply-evidence.mjs";
 import {
   reconcileInstalledNpm,
@@ -578,14 +579,16 @@ async function verifyCapsule(
   const signatureSha256 = await fileHash(
     join(directory, "manifest.bundle.json"),
   );
-  await verifySignature(
-    manifestPath,
-    join(directory, "manifest.bundle.json"),
-    trust,
-    source,
-    authority,
-    slsa,
-    manifestSha256,
+  await observePhase("supply.signature.manifest", () =>
+    verifySignature(
+      manifestPath,
+      join(directory, "manifest.bundle.json"),
+      trust,
+      source,
+      authority,
+      slsa,
+      manifestSha256,
+    ),
   );
   insist(
     manifestBytes.equals(await readFile(manifestPath)),
@@ -615,10 +618,12 @@ async function verifyCapsule(
   if (trust === production)
     insist(same(manifest.image, image), "signed registry image differs");
   else insist(manifest.image === null, "proof must not claim a registry image");
-  insist(
-    same(manifest.files, await manifestFiles(directory)),
-    "signed evidence hash differs",
-  );
+  await observePhase("supply.manifest.compare.initial", async () => {
+    insist(
+      same(manifest.files, await manifestFiles(directory)),
+      "signed evidence hash differs",
+    );
+  });
   const archiveSha256 = manifest.files["build/image.tar"];
   if (trust === production)
     insist(
@@ -626,24 +631,22 @@ async function verifyCapsule(
       "published archive differs from signed archive",
     );
   const evidence = await isolated(async (originals) => {
-    const producers = await materializeProducers(
-      source,
-      authority,
-      trust,
-      originals,
+    const producers = await observePhase("supply.originals.materialize", () =>
+      materializeProducers(source, authority, trust, originals),
     );
     insist(
       same(manifest.producers, producers),
       "immutable producer artifact membership differs",
     );
-    await compareOriginals(directory, originals);
-    const validated = await validateEvidence(
-      originals,
-      source,
-      authority,
-      trust,
+    await observePhase("supply.originals.compare.before", () =>
+      compareOriginals(directory, originals),
     );
-    await compareOriginals(directory, originals);
+    const validated = await observePhase("supply.evidence.validate", () =>
+      validateEvidence(originals, source, authority, trust),
+    );
+    await observePhase("supply.originals.compare.after", () =>
+      compareOriginals(directory, originals),
+    );
     return validated;
   });
   let subject = join(directory, "build/image.tar");
@@ -651,25 +654,31 @@ async function verifyCapsule(
   if (trust === production) {
     subject = `oci://${image.reference}`;
     digest = image.digest.slice(7);
-    await compareRegistryArchive(image, join(directory, "build/image.tar"));
+    await observePhase("supply.registry.compare", () =>
+      compareRegistryArchive(image, join(directory, "build/image.tar")),
+    );
   }
-  const provenance = await verifySignature(
-    subject,
-    join(directory, "signer/provenance.bundle.json"),
-    trust,
-    source,
-    authority,
-    slsa,
-    digest,
+  const provenance = await observePhase("supply.signature.provenance", () =>
+    verifySignature(
+      subject,
+      join(directory, "signer/provenance.bundle.json"),
+      trust,
+      source,
+      authority,
+      slsa,
+      digest,
+    ),
   );
-  const sbomStatement = await verifySignature(
-    subject,
-    join(directory, "signer/sbom.bundle.json"),
-    trust,
-    source,
-    authority,
-    spdx,
-    digest,
+  const sbomStatement = await observePhase("supply.signature.sbom", () =>
+    verifySignature(
+      subject,
+      join(directory, "signer/sbom.bundle.json"),
+      trust,
+      source,
+      authority,
+      spdx,
+      digest,
+    ),
   );
   insist(
     same(sbomStatement.predicate, evidence.sbom),
@@ -681,26 +690,32 @@ async function verifyCapsule(
         sbomStatement.subject[0].name === "ghcr.io/shiosos/damadama",
       "OCI subject name differs",
     );
-  await requireCurrentDatabase(evidence.assessment.database);
-  await validateScanEvidence(
-    join(directory, "scan"),
-    source,
-    authority,
-    archiveSha256,
+  await observePhase("supply.database.current", () =>
+    requireCurrentDatabase(evidence.assessment.database),
   );
-  insist(
-    same(manifest.files, await manifestFiles(directory)),
-    "evidence changed during verification",
+  await observePhase("supply.scan.recheck", () =>
+    validateScanEvidence(
+      join(directory, "scan"),
+      source,
+      authority,
+      archiveSha256,
+    ),
   );
-  insist(
-    (await fileHash(manifestPath)) === manifestSha256,
-    "manifest changed during verification",
-  );
-  insist(
-    (await fileHash(join(directory, "manifest.bundle.json"))) ===
-      signatureSha256,
-    "manifest signature changed during verification",
-  );
+  await observePhase("supply.manifest.compare.final", async () => {
+    insist(
+      same(manifest.files, await manifestFiles(directory)),
+      "evidence changed during verification",
+    );
+    insist(
+      (await fileHash(manifestPath)) === manifestSha256,
+      "manifest changed during verification",
+    );
+    insist(
+      (await fileHash(join(directory, "manifest.bundle.json"))) ===
+        signatureSha256,
+      "manifest signature changed during verification",
+    );
+  });
   if (trust === production) {
     insist(
       evidence.coverage.osPackages > 0 &&

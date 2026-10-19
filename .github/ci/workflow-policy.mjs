@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { gates, releaseCallables } from "./required-jobs.mjs";
+import { ownerProofErrors } from "./owner-proof-policy.mjs";
 import {
   readSecurityContract,
   acceptedSecurityErrors,
@@ -240,6 +241,7 @@ function setupNodeCohortErrors(workflows) {
 
 export function gateGraphErrors(workflows) {
   const errors = preflightProofErrors(workflows["release-preflight-proof.yml"]);
+  errors.push(...ownerProofErrors(workflows));
   errors.push(...setupNodeCohortErrors(workflows));
   try {
     errors.push(...acceptedSecurityErrors(readSecurityContract(workflows)));
@@ -299,7 +301,8 @@ export function gateGraphErrors(workflows) {
       );
       if (!dependency) continue;
       expect(
-        dependency.if === undefined && dependency.needs === undefined,
+        dependency.if === undefined &&
+          (gate === "supply-pr" || dependency.needs === undefined),
         `${filename}:jobs.${name}: prerequisite must run unconditionally`,
       );
       expect(
@@ -314,6 +317,12 @@ export function gateGraphErrors(workflows) {
       );
       if (gate === "release-controls" || gate === "main-release-controls") {
         const callable = releaseCallables[name];
+        expect(
+          Object.keys(dependency).length === 2 &&
+            Object.hasOwn(dependency, "uses") &&
+            Object.hasOwn(dependency, "permissions"),
+          `${filename}:jobs.${name}: callable must declare only uses and permissions`,
+        );
         expect(
           dependency.uses === `$/.github/workflows/${callable.workflow}`,
           `${filename}:jobs.${name}: wrong callable workflow`,
@@ -399,6 +408,7 @@ export function gateGraphErrors(workflows) {
       );
       continue;
     }
+    if (kind === "owner-proof") continue;
     expect(
       Object.keys(leaf?.on ?? {}).length === 1,
       `${filename}: must be workflow_call only`,
@@ -470,17 +480,22 @@ export function gateGraphErrors(workflows) {
     "recovery-check.yml: failure upload must include safe hidden recovery proof",
   );
   const suite = "node --test release/*.test.mjs";
-  const prSuiteCount = [
+  const prSuiteLocations = [
     "check.yml",
     "release-controls.yml",
     ...Object.values(releaseCallables).map((callable) => callable.workflow),
-  ]
-    .flatMap((filename) => Object.values(workflows[filename]?.jobs ?? {}))
-    .flatMap((job) => job.steps ?? [])
-    .filter((step) => step.run === suite).length;
+  ].flatMap((filename) =>
+    Object.entries(workflows[filename]?.jobs ?? {}).flatMap(([name, job]) =>
+      (job.steps ?? [])
+        .filter((step) => step.run === suite)
+        .map(() => `${filename}:${name}`),
+    ),
+  );
   expect(
-    prSuiteCount === 1,
-    "release runtime suite must run exactly once per PR in runtime-policy",
+    prSuiteLocations.length === 2 &&
+      prSuiteLocations.includes("release-runtime-check.yml:runtime-policy") &&
+      prSuiteLocations.includes("supply-pr-proof.yml:proof-build"),
+    "release runtime suite must run exactly in runtime-policy and the complete Supply proof-build replica",
   );
   const stage = workflows["stage.yml"]?.jobs;
   for (const name of ["release-controls", "check"]) {

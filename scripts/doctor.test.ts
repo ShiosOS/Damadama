@@ -24,7 +24,7 @@ function runtimeFixture(
   overrides: Record<string, Capture> = {},
 ): (command: Command) => Promise<Capture> {
   const responses: Record<string, Capture> = {
-    bun: { kind: "ok", output: "1.3.14" },
+    bun: { kind: "ok", output: "1.4.3" },
     node: { kind: "ok", output: "v24.21.0" },
     dotnet: { kind: "ok", output: "10.0.113" },
     docker: { kind: "ok", output: "linux" },
@@ -330,7 +330,7 @@ describe("real operating-system effects", () => {
       );
       await writeFile(
         join(directory, "package.json"),
-        '{"packageManager":"bun@1.3.14"}',
+        '{"packageManager":"bun@1.4.3"}',
       );
       await writeFile(
         join(directory, "global.json"),
@@ -366,7 +366,7 @@ describe("real operating-system effects", () => {
       }
       await writeFile(
         join(directory, "package.json"),
-        '{"packageManager":"bun@1.3.14"}',
+        '{"packageManager":"bun@1.4.3"}',
       );
       for (const invalid of [
         secret,
