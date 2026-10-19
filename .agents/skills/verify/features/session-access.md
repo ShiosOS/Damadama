@@ -21,7 +21,7 @@ Preconditions: choose integrated or provider mode explicitly. [SKILL.md](../SKIL
 node node_modules/@playwright/test/cli.js test --config tests/Browser/playwright.config.ts habits.spec.ts today.spec.ts
 ```
 
-- Integrated refusal uses `expired authentication explains how to continue` and the owner/foreign/sign-out Today example. Require the owner success before the foreign refusal, visible private-data removal and the actual tokenless API refusal. Read each spec's request assertions before describing the result.
+- Integrated refusal uses `expired authentication explains how to continue` and the owner/foreign/sign-out Today example. Require owner success, the other account's successful empty view, sign-out clearing and the final tokenless API refusal. Read each spec's request assertions before describing the result.
 - Integrated transitions use the draft clearing and account-data tests in `habits.spec.ts`. The fixture buttons change synthetic accounts; label that evidence accordingly.
 - For provider mode follow the existing provider-session workflow on trusted main. Obtain the deployed source from staging's release manifest as the runbook requires. Let that workflow own the browser/session and secret use. Read its actual sanitized `provider-smoke.json` result and deployed source/tree separately from the workflow controls revision.
 - Require the real SignIn observation, complete ordinary session, signed-in reload, actual UserButton action, absent session/user/protected UI after sign-out/reload, and final tokenless refusal. If the authorized provider route cannot run, record the attempted route and exact unmet prerequisite. Keep it unverified when it was not attempted.
