@@ -66,3 +66,9 @@ These checks can reject the excluded outcomes their runners report. They cannot 
 The separate browser compatibility suite currently uses project-specific selection. Its intentional project-routing skips are outside this canonical completeness policy. Manual provider verification also remains separate.
 
 Review the real runner probes and the current-revision full check. An absent Docker engine blocks PostgreSQL and integrated browser proof locally. A blocked command is not a passing result. The PR must identify that boundary and link the supported Linux run.
+
+## Understand the stack dependency
+
+GitHub shows this change above the [prerequisite command lifetime repair](doctor-command-lifetime.md). That repair makes the doctor wait for a stopped child process to close before returning its result. Windows verification of this acceptance work exposed the existing cleanup defect.
+
+Review and merge the parent repair first. This layer then adds the acceptance completeness rules described above. The GitHub stack records the order, and each PR has its own reading guide and test evidence.
