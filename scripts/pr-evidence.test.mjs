@@ -25,7 +25,27 @@ const revision = "0123456789abcdef0123456789abcdef01234567";
 const verification = "https://github.com/ShiosOS/Damadama/actions/runs/123";
 const screenshot = "https://github.com/user-attachments/assets/screenshot";
 const recording = "https://github.com/user-attachments/assets/recording";
-const uiEvidence = `## Evidence
+const story = "https://app.notion.com/p/3f89c05101188180bbc4da6e38c3ce83";
+const outcome = "Every PR names its requirement and one intended outcome.";
+const metadata = `## Requirements
+
+Story: ${story}
+Outcome: ${outcome}
+
+## Scope
+
+Check PR description fields. Leave story contents and semantic focus to review.
+
+## Acceptance examples
+
+Given a description lacks its Story field, when the check runs, then it names the missing field.
+
+## Verification
+
+The extracted workflow script accepts complete metadata and rejects incomplete examples.
+
+`;
+const uiEvidence = `${metadata}## Evidence
 
 Tested revision: ${revision}
 [Passing check](${verification})
@@ -38,7 +58,7 @@ Tested revision: ${revision}
 
 [Changed flow](${recording})
 `;
-const nonvisualEvidence = `## Evidence
+const nonvisualEvidence = `${metadata}## Evidence
 
 Tested revision: ${revision}
 Visual evidence does not apply because this change only updates server validation.
@@ -63,6 +83,11 @@ const artifactEvidence = uiEvidence.replace(
   `![Desktop](${screenshot})`,
   artifactScreenshots,
 );
+const requirementSection = "Use exactly one ## Requirements section.";
+const storyField =
+  "Add exactly one Story field under ## Requirements with a canonical https://app.notion.com/p/<32-character-page-id> URL.";
+const outcomeField =
+  "Add exactly one nonblank Outcome field under ## Requirements. Replace template prompts with the intended result.";
 
 async function failures(
   body = uiEvidence,
@@ -87,7 +112,7 @@ async function failures(
         return files;
       },
     },
-    { setFailed: (message) => result.push(message) },
+    { setFailed: (message) => result.push(message), notice: () => {} },
   );
   return result;
 }
@@ -440,4 +465,208 @@ test("allows repository links to lasting contracts outside media proof", async (
     ),
     [],
   );
+});
+
+for (const [name, body, expected] of [
+  [
+    "missing Requirements",
+    uiEvidence.replace(metadata, ""),
+    requirementSection,
+  ],
+  [
+    "duplicate Requirements",
+    `${uiEvidence}\n## Requirements\nStory: ${story}\nOutcome: Another outcome.`,
+    requirementSection,
+  ],
+  ["missing Story", uiEvidence.replace(`Story: ${story}`, ""), storyField],
+  ["blank Story", uiEvidence.replace(story, ""), storyField],
+  [
+    "duplicate Story",
+    uiEvidence.replace(`Story: ${story}`, `Story: ${story}\nStory: ${story}`),
+    storyField,
+  ],
+  [
+    "missing Outcome",
+    uiEvidence.replace(`Outcome: ${outcome}`, ""),
+    outcomeField,
+  ],
+  ["blank Outcome", uiEvidence.replace(outcome, "   "), outcomeField],
+  [
+    "duplicate Outcome",
+    uiEvidence.replace(
+      `Outcome: ${outcome}`,
+      `Outcome: ${outcome}\nOutcome: Another result.`,
+    ),
+    outcomeField,
+  ],
+  [
+    "placeholder Outcome",
+    uiEvidence.replace(outcome, "<State one intended result.>"),
+    outcomeField,
+  ],
+  ["unfinished Outcome", uiEvidence.replace(outcome, "TODO"), outcomeField],
+  [
+    "comment-only Requirements",
+    uiEvidence.replace(metadata, `<!--\n${metadata}-->\n`),
+    requirementSection,
+  ],
+  [
+    "fenced Requirements",
+    uiEvidence.replace(metadata, `\`\`\`markdown\n${metadata}\`\`\`\n`),
+    requirementSection,
+  ],
+  [
+    "comment-only Story",
+    uiEvidence.replace(`Story: ${story}`, `<!-- Story: ${story} -->`),
+    storyField,
+  ],
+  [
+    "fenced Story",
+    uiEvidence.replace(`Story: ${story}`, `\`\`\`\nStory: ${story}\n\`\`\``),
+    storyField,
+  ],
+  [
+    "indented-code Story",
+    uiEvidence.replace(`Story: ${story}`, `    Story: ${story}`),
+    storyField,
+  ],
+  [
+    "comment-only Outcome",
+    uiEvidence.replace(`Outcome: ${outcome}`, `<!-- Outcome: ${outcome} -->`),
+    outcomeField,
+  ],
+  [
+    "fenced Outcome",
+    uiEvidence.replace(`Outcome: ${outcome}`, `~~~\nOutcome: ${outcome}\n~~~`),
+    outcomeField,
+  ],
+]) {
+  test(`refuses ${name} metadata`, async () => {
+    assert.deepEqual(await failures(body), [expected]);
+  });
+}
+
+for (const url of [
+  "http://app.notion.com/p/3f89c05101188180bbc4da6e38c3ce83",
+  "https://app.notion.com.evil.example/p/3f89c05101188180bbc4da6e38c3ce83",
+  "https://app.notion.com@evil.example/p/3f89c05101188180bbc4da6e38c3ce83",
+  "https://user:password@app.notion.com/p/3f89c05101188180bbc4da6e38c3ce83",
+  "https://app.notion.com:443/p/3f89c05101188180bbc4da6e38c3ce83",
+  "https://app.notion.com/p/not-a-page-id",
+  `${story}?share=1`,
+  `${story}#examples`,
+  `${story}/`,
+  `${story} https://app.notion.com/p/3f69c051011881f6be69c72136388723`,
+]) {
+  test(`refuses noncanonical story reference ${url}`, async () => {
+    assert.deepEqual(await failures(uiEvidence.replace(story, url)), [
+      storyField,
+    ]);
+  });
+}
+
+for (const heading of ["Scope", "Acceptance examples", "Verification"]) {
+  const section = metadata
+    .match(new RegExp(`## ${heading}\\n\\n([\\s\\S]*?)(?=\\n\\n## |$)`))[1]
+    .trimEnd();
+  for (const [name, replacement] of [
+    ["empty", ""],
+    ["comment-only", `<!-- ${section} -->`],
+    ["punctuation-only", "- [ ] ..."],
+    ["heading-only", "### Describe the result"],
+    ["unfinished", "TBD"],
+    ["placeholder", "<Describe the result.>"],
+  ]) {
+    test(`refuses ${name} ${heading}`, async () => {
+      assert.deepEqual(
+        await failures(uiEvidence.replace(section, replacement)),
+        [
+          `Fill ## ${heading} with the PR's actual ${heading.toLowerCase()}. Replace template prompts.`,
+        ],
+      );
+    });
+  }
+  test(`refuses duplicate ${heading}`, async () => {
+    assert.deepEqual(
+      await failures(`${uiEvidence}\n## ${heading}\nAnother section.`),
+      [`Use exactly one ## ${heading} section.`],
+    );
+  });
+  test(`refuses missing ${heading}`, async () => {
+    assert.deepEqual(
+      await failures(uiEvidence.replace(`## ${heading}`, "## Other section")),
+      [`Use exactly one ## ${heading} section.`],
+    );
+  });
+}
+
+test("refuses duplicate Evidence sections without changing existing evidence checks", async () => {
+  assert.deepEqual(
+    await failures(`${uiEvidence}\n## Evidence\nAnother capture.`),
+    ["Use exactly one ## Evidence section."],
+  );
+});
+
+test("allows separate reference links without changing the declared story", async () => {
+  assert.deepEqual(
+    await failures(
+      `${uiEvidence}\n## References\n\nhttps://app.notion.com/p/3f69c051011881f6be69c72136388723`,
+    ),
+    [],
+  );
+});
+
+test("accepts fenced acceptance examples and ignores headings inside them", async () => {
+  const examples =
+    "Given a description lacks its Story field, when the check runs, then it names the missing field.";
+  const body = uiEvidence.replace(
+    examples,
+    "```feature\nGiven a complete description\nWhen the check runs\nThen it passes\n## Requirements\n```",
+  );
+  assert.deepEqual(await failures(body), []);
+});
+
+test("accepts CRLF and a longer fence around literal backticks", async () => {
+  const body = uiEvidence
+    .replace(
+      "## Acceptance examples\n",
+      "## Acceptance examples\n\n````markdown\n```\n## Requirements\n```\n````\n",
+    )
+    .replaceAll("\n", "\r\n");
+  assert.deepEqual(await failures(body), []);
+});
+
+test("treats shell syntax, template expressions and script text as inert metadata", async () => {
+  const body = uiEvidence
+    .replace(
+      outcome,
+      "Keep $(throw new Error('shell')) and ${{ github.token }} as text.",
+    )
+    .replace(
+      "Check PR description fields.",
+      "<script>throw new Error('script')</script> Check PR description fields.",
+    );
+  assert.deepEqual(await failures(body), []);
+});
+
+test("reports linked-story content and semantic focus as unverified", async () => {
+  const notices = [];
+  await validate(
+    {
+      repo: { owner: "ShiosOS", repo: "Damadama" },
+      payload: {
+        pull_request: { body: uiEvidence, number: 31, head: { sha: revision } },
+      },
+    },
+    {
+      rest: { pulls: { listFiles: "files" } },
+      paginate: async () => [
+        { filename: "web/src/TodayView.vue", status: "modified" },
+      ],
+    },
+    { setFailed: assert.fail, notice: (message) => notices.push(message) },
+  );
+  assert.deepEqual(notices, [
+    "PR metadata format passed. Linked-story contents and semantic focus remain unverified.",
+  ]);
 });

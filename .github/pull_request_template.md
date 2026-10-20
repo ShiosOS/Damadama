@@ -1,3 +1,11 @@
+## Requirements
+
+Story: https://app.notion.com/p/<32-character-page-id>
+Outcome: <State one intended result.>
+
+<!-- Link the one story this PR delivers. Other reference links may appear elsewhere.
+The check validates description format. Linked-story contents and semantic focus still need review. -->
+
 ## Why
 
 Describe the problem and who the change helps.
@@ -8,11 +16,15 @@ Briefly describe the resulting behavior and the main implementation choices.
 
 ## Scope
 
-State what this PR includes and any deferred work.
+<!-- State what this PR includes and any deferred work. -->
+
+## Acceptance examples
+
+<!-- Describe the behavior with Given, When, and Then examples. Fenced examples are accepted here. -->
 
 ## Verification
 
-List the commands you ran and their results. Link the actual output in a CI run or PR attachment.
+<!-- List the commands you ran and their results. Link the actual output in a CI run or PR attachment. -->
 
 ## Evidence
 
