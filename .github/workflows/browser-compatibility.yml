@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   browser-compatibility:
+    if: github.event_name != 'workflow_dispatch'
     name: Browser compatibility (${{ matrix.mode }})
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -69,4 +70,23 @@ jobs:
             .audit/browser-quality/test-results/**/*-diff.png
           include-hidden-files: true
           if-no-files-found: ignore
+          retention-days: 7
+  kernel-prerequisites:
+    if: github.event_name == 'workflow_dispatch'
+    name: Kernel experiment prerequisites
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - run: python3 .github/diagnostics/compatibility-kernel-prerequisites.py
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: kernel-prerequisites-${{ github.sha }}-${{ github.run_attempt }}
+          path: .audit/compatibility-kernel-prerequisites/receipt.json
+          include-hidden-files: true
+          if-no-files-found: error
           retention-days: 7
