@@ -3,6 +3,7 @@ import {
   browserSnapshot,
   nodeRecord,
 } from "./quiet-save-schema.mjs";
+import { caseNames, retainFailureMedia } from "./quiet-save-media.mjs";
 
 const states = new WeakMap();
 
@@ -130,6 +131,7 @@ export async function begin(page, control = "normal") {
     control,
     cancel: null,
     cancelled: false,
+    started: Date.now(),
   };
   states.set(page, state);
   mark(page, "test-start");
@@ -262,6 +264,30 @@ export async function finish(page, testInfo) {
       body: Buffer.from(JSON.stringify(safe)),
       contentType: "application/json",
     });
+    if (
+      testInfo.outputDir &&
+      testInfo.project?.outputDir &&
+      process.env.QUIET_CONTROL
+    ) {
+      const manifest = await retainFailureMedia({
+        outputDir: testInfo.outputDir,
+        outputRoot: testInfo.project.outputDir,
+        started: state.started,
+        owner: {
+          control: process.env.QUIET_CONTROL,
+          iteration: Number(process.env.QUIET_ITERATION),
+          phase: process.env.QUIET_PHASE,
+          project: testInfo.project.name,
+          case: caseNames.indexOf(testInfo.title),
+        },
+        head: process.env.COMPAT_CURRENT_SHA,
+        selfTest: process.env.QUIET_SELF_TEST === "1",
+      });
+      await testInfo.attach("quiet-save-media", {
+        body: Buffer.from(JSON.stringify(manifest)),
+        contentType: "application/json",
+      });
+    }
   }
   if (state.cancel && state.control === "held-response") state.cancel();
 }

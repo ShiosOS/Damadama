@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { classify, observation } from "./quiet-save-schema.mjs";
+import { caseNames, controls, mediaManifest } from "./quiet-save-media.mjs";
+import { failureSchema, failureStage } from "./quiet-save-source.mjs";
 
 export const phases = [
   "Firefox and WebKit smoke",
@@ -9,14 +11,10 @@ export const phases = [
   "changed-row pixel rejection and same-page restoration",
   "missing-baseline rejection",
 ];
-export const titles = [
-  "Firefox and WebKit create, save, and reload through the real API",
-  "desktop creation and saved details remain stable",
-  "mobile saved layout remains stable",
-];
+export const titles = caseNames;
 const common = {
   iteration: z.number().int().min(0).max(20),
-  control: z.enum(["normal", "invalid", "held-response", "deadline"]),
+  control: z.enum(controls),
   phase: z.enum(["calibration", ...phases]),
 };
 const error = z.enum([
@@ -66,6 +64,9 @@ export const receiptRow = z.discriminatedUnion("kind", [
       errorOverflow: z.boolean(),
       observation: observation.nullable(),
       observationRejected: z.boolean(),
+      failure: failureSchema.nullable(),
+      media: mediaManifest.nullable(),
+      mediaRejected: z.boolean(),
       classification: z.enum([
         "unknown",
         "deadline-before-enter",
@@ -90,6 +91,28 @@ export function parseReceipt(text, control, iteration) {
     const row = receiptRow.parse(JSON.parse(line));
     if (row.control !== control || row.iteration !== iteration)
       throw new Error("Receipt owner differs.");
+    if (control === "normal") {
+      if (iteration < 1 || row.phase === "calibration")
+        throw new Error("Normal receipt phase differs.");
+    } else if (iteration !== 0 || row.phase !== "calibration")
+      throw new Error("Calibration receipt phase differs.");
+    if (row.kind === "test-result" && row.media) {
+      const owner = row.media.owner;
+      if (
+        owner.control !== row.control ||
+        owner.iteration !== row.iteration ||
+        owner.phase !== row.phase ||
+        owner.project !== row.project ||
+        owner.case !== row.case
+      )
+        throw new Error("Receipt media owner differs.");
+    }
+    if (
+      row.kind === "test-result" &&
+      row.failure &&
+      row.failure.stage !== failureStage(row.observation)
+    )
+      throw new Error("Receipt failure stage differs.");
     if (
       row.kind === "test-result" &&
       row.classification !== classify(row.observation)
@@ -117,7 +140,8 @@ function completePhase(rows, phase, projects, calibration = false) {
     return false;
   for (const row of results) {
     if (!expected.delete(`${row.project}:${row.case}`)) return false;
-    if (row.observationRejected || row.errorOverflow) return false;
+    if (row.observationRejected || row.errorOverflow || row.mediaRejected)
+      return false;
   }
   return expected.size === 0;
 }
@@ -130,6 +154,41 @@ export function calibrationMatched(rows, control, exitCode) {
   )
     return false;
   const result = rows.find((row) => row.kind === "test-result");
+  if (["presave-assertion", "pixel-mismatch"].includes(control)) {
+    if (
+      result.status !== "failed" ||
+      result.failure?.stage !== "creation-comparison" ||
+      result.failure.category !== "expect" ||
+      result.failure.candidateOverflow ||
+      result.failure.locationOrigin !== "step" ||
+      !result.observation ||
+      result.observation.refusal !== "none" ||
+      result.observation.node.some((row) =>
+        ["waiter-armed", "enter-sent", "request"].includes(row.event),
+      ) ||
+      rows.some((row) => row.kind === "runner-error") ||
+      result.media?.refusal !== "none"
+    )
+      return false;
+    if (control === "presave-assertion")
+      return (
+        result.failure.site.source === "generated-test" &&
+        result.failure.operation === "toBe" &&
+        result.media.entries.every((entry) => entry.state === "absent")
+      );
+    return (
+      result.failure.site.source === "visual-support" &&
+      result.failure.operation === "toHaveScreenshot" &&
+      ["actual", "expected", "diff"].every((kind) =>
+        result.media.entries.some(
+          (entry) =>
+            entry.checkpoint === "desktop-creation" &&
+            entry.kind === kind &&
+            entry.state === "present",
+        ),
+      )
+    );
+  }
   if (
     result.status !== "timedOut" ||
     !result.observation ||
@@ -237,7 +296,10 @@ export function invocationPassed(rows, exitCode) {
       if (
         row.status !== expectedStatus ||
         row.errorCategories.length !== 0 ||
-        row.observation !== null
+        row.observation !== null ||
+        row.failure !== null ||
+        row.media !== null ||
+        row.mediaRejected
       )
         return false;
     }

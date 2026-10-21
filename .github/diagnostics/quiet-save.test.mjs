@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { test } from "node:test";
 import { chromium } from "@playwright/test";
 import { classify, observation, errorCategory } from "./quiet-save-schema.mjs";
 import { instrument, replaceOnce } from "./quiet-save-generate.mjs";
+import { mediaDirectory } from "./quiet-save-media.mjs";
 import {
   begin,
   finish,
@@ -46,6 +47,9 @@ test("receipt validates every row and the complete six-phase routed case set", (
           errorOverflow: false,
           observation: null,
           observationRejected: false,
+          failure: null,
+          media: null,
+          mediaRejected: false,
           classification: "unknown",
         });
       }
@@ -115,6 +119,11 @@ test("generated hooks leave canonical actions, assertions, screenshots and reloa
   generated = generated
     .replace('"../../tests/Browser/visual-support"', '"./visual-support"')
     .replace(/^  quiet\.mark\(page, "fill-boundary",.*\n/gm, "")
+    .replace(/^  quiet\.mark\(page, "phase-boundary",.*\n/gm, "")
+    .replace(
+      /  if \(beforeSave\) \{\n[\s\S]*?\n  \}\n  const created =/,
+      "  if (beforeSave) await beforeSave();\n  const created =",
+    )
     .replace(
       "  if (quiet.isDeadline(page) && !(await quiet.deadlineGate(page))) return;\n",
       "",
@@ -298,6 +307,23 @@ test("desktop creation and saved details remain stable", async ({ page }) => {
       recursive: true,
     });
     await writeFile(evidence, "");
+    const retained = mediaDirectory(
+      {
+        control: "deadline",
+        iteration: 0,
+        phase: "calibration",
+        project: "chromium-desktop",
+        case: 1,
+      },
+      true,
+    );
+    assert.equal(
+      retained,
+      resolve(
+        ".audit/quiet-save-self-test-evidence/media-deadline-0-0-chromium-desktop-1",
+      ),
+    );
+    await rm(retained, { recursive: true, force: true });
     const result = await new Promise((resolveResult, reject) => {
       const child = spawn(
         process.execPath,

@@ -13,6 +13,10 @@ import {
 const directory = resolve(".audit/quiet-save/evidence");
 await mkdir(directory, { recursive: true });
 const hashes = await generate();
+await writeFile(
+  resolve(directory, "source-map.json"),
+  await readFile(".audit/quiet-save/source-map.json"),
+);
 const invocations = z.coerce
   .number()
   .int()
@@ -167,7 +171,13 @@ async function receipt(control, iteration) {
   }
 }
 
-for (const control of ["invalid", "held-response", "deadline"]) {
+for (const control of [
+  "invalid",
+  "held-response",
+  "deadline",
+  "presave-assertion",
+  "pixel-mismatch",
+]) {
   await writeFile(resolve(directory, `${control}-0.jsonl`), "");
   const run = await runOwned(
     "node",

@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { test } from "node:test";
 import { calibrationMatched, parseReceipt } from "./quiet-save-receipt.mjs";
+import { mediaDirectory } from "./quiet-save-media.mjs";
 
 test(
   "real 201 response stays held while the original 30-second waiter expires",
@@ -64,6 +65,23 @@ test("desktop creation and saved details remain stable", async ({ page }) => {
         recursive: true,
       });
       await writeFile(evidence, "");
+      const retained = mediaDirectory(
+        {
+          control: "held-response",
+          iteration: 0,
+          phase: "calibration",
+          project: "chromium-desktop",
+          case: 1,
+        },
+        true,
+      );
+      assert.equal(
+        retained,
+        resolve(
+          ".audit/quiet-save-self-test-evidence/media-held-response-0-0-chromium-desktop-1",
+        ),
+      );
+      await rm(retained, { recursive: true, force: true });
       const result = await new Promise((resolveExit, reject) => {
         const child = spawn(
           process.execPath,

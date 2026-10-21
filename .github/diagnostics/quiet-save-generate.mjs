@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { sourceProof } from "./quiet-save-source.mjs";
 
 export function replaceOnce(source, before, after) {
   if (source.split(before).length !== 2)
@@ -9,6 +10,16 @@ export function replaceOnce(source, before, after) {
 }
 
 export function instrument(source) {
+  source = replaceOnce(
+    source,
+    "  await openByKeyboard(page);",
+    '  quiet.mark(page, "phase-boundary", { stage: "dialog-open", edge: "start" });\n  await openByKeyboard(page);\n  quiet.mark(page, "phase-boundary", { stage: "dialog-open", edge: "complete" });',
+  );
+  source = replaceOnce(
+    source,
+    "  if (beforeSave) await beforeSave();",
+    '  if (beforeSave) {\n    quiet.mark(page, "phase-boundary", { stage: "creation-comparison", edge: "start" });\n    if (process.env["QUIET_CONTROL"] === "presave-assertion") expect(false).toBe(true);\n    if (process.env["QUIET_CONTROL"] === "pixel-mismatch") await page.getByRole("dialog", { name: "Create a habit" }).evaluate(element => { element.style.border = "30px solid rgb(255, 0, 0)"; });\n    await beforeSave();\n    quiet.mark(page, "phase-boundary", { stage: "creation-comparison", edge: "complete" });\n  }',
+  );
   for (const [action, stage] of [
     ["  await page.keyboard.type(habitName);", '"Name"'],
     [
@@ -98,6 +109,15 @@ export async function generate() {
       "Quiet probe requires the canonical uninstrumented source.",
     );
   const generated = instrument(source);
+  const proof = sourceProof(
+    source,
+    generated,
+    await readFile("tests/Browser/visual-support.ts", "utf8"),
+  );
+  await writeFile(
+    resolve(directory, "source-map.json"),
+    JSON.stringify(proof) + "\n",
+  );
   await writeFile(resolve(directory, "observed.pw.ts"), generated);
   await writeFile(
     resolve(directory, "observed.config.ts"),
@@ -131,5 +151,7 @@ export default {
   return {
     canonicalSha256: createHash("sha256").update(source).digest("hex"),
     generatedSha256: createHash("sha256").update(generated).digest("hex"),
+    visualSupportSha256: proof.visualSupportSha256,
+    mappingSha256: proof.mappingSha256,
   };
 }

@@ -95,9 +95,12 @@ jobs:
       - run: dotnet build --no-restore --artifacts-path .audit/check-build
       - run: bun x --no-install vite build --config tests/Browser/compatibility.vite.config.ts
       - run: node node_modules/@playwright/test/cli.js install --with-deps chromium firefox webkit
-      - run: node --test .github/diagnostics/quiet-save.test.mjs .github/diagnostics/quiet-save-held.test.mjs
+      - run: node --test --test-concurrency=1 .github/diagnostics/quiet-save.test.mjs .github/diagnostics/quiet-save-held.test.mjs .github/diagnostics/quiet-save-evidence.test.mjs
       - run: node .github/diagnostics/quiet-save-run.mjs
       - if: always()
+        id: quiet-evidence
+        run: node .github/diagnostics/quiet-save-validate.mjs
+      - if: always() && steps.quiet-evidence.outcome == 'success'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: quiet-save-diagnostic-${{ github.sha }}

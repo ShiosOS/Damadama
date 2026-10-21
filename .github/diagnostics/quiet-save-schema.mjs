@@ -48,6 +48,15 @@ export const nodeRecord = z.discriminatedUnion("event", [
     .object({
       origin: z.literal("node-performance"),
       ms: time,
+      event: z.literal("phase-boundary"),
+      stage: z.enum(["dialog-open", "creation-comparison"]),
+      edge: z.enum(["start", "complete"]),
+    })
+    .strict(),
+  z
+    .object({
+      origin: z.literal("node-performance"),
+      ms: time,
       event: z.literal("fill-boundary"),
       stage: z.enum([
         "Name",

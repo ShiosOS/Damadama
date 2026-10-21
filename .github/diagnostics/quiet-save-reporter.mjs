@@ -3,6 +3,15 @@ import { resolve } from "node:path";
 import { z } from "zod";
 import { classify, errorCategory, observation } from "./quiet-save-schema.mjs";
 import { receiptRow, titles } from "./quiet-save-receipt.mjs";
+import { controls, mediaManifest } from "./quiet-save-media.mjs";
+import {
+  digest,
+  failedStep,
+  failureStage,
+  loadSources,
+  normalizeSite,
+  unavailableSite,
+} from "./quiet-save-source.mjs";
 
 const phase = z.enum([
   "calibration",
@@ -27,7 +36,20 @@ const status = z.enum([
   "interrupted",
 ]);
 
+function errorKey(error) {
+  if (
+    typeof error?.message !== "string" ||
+    !error.message ||
+    typeof error.stack !== "string" ||
+    !error.stack
+  )
+    return null;
+  return digest(JSON.stringify([error.message, error.stack]));
+}
+
 export default class QuietSaveReporter {
+  candidates = new Map();
+  sources = loadSources(process.env.QUIET_SELF_TEST === "1");
   directory = resolve(
     process.env.QUIET_SELF_TEST === "1"
       ? ".audit/quiet-save-self-test-evidence"
@@ -39,9 +61,7 @@ export default class QuietSaveReporter {
     .min(0)
     .max(20)
     .parse(process.env.QUIET_ITERATION);
-  control = z
-    .enum(["normal", "invalid", "held-response", "deadline"])
-    .parse(process.env.QUIET_CONTROL);
+  control = z.enum(controls).parse(process.env.QUIET_CONTROL);
   phase = phase.parse(process.env.QUIET_PHASE);
   record(data) {
     mkdirSync(this.directory, { recursive: true });
@@ -60,6 +80,24 @@ export default class QuietSaveReporter {
   onBegin(_config, suite) {
     this.record({ kind: "phase-start", cases: suite.allTests().length });
   }
+  onStepEnd(test, _result, step) {
+    if (!step.error || step.steps?.some((child) => child.error)) return;
+    let state = this.candidates.get(test.id);
+    if (!state) {
+      state = { rows: [], overflow: false };
+      this.candidates.set(test.id, state);
+    }
+    if (state.rows.length >= 8) {
+      state.overflow = true;
+      return;
+    }
+    const key = errorKey(step.error);
+    if (key === null) return;
+    state.rows.push({
+      key,
+      ...failedStep(step, this.sources),
+    });
+  }
   onTestEnd(test, result) {
     let safe = null;
     let refusal = false;
@@ -77,6 +115,67 @@ export default class QuietSaveReporter {
         refusal = true;
       }
     }
+    let media = null;
+    let mediaRejected = false;
+    const mediaAttachments = result.attachments.filter(
+      (item) => item.name === "quiet-save-media",
+    );
+    if (mediaAttachments.length > 1) mediaRejected = true;
+    if (mediaAttachments.length === 1) {
+      try {
+        const body = mediaAttachments[0].body;
+        if (!body || body.length > 16384)
+          throw new Error("Media manifest refused.");
+        media = mediaManifest.parse(JSON.parse(body.toString("utf8")));
+        if (
+          media.owner.control !== this.control ||
+          media.owner.iteration !== this.iteration ||
+          media.owner.phase !== this.phase ||
+          media.owner.project !== test.parent.project().name ||
+          media.owner.case !== titles.indexOf(test.title)
+        )
+          throw new Error("Media owner differs.");
+      } catch {
+        media = null;
+        mediaRejected = true;
+      }
+    }
+    let failure = null;
+    if (!["passed", "skipped"].includes(result.status)) {
+      const state = this.candidates.get(test.id) ?? {
+        rows: [],
+        overflow: false,
+      };
+      const primary = result.errors[0];
+      const key = errorKey(primary);
+      const errorSite = normalizeSite(primary?.location, this.sources);
+      const matching = state.rows.filter(
+        (candidate) =>
+          candidate.key === key &&
+          (errorSite.source === "unavailable" ||
+            JSON.stringify(candidate.site) === JSON.stringify(errorSite)),
+      );
+      let selected;
+      if (matching.length === 1 && !state.overflow) selected = matching[0];
+      let site = unavailableSite;
+      let locationOrigin = "unavailable";
+      if (selected?.site.source !== "unavailable" && selected) {
+        site = selected.site;
+        locationOrigin = "step";
+      } else if (errorSite.source !== "unavailable") {
+        site = errorSite;
+        locationOrigin = "result-error";
+      }
+      failure = {
+        stage: failureStage(safe),
+        site,
+        category: selected?.category ?? "unknown",
+        operation: selected?.operation ?? "unknown",
+        locationOrigin,
+        candidateOverflow: state.overflow,
+      };
+    }
+    this.candidates.delete(test.id);
     this.record({
       kind: "test-result",
       case: titles.indexOf(test.title),
@@ -88,6 +187,9 @@ export default class QuietSaveReporter {
       errorOverflow: result.errors.length > 8,
       observation: safe,
       observationRejected: refusal,
+      failure,
+      media,
+      mediaRejected,
       classification: classify(safe),
     });
   }
