@@ -495,7 +495,15 @@ test("saved values appear once with a non-interactive habit name", async ({
   const list = page.getByRole("region", { name: "Saved habits" });
   await expect(list.locator("article")).toHaveCount(1);
   await expect(list.getByRole("heading", { name: "Walking" })).toHaveCount(1);
-  await expect(list.getByRole("button", { name: "Walking" })).toHaveCount(0);
+  await expect(
+    list.getByRole("button", { name: "Walking", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    list.getByRole("button", { name: "Edit Walking", exact: true }),
+  ).toHaveCount(1);
+  await expect(
+    list.getByRole("button", { name: "Archive Walking", exact: true }),
+  ).toHaveCount(1);
   await expect(list.getByText("Good: 5 minutes")).toHaveCount(1);
   await expect(page.getByRole("region", { name: "Opened habit" })).toHaveCount(
     0,
