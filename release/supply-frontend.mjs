@@ -163,7 +163,12 @@ function under(image, root) {
   return files.sort();
 }
 
-async function assets(web, final, source, expectedReleaseHash) {
+export async function reconcileEmittedAssets(
+  web,
+  final,
+  source,
+  expectedReleaseHash,
+) {
   const webNames = under(web, "src/server/wwwroot");
   const finalNames = under(final, "app/wwwroot");
   assert(
@@ -188,7 +193,7 @@ async function assets(web, final, source, expectedReleaseHash) {
     values.push({ path: relative, size: bytes.length, sha256: hash(bytes) });
     if (
       relative === "index.html" ||
-      /^assets\/[^/]+\.(?:css|js)$/.test(relative)
+      /^assets\/[^/]+\.(?:css|js|txt)$/.test(relative)
     ) {
       for (const extension of ["br", "gz"]) {
         const derived = `${destination}.${extension}`;
@@ -630,7 +635,7 @@ export async function reconstructFrontend({
   assert.equal(await fileHash(finalArchive), build.final.dockerArchiveSha256);
   const web = await tarIndex(webFlat, frontendFormat.flattenedBytes);
   const final = await tarIndex(finalFlat, frontendFormat.finalBytes);
-  const reconstructAssets = tiny ? tinyAssets : assets;
+  const reconstructAssets = tiny ? tinyAssets : reconcileEmittedAssets;
   const emitted = await reconstructAssets(
     web,
     final,
