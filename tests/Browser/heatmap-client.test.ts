@@ -190,3 +190,23 @@ void test("a service refusal retains its safe support reference", async () => {
       error.message === "Try again later. Support reference: trace-123.",
   );
 });
+
+void test("expired authentication explains sign-in and retains only a safe support reference", async () => {
+  for (const [traceId, message] of [
+    ["trace-123", "Sign in to continue. Support reference: trace-123."],
+    ["unsafe <reference>", "Sign in to continue."],
+  ] satisfies [string, string][]) {
+    respond(
+      { title: "Authentication required.", traceId },
+      401,
+      "application/problem+json",
+    );
+    await assert.rejects(
+      heatmapApi(async () => "expired-token")(anchor),
+      (error: unknown) =>
+        error instanceof ApiError &&
+        error.status === 401 &&
+        error.message === message,
+    );
+  }
+});

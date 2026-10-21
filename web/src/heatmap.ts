@@ -28,6 +28,12 @@ export function heatmapApi(
     }
     if (!response.ok) {
       const problem = problemSchema.safeParse(data);
+      if (response.status === 401)
+        throw new ApiError(
+          "Sign in to continue.",
+          401,
+          problem.success ? problem.data.traceId : undefined,
+        );
       if (!problem.success)
         throw new ApiError(
           "The request could not be completed.",
