@@ -4,6 +4,7 @@ import { once } from "node:events";
 import {
   mkdir,
   mkdtemp,
+  open,
   readFile,
   realpath,
   rm,
@@ -60,6 +61,48 @@ test("actual child/listener identity becomes absent after its owned termination"
     }
   }
 });
+
+test(
+  "an actual process exit between opening and reading stat is absence",
+  { timeout: 10_000 },
+  async () => {
+    const child = spawn(
+      process.execPath,
+      ["-e", "console.log('ready'); setInterval(() => {}, 1000)"],
+      { stdio: ["ignore", "pipe", "inherit"] },
+    );
+    let readErrorCode;
+    try {
+      await once(child.stdout, "data");
+      const identity = await processIdentity(
+        child.pid,
+        async (path, encoding) => {
+          if (path.endsWith("boot_id")) return readFile(path, encoding);
+          const handle = await open(path, "r");
+          try {
+            const exited = once(child, "exit");
+            child.kill("SIGTERM");
+            await exited;
+            return await handle.readFile(encoding);
+          } catch (error) {
+            readErrorCode = error.code;
+            throw error;
+          } finally {
+            await handle.close();
+          }
+        },
+      ).catch((error) => ({ failure: error.message }));
+      assert.equal(readErrorCode, "ESRCH");
+      assert.equal(identity, null);
+      assert.equal(await processIdentity(child.pid), null);
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill("SIGTERM");
+        await once(child, "exit");
+      }
+    }
+  },
+);
 
 test("actual Linux cleanup removes only fresh owned fixtures and is repeatable", async () => {
   const parent = await realpath(tmpdir());
