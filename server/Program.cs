@@ -13,6 +13,8 @@ builder.Services.AddRequestDiagnostics();
 builder.Services.AddPrivateRequestTracing();
 builder.Services.AddDbContext<HabitsDb>(options => options.UseNpgsql(builder.Configuration.GetConnectionString("habits")));
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<HabitHistory>();
+builder.Services.AddScoped<IHistoryReader>(services => services.GetRequiredService<HabitHistory>());
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
 {
     options.Authority = builder.Configuration["Clerk:Issuer"];
@@ -86,7 +88,7 @@ public partial class Program;
 public sealed record ApplicationConfig(string? ClerkPublishableKey);
 
 public sealed record HabitResponse(Guid Id, string Name, string Good, string Better, string Best,
-    DateTimeOffset CreatedAt, InitialSchedule Schedule)
+    DateTimeOffset CreatedAt, InitialSchedule Schedule, bool Archived = false, long Revision = 0)
 {
     public static HabitResponse From(Habit habit) => new(habit.Id, habit.Name, habit.Levels.Good, habit.Levels.Better,
         habit.Levels.Best, habit.CreatedAt, habit.Schedule);

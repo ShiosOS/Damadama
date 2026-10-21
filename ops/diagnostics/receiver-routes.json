@@ -3,6 +3,7 @@
   "/api/entries",
   "/api/habits",
   "/api/habits/{id:guid}",
+  "/api/habits/{id:guid}/archives",
   "/api/habits/{id:guid}/entries/{date}",
   "/health/live",
   "/health/ready",

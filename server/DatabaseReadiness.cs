@@ -15,6 +15,7 @@ public sealed class DatabaseReadiness(HabitsDb db) : IHealthCheck
             await db.Database.ExecuteSqlRawAsync("""
                 SELECT 1 FROM "Habits" JOIN "InitialSchedules" ON "Habits"."Id" = "InitialSchedules"."HabitId" LIMIT 0;
                 SELECT "Result", "EditedAtTicks", "CalendarDate", "Good", "Better", "Best" FROM "DailyEntries" LIMIT 0;
+                SELECT "HabitId", "Sequence", "MutationId", "Kind", "EffectiveDate", "Payload" FROM "HabitChanges" LIMIT 0;
                 """, cancellationToken);
             return HealthCheckResult.Healthy();
         }

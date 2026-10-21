@@ -148,7 +148,9 @@ public class ScheduledHabitsTests
         Assert.Multiple(() =>
         {
             Assert.That(habit.EnumerateObject().Select(field => field.Name),
-                Is.EquivalentTo(new[] { "id", "name", "good", "better", "best", "createdAt", "schedule" }));
+                Is.EquivalentTo(new[] { "id", "name", "good", "better", "best", "createdAt", "schedule", "archived", "revision" }));
+            Assert.That(habit.GetProperty("archived").GetBoolean(), Is.False);
+            Assert.That(habit.GetProperty("revision").GetInt64(), Is.Zero);
             Assert.That(habit.GetProperty("id").GetGuid(), Is.EqualTo(expectedId));
             Assert.That(habit.GetProperty("name").GetString(), Is.EqualTo("Walking"));
             Assert.That(habit.GetProperty("good").GetString(), Is.EqualTo("5 minutes"));

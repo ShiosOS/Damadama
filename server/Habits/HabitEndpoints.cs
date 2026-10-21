@@ -21,6 +21,16 @@ public static class HabitEndpoints
             .WithSummary("Read an owned habit")
             .Produces<HabitResponse>().ProducesProblem(400).ProducesProblem(401)
             .ProducesProblem(404).ProducesProblem(503).RequireAuthorization();
+        app.MapPatch("/api/habits/{id:guid}", Edit).WithName("edit-habit").WithTags("Habits")
+            .WithSummary("Edit an owned habit while preserving its dated history")
+            .Produces<HabitResponse>().Produces<HabitMutationProblem>(409, "application/problem+json")
+            .ProducesProblem(400).ProducesProblem(401).ProducesProblem(404)
+            .ProducesProblem(415).ProducesProblem(503).RequireAuthorization();
+        app.MapPost("/api/habits/{id:guid}/archives", Archive).WithName("archive-habit").WithTags("Habits")
+            .WithSummary("Stop scheduling an owned habit while retaining its entries")
+            .Produces<HabitResponse>().Produces<HabitMutationProblem>(409, "application/problem+json")
+            .ProducesProblem(400).ProducesProblem(401).ProducesProblem(404)
+            .ProducesProblem(415).ProducesProblem(503).RequireAuthorization();
     }
 
     private static async Task<IResult> Create(CreateHabit input, ClaimsPrincipal user,
@@ -32,7 +42,7 @@ public static class HabitEndpoints
     }
 
     private static async Task<IResult> List([FromQuery] string? scheduledOn, HttpRequest request,
-        ClaimsPrincipal user, HabitsDb db, CancellationToken cancellationToken)
+        ClaimsPrincipal user, HabitHistory history, CancellationToken cancellationToken)
     {
         DateOnly? filter = null;
         if (request.Query.ContainsKey("scheduledOn"))
@@ -45,17 +55,34 @@ public static class HabitEndpoints
                 }, title: "Check the requested date.");
             filter = date;
         }
-        var habits = await db.Habits.AsNoTracking().Include(habit => habit.Schedule)
-            .Where(habit => habit.OwnerId == user.FindFirst("sub")!.Value)
-            .OrderBy(habit => habit.CreatedAt).ThenBy(habit => habit.Id).ToListAsync(cancellationToken);
-        return TypedResults.Ok(habits.Where(habit => filter is null || ScheduleEligibility.IsScheduled(habit.Schedule, filter.Value))
-            .Select(HabitResponse.From).ToArray());
+        return TypedResults.Ok(await history.ReadHabits(user.FindFirst("sub")!.Value, filter, null, cancellationToken));
     }
 
-    private static async Task<IResult> Read(Guid id, ClaimsPrincipal user, HabitsDb db, CancellationToken cancellationToken)
+    private static async Task<IResult> Read(Guid id, ClaimsPrincipal user, HabitHistory history, CancellationToken cancellationToken)
     {
-        var habit = await db.Habits.AsNoTracking().Include(habit => habit.Schedule)
-            .SingleOrDefaultAsync(habit => habit.Id == id && habit.OwnerId == user.FindFirst("sub")!.Value, cancellationToken);
-        return habit is null ? Results.NotFound() : TypedResults.Ok(HabitResponse.From(habit));
+        var habits = await history.ReadHabits(user.FindFirst("sub")!.Value, null, id, cancellationToken);
+        return habits.Length == 0 ? Results.NotFound() : TypedResults.Ok(habits[0]);
     }
+
+    private static async Task<IResult> Edit(Guid id, EditHabit input, ClaimsPrincipal user,
+        HabitHistory history, CancellationToken cancellationToken) =>
+        MutationResult(await history.Edit(id, user.FindFirst("sub")!.Value, input, cancellationToken));
+
+    private static async Task<IResult> Archive(Guid id, ArchiveHabit input, ClaimsPrincipal user,
+        HabitHistory history, CancellationToken cancellationToken) =>
+        MutationResult(await history.Archive(id, user.FindFirst("sub")!.Value, input, cancellationToken));
+
+    private static IResult MutationResult(HabitMutationOutcome outcome) => outcome switch
+    {
+        HabitMutationOutcome.Accepted accepted => TypedResults.Ok(accepted.Habit),
+        HabitMutationOutcome.Missing => Results.NotFound(),
+        HabitMutationOutcome.Conflict conflict => TypedResults.Problem(new HabitMutationProblem
+        {
+            Status = 409, Title = "The habit change needs attention.", Code = conflict.Code,
+            Detail = conflict.Code == "today_choice_required"
+                ? "This habit has an entry today. Choose whether to keep or remove today from the schedule."
+                : "This mutation identifier already belongs to a different change."
+        }),
+        _ => throw new System.Diagnostics.UnreachableException()
+    };
 }

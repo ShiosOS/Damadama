@@ -10,6 +10,16 @@ public static class EntryStore
         CancellationToken cancellationToken)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
+        var current = await HabitHistory.LockOwned(db, habit.Id, habit.OwnerId, cancellationToken)
+            ?? throw new InvalidOperationException("The owned habit no longer exists.");
+        var saved = await SaveLocked(db, current, edit, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return saved;
+    }
+
+    internal static async Task<EntrySaveOutcome> SaveLocked(HabitsDb db, Habit habit, EntryEdit edit,
+        CancellationToken cancellationToken)
+    {
         var inserted = await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "DailyEntries" ("HabitId", "CalendarDate", "Result", "EditedAtTicks", "Good", "Better", "Best")
             VALUES ({habit.Id}, {edit.CalendarDate}, {(int)edit.Result}, {edit.EditedAt.UtcTicks},
@@ -28,7 +38,6 @@ public static class EntryStore
         // A separate Read Committed statement sees a conflicting insert after its transaction commits.
         var winner = await db.Entries.AsNoTracking()
             .SingleAsync(entry => entry.HabitId == habit.Id && entry.CalendarDate == edit.CalendarDate, cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
         if (inserted == 1) return new EntrySaveOutcome.Created(winner);
         return winner.EditedAt.UtcTicks == edit.EditedAt.UtcTicks && winner.Result == edit.Result
             ? new EntrySaveOutcome.Accepted(winner)

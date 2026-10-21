@@ -80,7 +80,7 @@ public class EntryApiTests
         await connection.OpenAsync();
         await using var command = new NpgsqlCommand("""
             SELECT count(*) FROM pg_stat_activity
-            WHERE wait_event_type = 'Lock' AND query LIKE '%INSERT INTO "DailyEntries"%'
+            WHERE wait_event_type = 'Lock' AND (query LIKE '%INSERT INTO "DailyEntries"%' OR query LIKE '%FOR UPDATE%')
             """, connection);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         while (Convert.ToInt32(await command.ExecuteScalarAsync(timeout.Token)) < count)

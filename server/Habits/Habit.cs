@@ -13,6 +13,12 @@ public sealed class Habit
     public DateTimeOffset CreatedAt { get; private set; }
     public InitialSchedule Schedule { get; private set; } = null!;
 
+    internal void Edit(string name, HabitLevels levels)
+    {
+        Name = name;
+        Levels = levels;
+    }
+
     public static Habit Create(CreateHabit input, string ownerId, DateTimeOffset now)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(input.Name, nameof(input.Name));
@@ -67,4 +73,10 @@ public sealed class InitialSchedule
     public string TimeZone { get; private set; } = "";
     public DateOnly CreationDate { get; private set; }
     public DateOnly FirstWeekMonday { get; private set; }
+
+    internal InitialSchedule WithRecurrence(int[] weekdays, int repeatEveryWeeks, DateOnly firstWeekMonday) => new()
+    {
+        HabitId = HabitId, Weekdays = weekdays, RepeatEveryWeeks = repeatEveryWeeks,
+        TimeZone = TimeZone, CreationDate = CreationDate, FirstWeekMonday = firstWeekMonday
+    };
 }
