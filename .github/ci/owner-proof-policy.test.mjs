@@ -35,6 +35,7 @@ const safeSupply = [
 ];
 const browser = (w) =>
   w["browser-compatibility.yml"].jobs["browser-compatibility"];
+const quiet = (w) => w["browser-compatibility.yml"].jobs["quiet-save-probe"];
 const developer = (w) => w["developer-experience.yml"].jobs;
 const recovery = (w) =>
   w["recovery-current-image.yml"].jobs["current-image-recovery"];
@@ -187,6 +188,67 @@ for (const filename of Object.values(lanes).filter(
   );
 
 for (const [label, mutate] of [
+  [
+    "quiet diagnostic skips the passive integration selftests",
+    (w) => {
+      const step = command(quiet(w), "--test-concurrency=1");
+      step.run = step.run.replace(
+        " .github/diagnostics/quiet-save-integration.test.mjs",
+        "",
+      );
+    },
+  ],
+  [
+    "quiet diagnostic bypasses validation before upload",
+    (w) => {
+      quiet(w).steps.find((step) =>
+        step.uses?.startsWith("actions/upload-artifact@"),
+      ).if = "always()";
+    },
+  ],
+  [
+    "quiet diagnostic uploads raw output",
+    (w) => {
+      quiet(w).steps.find((step) =>
+        step.uses?.startsWith("actions/upload-artifact@"),
+      ).with.path = ".audit/quiet-save/";
+    },
+  ],
+  [
+    "quiet diagnostic relaxes the pinned Node runtime",
+    (w) => {
+      quiet(w).steps.find((step) =>
+        step.uses?.startsWith("actions/setup-node@"),
+      ).with["node-version"] = 24;
+    },
+  ],
+  [
+    "quiet diagnostic extends the job deadline",
+    (w) => {
+      quiet(w)["timeout-minutes"] = 46;
+    },
+  ],
+  [
+    "quiet diagnostic loses the first-step job origin",
+    (w) => {
+      quiet(w).steps.shift();
+    },
+  ],
+  [
+    "quiet diagnostic swaps preparation and origin",
+    (w) => {
+      [quiet(w).steps[0], quiet(w).steps[1]] = [
+        quiet(w).steps[1],
+        quiet(w).steps[0],
+      ];
+    },
+  ],
+  [
+    "quiet diagnostic dispatch also runs the normal matrix",
+    (w) => {
+      delete browser(w).if;
+    },
+  ],
   ["browser capture only", (w) => browser(w).strategy.matrix.mode.pop()],
   [
     "browser skipped engine",

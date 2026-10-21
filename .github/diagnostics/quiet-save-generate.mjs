@@ -1,7 +1,10 @@
-import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { sourceProof } from "./quiet-save-source.mjs";
+import {
+  sourceProof,
+  digest,
+  passivePreparationProof,
+} from "./quiet-save-source.mjs";
 
 export function replaceOnce(source, before, after) {
   if (source.split(before).length !== 2)
@@ -100,37 +103,29 @@ test.afterEach(async ({ page }, testInfo) => {
   );
 }
 
-export async function generate() {
-  const directory = resolve(".audit/quiet-save");
-  await mkdir(directory, { recursive: true });
+export async function prepare() {
   const source = await readFile("tests/Browser/compatibility.pw.ts", "utf8");
   if (source.includes("compatibility-diagnostic"))
     throw new Error(
       "Quiet probe requires the canonical uninstrumented source.",
     );
   const generated = instrument(source);
-  const proof = sourceProof(
+  const legacy = sourceProof(
     source,
     generated,
     await readFile("tests/Browser/visual-support.ts", "utf8"),
   );
-  await writeFile(
-    resolve(directory, "source-map.json"),
-    JSON.stringify(proof) + "\n",
-  );
-  await writeFile(resolve(directory, "observed.pw.ts"), generated);
-  await writeFile(
-    resolve(directory, "observed.config.ts"),
-    `import shared from "../../tests/Browser/compatibility.config";
+  const config = (
+    entry,
+  ) => `import shared from "../../tests/Browser/compatibility.config";
 export default {
   ...shared,
   testDir: ".",
-  testMatch: "observed.pw.ts",
+  testMatch: "${entry}",
   snapshotPathTemplate: ${JSON.stringify(resolve("tests/Browser/baselines/{arg}{ext}").replaceAll("\\", "/"))},
   reporter: [[${JSON.stringify(resolve(".github/diagnostics/quiet-save-reporter.mjs").replaceAll("\\", "/"))}]],
 };
-`,
-  );
+`;
   let runner = await readFile("tests/Browser/compatibility-run.ts", "utf8");
   runner = replaceOnce(
     runner,
@@ -140,17 +135,47 @@ export default {
   runner = replaceOnce(
     runner,
     '"tests/Browser/compatibility.config.ts"',
-    '".audit/quiet-save/observed.config.ts"',
+    '".audit/quiet-save/passive.config.ts"',
   );
   runner = replaceOnce(
     runner,
     "      COMPAT_MODE: mode,",
     "      QUIET_PHASE: phase,\n      COMPAT_MODE: mode,",
   );
-  await writeFile(resolve(directory, "observed-run.ts"), runner);
+  const files = {
+    "observed.pw.ts": generated,
+    "observed.config.ts": config("observed.pw.ts"),
+    "passive.pw.ts":
+      'import "../../tests/Browser/compatibility.pw";\nimport { installPassiveSaveHooks } from "../../.github/diagnostics/quiet-save-passive.mjs";\ninstallPassiveSaveHooks();\n',
+    "passive.config.ts": config("passive.pw.ts"),
+    "calibration.pw.ts":
+      'import "../../tests/Browser/compatibility.pw";\nimport { test, expect } from "@playwright/test";\nimport { installPassiveSaveHooks } from "../../.github/diagnostics/quiet-save-passive.mjs";\ntest.afterEach(({}, info) => { if (info.status === "passed") for (let index = 0; index < 8; index++) expect.soft(index).toBe(-1); });\ninstallPassiveSaveHooks();\n',
+    "calibration.config.ts": config("calibration.pw.ts"),
+    "observed-run.ts": runner,
+  };
+  const proof = {
+    ...legacy,
+    mode: "canonical-import",
+    passive: passivePreparationProof(files),
+  };
+  return { files, proof };
+}
+
+export async function generate() {
+  const directory = resolve(".audit/quiet-save");
+  await mkdir(directory, { recursive: true });
+  const { files, proof } = await prepare();
+  for (const [name, bytes] of Object.entries(files))
+    await writeFile(resolve(directory, name), bytes);
+  await writeFile(
+    resolve(directory, "source-map.json"),
+    JSON.stringify(proof) + "\n",
+  );
   return {
-    canonicalSha256: createHash("sha256").update(source).digest("hex"),
-    generatedSha256: createHash("sha256").update(generated).digest("hex"),
+    mode: "canonical-import",
+    preparationSha256: digest(JSON.stringify(proof)),
+    canonicalSha256: proof.canonicalSha256,
+    generatedSha256: proof.generatedSha256,
     visualSupportSha256: proof.visualSupportSha256,
     mappingSha256: proof.mappingSha256,
   };

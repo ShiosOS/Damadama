@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ownerSchema } from "./quiet-save-media.mjs";
 
 export const targets = [
   "Name",
@@ -337,3 +338,187 @@ export function errorCategory(error) {
     return "whole-test-timeout";
   return "unknown-runner-error";
 }
+
+export const passiveRefusal = z.enum([
+  "source-mismatch",
+  "site-unadmitted",
+  "operation-mismatch",
+  "owner-mismatch",
+  "malformed",
+  "duplicate",
+  "overflow",
+  "missing",
+  "clock-unusable",
+  "lifecycle-incomplete",
+]);
+export const unverified = (reason) => ({ kind: "unverified", reason });
+export const complete = (value) => ({ kind: "complete", value });
+const evidence = (schema) =>
+  z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("complete"), value: schema }).strict(),
+    z
+      .object({ kind: z.literal("unverified"), reason: passiveRefusal })
+      .strict(),
+  ]);
+const elapsed = z.number().finite().min(0).max(300000);
+const wall = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+const workerIndex = z.number().int().min(0).max(32);
+const sample = z.object({ at: elapsed, wall }).strict();
+const event = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("request") }).strict(),
+  z
+    .object({
+      kind: z.literal("response"),
+      status: z.number().int().min(100).max(599),
+    })
+    .strict(),
+  z.object({ kind: z.literal("request-failed") }).strict(),
+]);
+const networkEvent = {
+  sequence: z.number().int().min(1).max(12),
+  requestOrdinal: z.number().int().min(1).max(4),
+  at: elapsed,
+  event,
+};
+export const passiveAttachment = z
+  .object({
+    schema: z.literal(1),
+    owner: z.lazy(() => ownerSchema),
+    workerIndex,
+    journal: evidence(
+      z
+        .object({
+          installationWall: wall,
+          end: sample,
+          events: z.array(z.object({ ...networkEvent, wall }).strict()).max(12),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+const offset = evidence(elapsed);
+export const passiveSite = z
+  .object({
+    id: z.number().int().min(1).max(512),
+    source: z.enum(["canonical-test", "visual-support", "calibration-test"]),
+    line: z.number().int().min(1).max(10000),
+    column: z.number().int().min(1).max(1000),
+    operation: z.enum([
+      "keyboard.press",
+      "keyboard.type",
+      "page.waitForResponse",
+      "page.goto",
+      "page.reload",
+      "page.evaluate",
+      "locator.evaluate",
+      "locator.screenshot",
+      "assertion",
+      "other-admitted-source-call",
+    ]),
+    role: z.enum([
+      "save-enter",
+      "dialog-enter",
+      "save-response-waiter",
+      "other-original",
+    ]),
+  })
+  .strict();
+const order = z.number().int().min(1).max(4096);
+const occurrence = z.number().int().min(1).max(512);
+export const passiveFailure = z
+  .object({
+    kind: z.literal("passive-save"),
+    owner: z.lazy(() => ownerSchema),
+    operations: evidence(
+      z
+        .array(
+          z
+            .object({
+              sequence: occurrence,
+              site: passiveSite,
+              start: offset,
+              receiptOrder: order,
+              end: z.discriminatedUnion("kind", [
+                z.object({ kind: z.literal("not-observed") }).strict(),
+                ...["success", "error"].map((kind) =>
+                  z
+                    .object({
+                      kind: z.literal(kind),
+                      at: offset,
+                      receiptOrder: order,
+                    })
+                    .strict(),
+                ),
+              ]),
+            })
+            .strict(),
+        )
+        .max(512),
+    ),
+    network: evidence(
+      z
+        .object({
+          owner: z.lazy(() => ownerSchema),
+          workerIndex,
+          installationWall: offset,
+          end: z
+            .object({
+              provenance: z.literal("afterEach-start"),
+              at: elapsed,
+              wall: offset,
+            })
+            .strict(),
+          events: z
+            .array(z.object({ ...networkEvent, wall: offset }).strict())
+            .max(12),
+        })
+        .strict(),
+    ),
+    errors: evidence(
+      z
+        .array(
+          z
+            .object({
+              errorIndex: z.number().int().min(0).max(7),
+              category: z.enum([
+                "whole-test-timeout",
+                "pending-waiter-global-timeout",
+                "other-error",
+              ]),
+              correlation: z.discriminatedUnion("kind", [
+                z
+                  .object({ kind: z.literal("unique-step"), occurrence })
+                  .strict(),
+                z
+                  .object({ kind: z.literal("result-site"), site: passiveSite })
+                  .strict(),
+                z
+                  .object({
+                    kind: z.literal("unavailable"),
+                    reason: z.enum(["no-site", "ambiguous"]),
+                  })
+                  .strict(),
+              ]),
+            })
+            .strict(),
+        )
+        .max(8),
+    ),
+    budget: z
+      .object({
+        configuredWholeTestMs: z.number().int().positive().max(30000),
+        resultDurationMs: elapsed,
+        wallOffsetOrigin: z.literal("transported-worker-test-start"),
+        wallOffsets: z.enum([
+          "estimates-from-transported-worker-wall-time",
+          "unavailable",
+        ]),
+        exactBudgetOrigin: z.literal("not-observed"),
+        exactRemainingMs: z.literal("not-observed"),
+        deadlineInstant: z.literal("not-observed"),
+      })
+      .strict(),
+    observationMeaning: z.literal("observed-events-through-afterEach-start"),
+    cause: z.literal("unknown"),
+  })
+  .strict();

@@ -9,7 +9,7 @@ import {
   writeFile,
   symlink,
 } from "node:fs/promises";
-import { basename, resolve } from "node:path";
+import { resolve } from "node:path";
 import { test } from "node:test";
 import { generate } from "./quiet-save-generate.mjs";
 import {
@@ -484,6 +484,11 @@ test("upload boundary validates complete owned proof and refuses unknown files a
   await assert.rejects(validateEvidence(directory));
   await writeFile(
     resolve(directory, "source.json"),
+    JSON.stringify({ ...source, tree: "f".repeat(40) }),
+  );
+  await assert.rejects(validateEvidence(directory));
+  await writeFile(
+    resolve(directory, "source.json"),
     JSON.stringify({ ...source, token: "privacy-canary" }),
   );
   await assert.rejects(validateEvidence(directory));
@@ -499,59 +504,76 @@ test("upload boundary validates complete owned proof and refuses unknown files a
     mediaFiles: 0,
     mediaBytes: 0,
   });
-  const observed = parseReceipt(
-    await readFile(resolve(evidence, "presave-assertion-0.jsonl"), "utf8"),
-    "presave-assertion",
-    0,
-  );
-  const rows = observed.map((row) => ({
-    ...row,
-    control: "normal",
-    iteration: 1,
-    phase: "fresh visual comparison 1",
-  }));
-  const result = rows.find((row) => row.kind === "test-result");
-  result.failure = {
-    ...result.failure,
-    site: unavailableSite,
-    category: "unknown",
-    operation: "unknown",
-    locationOrigin: "unavailable",
+  const entry = {
+    kind: "calibration",
+    control: "invalid",
+    matched: false,
+    outcome: {
+      kind: "not-started",
+      reason: "budget-refused",
+      receipt: "absent",
+      teardown: "not-started",
+    },
   };
-  result.media.owner = {
-    ...result.media.owner,
-    control: "normal",
-    iteration: 1,
-    phase: "fresh visual comparison 1",
+  const outcomes = resolve(directory, "outcomes.json");
+  const receipt = resolve(directory, "invalid-0.jsonl");
+  const retain = async () => writeFile(outcomes, JSON.stringify([entry]));
+  await retain();
+  assert.equal((await validateEvidence(directory)).files, 3);
+  await writeFile(receipt, "");
+  await assert.rejects(validateEvidence(directory), /Not-started/);
+  await rm(receipt);
+  entry.outcome = {
+    kind: "started",
+    exitCode: null,
+    termination: "owned-group-interrupt",
+    teardown: "unverified-stop-no-retry",
+    receipt: "missing",
+    conclusion: "incomplete",
   };
-  const mediaPath = resolve(
-    directory,
-    basename(mediaDirectory(result.media.owner)),
-  );
-  await mkdir(mediaPath);
-  await writeFile(
-    resolve(mediaPath, "manifest.json"),
-    JSON.stringify(result.media),
-  );
-  const receipt = resolve(directory, "normal-1.jsonl");
-  const serialize = () => rows.map((row) => JSON.stringify(row)).join("\n");
-  await writeFile(receipt, serialize());
-  assert.deepEqual(await validateEvidence(directory), {
-    files: 5,
-    mediaFiles: 0,
-    mediaBytes: 0,
-  });
-  result.media.owner.case = 0;
-  await writeFile(receipt, serialize());
+  await retain();
+  assert.equal((await validateEvidence(directory)).files, 3);
+  entry.outcome.conclusion = "complete-pass";
+  await retain();
   await assert.rejects(validateEvidence(directory));
-  result.media.owner.case = 1;
-  await writeFile(receipt, serialize());
-  await writeFile(resolve(mediaPath, "unexpected.png"), "privacy-canary");
+  entry.outcome.conclusion = "incomplete";
+  entry.outcome.receipt = "empty";
+  await retain();
+  await writeFile(receipt, "");
+  assert.equal((await validateEvidence(directory)).files, 4);
+  await writeFile(receipt, '{"truncated":');
   await assert.rejects(validateEvidence(directory));
-  await rm(resolve(mediaPath, "unexpected.png"));
-  assert.deepEqual(await validateEvidence(directory), {
-    files: 5,
-    mediaFiles: 0,
-    mediaBytes: 0,
-  });
+  entry.outcome.receipt = "malformed";
+  await retain();
+  await assert.rejects(validateEvidence(directory), /Malformed receipt/);
+  entry.outcome.receipt = "bounded-prefix";
+  await retain();
+  const prefix = {
+    kind: "phase-start",
+    control: "invalid",
+    iteration: 0,
+    phase: "calibration",
+    cases: 1,
+  };
+  await writeFile(receipt, JSON.stringify(prefix) + "\n");
+  assert.equal((await validateEvidence(directory)).files, 4);
+  entry.outcome.conclusion = "complete-pass";
+  await retain();
+  await assert.rejects(validateEvidence(directory), /conclusion/);
+  entry.outcome.conclusion = "incomplete";
+  await retain();
+  for (const mutation of [
+    { ...prefix, cases: 2 },
+    { ...prefix, phase: "fresh visual comparison 1" },
+    { ...prefix, iteration: 1 },
+  ]) {
+    await writeFile(receipt, JSON.stringify(mutation) + "\n");
+    await assert.rejects(validateEvidence(directory));
+  }
+  await writeFile(receipt, JSON.stringify(prefix) + "\n");
+  await writeFile(outcomes, JSON.stringify([entry, entry]));
+  await assert.rejects(validateEvidence(directory), /terminal stop/);
+  await retain();
+  await mkdir(resolve(directory, "media-invalid-0-0-chromium-desktop-1"));
+  await assert.rejects(validateEvidence(directory), /Unexpected evidence/);
 });

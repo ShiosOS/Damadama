@@ -106,12 +106,13 @@ function browser(workflows) {
   const jobs = owner(
     workflows,
     filename,
-    ["browser-compatibility"],
+    ["browser-compatibility", "quiet-save-probe"],
     "browser-compatibility",
   );
   recipe(
     jobs["browser-compatibility"],
     {
+      if: "github.event_name != 'workflow_dispatch'",
       name: "Browser compatibility (${{ matrix.mode }})",
       "runs-on": "ubuntu-24.04",
       "timeout-minutes": 25,
@@ -159,6 +160,55 @@ function browser(workflows) {
       ],
     },
     `${filename}.jobs.browser-compatibility`,
+  );
+  recipe(
+    jobs["quiet-save-probe"],
+    {
+      if: "github.event_name == 'workflow_dispatch'",
+      name: "Quiet save boundary diagnostic",
+      "runs-on": "ubuntu-24.04",
+      "timeout-minutes": 45,
+      steps: [
+        { run: 'echo "QUIET_JOB_STARTED=$(date +%s)" >> "$GITHUB_ENV"' },
+        checkout(),
+        node("24.21.0"),
+        action("actions/setup-dotnet", { "global-json-file": "global.json" }),
+        action("oven-sh/setup-bun", { "bun-version": "1.4.3" }),
+        { run: "bun install --frozen-lockfile" },
+        {
+          run: "dotnet restore --locked-mode --artifacts-path .audit/check-build",
+        },
+        {
+          run: "dotnet build --no-restore --artifacts-path .audit/check-build",
+        },
+        {
+          run: "bun x --no-install vite build --config tests/Browser/compatibility.vite.config.ts",
+        },
+        {
+          run: "node node_modules/@playwright/test/cli.js install --with-deps chromium firefox webkit",
+        },
+        {
+          run: "node --test --test-concurrency=1 .github/diagnostics/quiet-save.test.mjs .github/diagnostics/quiet-save-held.test.mjs .github/diagnostics/quiet-save-evidence.test.mjs .github/diagnostics/quiet-save-font.test.mjs .github/diagnostics/quiet-save-font-boundary.test.mjs .github/diagnostics/quiet-save-proxy.test.mjs .github/diagnostics/quiet-save-integration.test.mjs",
+        },
+        { run: "node .github/diagnostics/quiet-save-run.mjs" },
+        {
+          if: "always()",
+          id: "quiet-evidence",
+          run: "node .github/diagnostics/quiet-save-validate.mjs",
+        },
+        upload(
+          {
+            name: "quiet-save-diagnostic-${{ github.sha }}",
+            path: ".audit/quiet-save/evidence/",
+            "include-hidden-files": true,
+            "if-no-files-found": "error",
+            "retention-days": 7,
+          },
+          "always() && steps.quiet-evidence.outcome == 'success'",
+        ),
+      ],
+    },
+    `${filename}.jobs.quiet-save-probe`,
   );
 }
 

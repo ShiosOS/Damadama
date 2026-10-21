@@ -9,6 +9,9 @@ export async function readOwnedFile(
 ) {
   return readFileWithIdentity(path, minimumTime, maximumBytes, true);
 }
+export async function readOwnedReceipt(path) {
+  return readFileWithIdentity(path, 0, 1024 * 1024, true, 0);
+}
 export async function readInstalledNunitoFile(kind) {
   if (!fontKinds.includes(kind))
     throw new Error("Installed font selection refused.");
@@ -57,6 +60,7 @@ async function readFileWithIdentity(
   minimumTime,
   maximumBytes,
   singleLink,
+  minimumBytes = 1,
 ) {
   const parents = await directoryIdentity(dirname(path));
   const before = await lstat(path);
@@ -64,7 +68,7 @@ async function readFileWithIdentity(
     !before.isFile() ||
     before.isSymbolicLink() ||
     (singleLink && before.nlink !== 1) ||
-    before.size < 1 ||
+    before.size < minimumBytes ||
     before.size > maximumBytes ||
     before.mtimeMs < minimumTime
   )

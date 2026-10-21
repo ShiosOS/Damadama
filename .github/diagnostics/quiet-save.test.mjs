@@ -48,6 +48,7 @@ test("receipt validates every row and the complete six-phase routed case set", (
           observation: null,
           observationRejected: false,
           failure: null,
+          passive: null,
           media: null,
           mediaRejected: false,
           classification: "unknown",

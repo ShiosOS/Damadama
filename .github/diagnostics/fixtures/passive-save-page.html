@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <body>
+    <button id="add">Add habit</button>
+    <section aria-label="Saved habits">
+      <h2>Your habits</h2>
+      <div id="saved"></div>
+    </section>
+    <dialog aria-label="Create a habit">
+      <form>
+        <label>Name<input name="name" autofocus /></label>
+        <label>Good<input name="good" /></label>
+        <label>Better<input name="better" /></label>
+        <label>Best<input name="best" /></label>
+        <label>Monday<input name="weekday" type="checkbox" value="1" /></label>
+        <label>Tuesday<input name="weekday" type="checkbox" value="2" /></label>
+        <label
+          >Wednesday<input name="weekday" type="checkbox" value="3"
+        /></label>
+        <label
+          >Thursday<input name="weekday" type="checkbox" value="4"
+        /></label>
+        <label>Friday<input name="weekday" type="checkbox" value="5" /></label>
+        <label
+          >Saturday<input name="weekday" type="checkbox" value="6"
+        /></label>
+        <label>Sunday<input name="weekday" type="checkbox" value="7" /></label>
+        <label
+          >Repeat every (weeks)<input name="repeatEveryWeeks" value="1"
+        /></label>
+        <button>Save habit</button>
+      </form>
+    </dialog>
+    <script>
+      const dialog = document.querySelector("dialog");
+      const saved = document.querySelector("#saved");
+      function render(habits) {
+        saved.replaceChildren();
+        if (!habits.length) saved.textContent = "No habits saved yet.";
+        for (const habit of habits) {
+          const article = document.createElement("article");
+          const heading = document.createElement("h3");
+          heading.textContent = habit.name;
+          article.append(heading);
+          article.append(
+            `Good: ${habit.good} Better: ${habit.better} Best: ${habit.best} Monday Wednesday Every ${habit.schedule.repeatEveryWeeks} weeks`,
+          );
+          saved.append(article);
+        }
+      }
+      document.querySelector("#add").onclick = () => dialog.showModal();
+      document.querySelector("form").onsubmit = async (event) => {
+        event.preventDefault();
+        const fields = new FormData(event.target);
+        const habit = await fetch("/api/habits", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            name: fields.get("name"),
+            good: fields.get("good"),
+            better: fields.get("better"),
+            best: fields.get("best"),
+            weekdays: fields.getAll("weekday").map(Number),
+            repeatEveryWeeks: Number(fields.get("repeatEveryWeeks")),
+            timeZone: "America/New_York",
+          }),
+        }).then((response) => response.json());
+        render([habit]);
+        dialog.close();
+      };
+      fetch("/api/habits")
+        .then((response) => response.json())
+        .then(render);
+    </script>
+  </body>
+</html>
