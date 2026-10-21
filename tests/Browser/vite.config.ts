@@ -8,6 +8,7 @@ const apiOrigin = `http://localhost:${process.env["DAMADAMA_API_PORT"] ?? "5055"
 
 export default defineConfig({
   root: "tests/Browser",
+  publicDir: resolve("web/public"),
   plugins: [
     vue(),
     ui({

@@ -17,6 +17,10 @@ public static class HabitEndpoints
             .WithSummary("List habits, optionally scheduled on a calendar date")
             .Produces<HabitResponse[]>().ProducesProblem(400).ProducesProblem(401)
             .ProducesProblem(503).RequireAuthorization();
+        app.MapGet("/api/habit-days/{date}", ReadDay).WithName("habit-day").WithTags("Habits")
+            .WithSummary("Read scheduled habits and retained entries in one calendar-day snapshot")
+            .Produces<HabitDayResponse>().ProducesProblem(400).ProducesProblem(401)
+            .ProducesProblem(503).RequireAuthorization();
         app.MapGet("/api/habits/{id:guid}", Read).WithName("read-habit").WithTags("Habits")
             .WithSummary("Read an owned habit")
             .Produces<HabitResponse>().ProducesProblem(400).ProducesProblem(401)
@@ -63,6 +67,10 @@ public static class HabitEndpoints
         var habits = await history.ReadHabits(user.FindFirst("sub")!.Value, null, id, cancellationToken);
         return habits.Length == 0 ? Results.NotFound() : TypedResults.Ok(habits[0]);
     }
+
+    private static async Task<IResult> ReadDay(string date, ClaimsPrincipal user, HabitHistory history,
+        CancellationToken cancellationToken) => TypedResults.Ok(await history.ReadDay(
+            user.FindFirst("sub")!.Value, DeviceCalendar.ParseDate(date, nameof(date)), cancellationToken));
 
     private static async Task<IResult> Edit(Guid id, EditHabit input, ClaimsPrincipal user,
         HabitHistory history, CancellationToken cancellationToken) =>

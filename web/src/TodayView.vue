@@ -16,6 +16,7 @@ import HabitLevels from "./HabitLevels.vue";
 import EntryControls from "./EntryControls.vue";
 import type { Entry, EntryEdit } from "./entries.schema";
 import type { TodayHandle } from "./TodayView.types";
+import type { EntryActivity } from "./EntryControls.types";
 
 type Props = {
   accountId: string | null;
@@ -27,6 +28,15 @@ type TodayState =
   | { kind: "loading"; date: string }
   | { kind: "ready"; date: string; habits: Habit[]; entries: Entry[] }
   | { kind: "error"; date: string; message: string };
+type PendingRow = {
+  kind: "pending";
+  key: string;
+  habitId: string;
+  name: string;
+  entry: undefined;
+  levels: Pick<Habit, "good" | "better" | "best">;
+};
+
 type TodayRow =
   | {
       kind: "scheduled";
@@ -42,8 +52,14 @@ type TodayRow =
       habitId: string;
       name: string;
       entry: Entry;
-    };
+    }
+  | PendingRow;
 type Load = { generation: number; date: string; accountId: string | null };
+type EntryCommand = {
+  scope: Load;
+  row: PendingRow;
+  activity: Exclude<EntryActivity, { kind: "idle" }>;
+};
 
 function localCalendarDate(): string {
   const now = new Date();
@@ -69,6 +85,7 @@ const dateLabel = computed(() =>
 let generation = 0;
 let disposed = false;
 let midnightTimer: ReturnType<typeof setTimeout> | undefined;
+const entryCommands = shallowRef(new Map<string, EntryCommand>());
 const rows = computed<TodayRow[]>(() => {
   const current = state.value;
   if (current.kind !== "ready") return [];
@@ -99,7 +116,16 @@ const rows = computed<TodayRow[]>(() => {
       name: entry.habitName,
       entry,
     }));
-  return [...scheduled, ...retained];
+  const present = new Set([...scheduledIds, ...entries.keys()]);
+  const pending = [...entryCommands.value.values()]
+    .filter(
+      (command) =>
+        command.scope.accountId === props.accountId &&
+        command.scope.date === current.date &&
+        !present.has(command.row.habitId),
+    )
+    .map((command) => command.row);
+  return [...scheduled, ...retained, ...pending];
 });
 
 function selectDate(event: Event): void {
@@ -113,12 +139,91 @@ function selectDate(event: Event): void {
   selectedDate.value = value === localCalendarDate() ? null : value;
 }
 
-function saveEntry(habitId: string, edit: EntryEdit): Promise<Entry> {
-  return api.saveEntry(habitId, state.value.date, {
-    ...edit,
-    deviceToday: localCalendarDate(),
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-  });
+function entryKey(
+  scope: Pick<Load, "date" | "accountId">,
+  habitId: string,
+): string {
+  return `${scope.accountId}/${scope.date}/${habitId}`;
+}
+
+function updateCommand(key: string, command: EntryCommand | undefined): void {
+  const next = new Map(entryCommands.value);
+  if (command) next.set(key, command);
+  else next.delete(key);
+  entryCommands.value = next;
+}
+
+function entryActivity(habitId: string): EntryActivity {
+  return (
+    entryCommands.value.get(
+      entryKey({ accountId: props.accountId, date: state.value.date }, habitId),
+    )?.activity ?? { kind: "idle" }
+  );
+}
+
+function saveEntry(row: TodayRow, edit: EntryEdit): void {
+  const scope: Load = {
+    generation,
+    date: state.value.date,
+    accountId: props.accountId,
+  };
+  const key = entryKey(scope, row.habitId);
+  if (
+    !scope.accountId ||
+    entryCommands.value.get(key)?.activity.kind === "saving"
+  )
+    return;
+  let levels: PendingRow["levels"];
+  if (row.kind === "scheduled") levels = row.habit;
+  else if (row.kind === "retained") levels = row.entry;
+  else levels = row.levels;
+  const command: EntryCommand = {
+    scope,
+    row: {
+      kind: "pending",
+      key: `pending-${row.habitId}`,
+      habitId: row.habitId,
+      name: row.name,
+      entry: undefined,
+      levels,
+    },
+    activity: { kind: "saving", edit },
+  };
+  updateCommand(key, command);
+  void sendEntry(key, command);
+}
+
+async function sendEntry(key: string, command: EntryCommand): Promise<void> {
+  const current = (): boolean =>
+    !disposed &&
+    command.scope.accountId === props.accountId &&
+    entryCommands.value.get(key) === command;
+  try {
+    const saved = await api.saveEntry(command.row.habitId, command.scope.date, {
+      ...command.activity.edit,
+      deviceToday: localCalendarDate(),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
+    if (!current()) return;
+    updateCommand(key, undefined);
+    if (isCurrentLoad(command.scope) && command.scope.date === requestedDate())
+      acceptEntry(saved);
+    else if (command.scope.date === requestedDate()) void refresh();
+    emit("committed");
+  } catch (error) {
+    if (!current()) return;
+    if (error instanceof ApiError && error.status === 401) {
+      signInRequired();
+      return;
+    }
+    let message =
+      "Could not reach the service. Check your connection and try again.";
+    if (error instanceof ApiError) message = error.message;
+    updateCommand(key, {
+      ...command,
+      activity: { kind: "error", edit: command.activity.edit, message },
+    });
+  }
 }
 
 function acceptEntry(entry: Entry): void {
@@ -131,11 +236,11 @@ function acceptEntry(entry: Entry): void {
       entry,
     ],
   };
-  emit("committed");
 }
 
 function signInRequired(): void {
   generation++;
+  entryCommands.value = new Map();
   state.value = {
     kind: "error",
     date: state.value.date,
@@ -187,10 +292,9 @@ async function refresh(mode: "all" | "schedule" = "all"): Promise<Load | null> {
   armMidnight();
   if (!load.accountId) return null;
   try {
-    const [habits, loadedEntries] = await Promise.all([
-      api.scheduled(load.date),
-      keepEntries ? Promise.resolve([]) : api.entries(load.date),
-    ]);
+    const day = keepEntries
+      ? { habits: await api.scheduled(load.date), entries: [] }
+      : await api.day(load.date);
     if (!isCurrentLoad(load)) return null;
     if (load.date !== requestedDate()) {
       void refresh();
@@ -199,8 +303,13 @@ async function refresh(mode: "all" | "schedule" = "all"): Promise<Load | null> {
     const entries =
       keepEntries && state.value.kind === "ready"
         ? state.value.entries
-        : loadedEntries;
-    state.value = { kind: "ready", date: load.date, habits, entries };
+        : day.entries;
+    state.value = {
+      kind: "ready",
+      date: load.date,
+      habits: day.habits,
+      entries,
+    };
   } catch (error) {
     if (!isCurrentLoad(load)) return null;
     if (load.date !== requestedDate()) {
@@ -235,6 +344,13 @@ async function refreshAfterChange(): Promise<void> {
 
 defineExpose({ refreshAfterCreate, refreshAfterChange } satisfies TodayHandle);
 
+watch(
+  () => props.accountId,
+  () => {
+    entryCommands.value = new Map();
+  },
+  { flush: "sync" },
+);
 watch(
   () => ({
     account: props.accountId,
@@ -311,7 +427,7 @@ onUnmounted(() => {
       <article v-for="row in rows" :key="row.key" class="habit-row">
         <h3 class="habit-name">{{ row.name }}</h3>
         <HabitDetails v-if="row.kind === 'scheduled'" :habit="row.habit" />
-        <template v-else>
+        <template v-else-if="row.kind === 'retained'">
           <p class="mb-2 text-sm text-muted">Retained entry</p>
           <HabitLevels
             :good="row.entry.good"
@@ -319,14 +435,21 @@ onUnmounted(() => {
             :best="row.entry.best"
           />
         </template>
+        <template v-else>
+          <p class="mb-2 text-sm text-muted">Pending entry</p>
+          <HabitLevels
+            :good="row.levels.good"
+            :better="row.levels.better"
+            :best="row.levels.best"
+          />
+        </template>
         <EntryControls
           v-if="state.date <= deviceToday"
           :key="`${accountId}/${state.date}/${row.habitId}`"
           :habit-name="row.name"
           :entry="row.entry"
-          :save="(edit: EntryEdit) => saveEntry(row.habitId, edit)"
-          @saved="acceptEntry"
-          @unauthorized="signInRequired"
+          :activity="entryActivity(row.habitId)"
+          :save="(edit: EntryEdit) => saveEntry(row, edit)"
         />
       </article>
     </template>

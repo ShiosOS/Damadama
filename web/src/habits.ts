@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { entrySchema, type Entry, type EntryEdit } from "./entries.schema";
+import { habitDaySchema, type HabitDay } from "./habit-day.schema";
 import {
   habitSchema,
   type Habit,
@@ -13,6 +14,7 @@ export type WriteEntryInput = EntryEdit & {
   timeZone: string;
 };
 export interface HabitsApi {
+  day(date: string): Promise<HabitDay>;
   entries(date: string): Promise<Entry[]>;
   saveEntry(
     habitId: string,
@@ -141,6 +143,15 @@ export function habitsApi(getToken: () => Promise<string | null>): HabitsApi {
     return parse(data, schema, traceId);
   }
   return {
+    async day(date): Promise<HabitDay> {
+      const day = await request(
+        `/api/habit-days/${encodeURIComponent(date)}`,
+        habitDaySchema,
+      );
+      if (day.date !== date)
+        throw new ApiError("The service returned an unexpected response.", 502);
+      return day;
+    },
     entries: (date) =>
       request(
         `/api/entries?date=${encodeURIComponent(date)}`,
