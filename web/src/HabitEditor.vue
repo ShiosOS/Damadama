@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, reactive, shallowRef } from "vue";
+import { computed, onUnmounted, reactive, shallowRef, watch } from "vue";
 import { ApiError, habitsApi } from "./habits";
 import {
   weekdays,
@@ -30,6 +30,9 @@ const form = reactive<Omit<NewHabit, "timeZone">>({
   best: "",
   weekdays: [],
   repeatEveryWeeks: 1,
+});
+watch(form, () => {
+  if (activity.value.kind === "error") activity.value = { kind: "idle" };
 });
 let disposed = false;
 let lastMode: "edit" | "archive" = "edit";
@@ -278,6 +281,7 @@ onUnmounted(() => {
         <UButton
           v-else
           type="submit"
+          class="editor-save"
           block
           :loading="activity.kind === 'saving'"
           :disabled="formDisabled"
@@ -341,3 +345,9 @@ onUnmounted(() => {
     </template>
   </UModal>
 </template>
+
+<style scoped>
+.editor-save:hover {
+  background-color: var(--ui-primary);
+}
+</style>
