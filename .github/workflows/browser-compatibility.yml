@@ -71,22 +71,24 @@ jobs:
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7
-  kernel-prerequisites:
+  kernel-guest:
     if: github.event_name == 'workflow_dispatch'
-    name: Kernel experiment prerequisites
+    name: Disposable kernel guest boot proof
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     steps:
+      - run: echo "KERNEL_JOB_STARTED=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - run: python3 .github/diagnostics/compatibility-kernel-prerequisites.py
+      - run: python3 -B .github/diagnostics/kernel-guest.test.py
+      - run: sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,ImageOS,ImageVersion,GITHUB_SHA,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,GITHUB_WORKFLOW,GITHUB_JOB,KERNEL_JOB_STARTED -- python3 -B .github/diagnostics/kernel-guest.py
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: kernel-prerequisites-${{ github.sha }}-${{ github.run_attempt }}
-          path: .audit/compatibility-kernel-prerequisites/receipt.json
+          name: kernel-guest-boot-${{ github.sha }}-${{ github.run_attempt }}
+          path: .audit/kernel-guest-proof/receipt.json
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
