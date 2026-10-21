@@ -53,6 +53,16 @@ jobs:
         id: lifecycle
         continue-on-error: true
         run: node .github/diagnostics/compatibility-lifecycle-probe.mjs
+      - name: Calibrate prevented submission under the original Node runtime
+        if: matrix.mode == 'verify'
+        id: invalid
+        continue-on-error: true
+        run: node .github/diagnostics/compatibility-save-calibration.mjs invalid
+      - name: Calibrate a withheld response under the original Node runtime
+        if: matrix.mode == 'verify'
+        id: held
+        continue-on-error: true
+        run: node .github/diagnostics/compatibility-save-calibration.mjs held-response
       - if: always() && matrix.mode == 'verify'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -61,7 +71,17 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
-      - if: matrix.mode == 'verify' && steps.lifecycle.outcome != 'success'
+      - if: always() && matrix.mode == 'verify'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: compatibility-save-calibration-${{ github.sha }}
+          path: |
+            .audit/compatibility-save-calibration/invalid.jsonl
+            .audit/compatibility-save-calibration/held-response.jsonl
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+      - if: matrix.mode == 'verify' && (steps.lifecycle.outcome != 'success' || steps.invalid.outcome != 'success' || steps.held.outcome != 'success')
         run: exit 1
       - if: always() && matrix.mode == 'capture'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

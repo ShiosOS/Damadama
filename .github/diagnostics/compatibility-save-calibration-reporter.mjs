@@ -63,7 +63,15 @@ export default class SaveCalibrationReporter {
 
   onBegin(_config, suite) {
     writeFileSync(this.file, "");
-    this.record({ kind: "start", cases: suite.allTests().length });
+    this.record({
+      kind: "start",
+      cases: suite.allTests().length,
+      node: process.version,
+      head: z
+        .string()
+        .regex(/^[0-9a-f]{40}$/)
+        .parse(process.env.COMPAT_CURRENT_SHA),
+    });
   }
 
   onStdOut(chunk) {
