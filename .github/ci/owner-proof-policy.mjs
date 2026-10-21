@@ -222,7 +222,13 @@ function developer(workflows) {
           if: "matrix.suite == 'browser'",
           run: "node node_modules/@playwright/test/cli.js install --with-deps chromium",
         },
-        { run: "bun run test:${{ matrix.suite }}" },
+        {
+          run: "bun run test:${{ matrix.suite }}",
+          env: {
+            DAMADAMA_BROWSER_PORT: "5184",
+            DAMADAMA_API_PORT: "5065",
+          },
+        },
       ],
     },
     `${filename}.jobs.focused`,
