@@ -36,7 +36,6 @@ export function captureCommand(
       child.kill("SIGKILL");
       child.stdout.destroy();
       child.stderr.destroy();
-      resolve(result);
     };
     const timer = setTimeout(() => {
       stop({ kind: "timeout" });
