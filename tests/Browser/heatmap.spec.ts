@@ -405,50 +405,69 @@ test("an old account response cannot restore its private totals after the accoun
   await expect(page.locator("[data-heatmap-date]")).toHaveCount(0);
 });
 
-test("travel refreshes the anchor and rejects a read that finishes for the old device date", async ({
-  page,
-  context,
-}) => {
-  await seed(page, "heatmapTravel", "Sunday history");
-  await page.clock.setFixedTime(instant);
-  const received = Promise.withResolvers<void>();
-  const release = Promise.withResolvers<void>();
-  let reads = 0;
-  await page.route(heatmapPath, async (route) => {
-    reads++;
-    if (reads !== 1) return route.continue();
-    const response = await route.fetch();
-    expect(response.status()).toBe(200);
-    received.resolve();
-    await release.promise;
-    await route.fulfill({ response });
-  });
-  await page.goto("/?account=heatmapTravel");
-  await received.promise;
-  const cdp = await context.newCDPSession(page);
-  await cdp.send("Emulation.setTimezoneOverride", { timezoneId: "Asia/Tokyo" });
-  await focus(page);
-  try {
+test.describe("device travel", () => {
+  test.use({ timezoneId: "" });
+
+  test("travel refreshes the anchor and rejects a read that finishes for the old device date", async ({
+    page,
+    context,
+  }) => {
+    const cdp = await context.newCDPSession(page);
+    await cdp.send("Emulation.setTimezoneOverride", {
+      timezoneId: "America/New_York",
+    });
+    expect(
+      await page.evaluate(
+        () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+      ),
+    ).toBe("America/New_York");
+    await seed(page, "heatmapTravel", "Sunday history");
+    await page.clock.setFixedTime(instant);
+    const received = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    let reads = 0;
+    await page.route(heatmapPath, async (route) => {
+      reads++;
+      if (reads !== 1) return route.continue();
+      const response = await route.fetch();
+      expect(response.status()).toBe(200);
+      received.resolve();
+      await release.promise;
+      await route.fulfill({ response });
+    });
+    await page.goto("/?account=heatmapTravel");
+    await received.promise;
+    await cdp.send("Emulation.setTimezoneOverride", {
+      timezoneId: "Asia/Tokyo",
+    });
+    expect(
+      await page.evaluate(
+        () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+      ),
+    ).toBe("Asia/Tokyo");
+    await focus(page);
+    try {
+      await expect(day(page, "2026-01-05")).toHaveAttribute(
+        "aria-label",
+        /Nothing scheduled/,
+      );
+      await expect(day(page, "2026-01-04")).toHaveAttribute(
+        "data-completion",
+        "0",
+      );
+    } finally {
+      release.resolve();
+    }
     await expect(day(page, "2026-01-05")).toHaveAttribute(
       "aria-label",
       /Nothing scheduled/,
     );
-    await expect(day(page, "2026-01-04")).toHaveAttribute(
-      "data-completion",
-      "0",
+    await expect(heatmap(page).locator("time").last()).toHaveAttribute(
+      "datetime",
+      "2026-01-05",
     );
-  } finally {
-    release.resolve();
-  }
-  await expect(day(page, "2026-01-05")).toHaveAttribute(
-    "aria-label",
-    /Nothing scheduled/,
-  );
-  await expect(heatmap(page).locator("time").last()).toHaveAttribute(
-    "datetime",
-    "2026-01-05",
-  );
-  expect(reads).toBe(2);
+    expect(reads).toBe(2);
+  });
 });
 
 test("local midnight refreshes the anchor using controlled next-day totals", async ({
