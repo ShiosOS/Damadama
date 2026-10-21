@@ -229,6 +229,80 @@ test("process identity uses start ticks and boot identity, without command lines
   assert.throws(() => parseProcessStat("bad data", "boot"), /invalid/);
 });
 
+test("a process that exits during its stat read is absent", async () => {
+  assert.equal(
+    await processIdentity(1, async (path) => {
+      if (path.endsWith("boot_id")) return "boot-one";
+      throw Object.assign(new Error("process exited"), { code: "ESRCH" });
+    }),
+    null,
+  );
+});
+
+test("process identity retains only fixed diagnostic stages and allowlisted error codes", async () => {
+  await assert.rejects(
+    processIdentity(1, async () => {
+      throw Object.assign(new Error("private boot query detail"), {
+        code: "ESRCH",
+      });
+    }),
+    { message: "process-identity-query-failed-boot-id-read-esrch" },
+  );
+  await assert.rejects(
+    processIdentity(1, async (path) => {
+      if (path.endsWith("boot_id")) return "boot-one";
+      throw Object.assign(new Error("private stat query detail"), {
+        code: "EIO",
+      });
+    }),
+    { message: "process-identity-query-failed-stat-read-eio" },
+  );
+  await assert.rejects(
+    processIdentity(1, async (path) => {
+      if (path.endsWith("boot_id")) return "boot-one";
+      throw Object.assign(new Error("private stat query detail"), {
+        code: "private-code",
+        path: "/private/path",
+      });
+    }),
+    { message: "process-identity-query-failed-stat-read-unknown" },
+  );
+  await assert.rejects(
+    processIdentity(1, async (path) => {
+      if (path.endsWith("boot_id")) return "boot-one";
+      return "private malformed stat content";
+    }),
+    { message: "process-identity-query-failed-stat-parse-unknown" },
+  );
+});
+
+test("process identity refuses boot, permission, unknown and malformed-stat failures", async () => {
+  for (const code of ["ESRCH", "ENOENT", "EACCES", "EIO", "unexpected"]) {
+    await assert.rejects(
+      processIdentity(1, async () => {
+        throw Object.assign(new Error("boot query failed"), { code });
+      }),
+      /process-identity-query-failed/,
+    );
+  }
+  for (const code of ["EACCES", "EPERM", "EMFILE", "EIO", "unexpected"]) {
+    await assert.rejects(
+      processIdentity(1, async (path) => {
+        if (path.endsWith("boot_id")) return "boot-one";
+        throw Object.assign(new Error("stat query failed"), { code });
+      }),
+      /process-identity-query-failed/,
+    );
+  }
+  await assert.rejects(
+    processIdentity(1, async (path) => {
+      if (path.endsWith("boot_id")) return "boot-one";
+      return "malformed stat";
+    }),
+    /process-identity-query-failed/,
+  );
+});
+
 function browserReport() {
   const report = {
     errors: [],

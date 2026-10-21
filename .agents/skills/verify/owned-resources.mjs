@@ -49,19 +49,42 @@ export function parseProcessStat(text, bootId) {
   };
 }
 
+function identityQueryFailure(stage, error) {
+  const codes = new Set([
+    "ENOENT",
+    "ESRCH",
+    "EACCES",
+    "EPERM",
+    "EMFILE",
+    "ENFILE",
+    "EIO",
+    "EINTR",
+    "EAGAIN",
+    "ENOMEM",
+  ]);
+  let code = "unknown";
+  if (codes.has(error?.code)) code = error.code.toLowerCase();
+  return new Error(`process-identity-query-failed-${stage}-${code}`);
+}
+
 export async function processIdentity(pid, read = readFile) {
   let bootId;
   try {
     bootId = await read("/proc/sys/kernel/random/boot_id", "utf8");
-  } catch {
-    throw new Error("process-identity-query-failed");
+  } catch (error) {
+    throw identityQueryFailure("boot-id-read", error);
+  }
+  let stat;
+  try {
+    stat = await read(`/proc/${pid}/stat`, "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT" || error.code === "ESRCH") return null;
+    throw identityQueryFailure("stat-read", error);
   }
   try {
-    const stat = await read(`/proc/${pid}/stat`, "utf8");
     return parseProcessStat(stat, bootId.trim());
   } catch (error) {
-    if (error.code === "ENOENT") return null;
-    throw new Error("process-identity-query-failed");
+    throw identityQueryFailure("stat-parse", error);
   }
 }
 
