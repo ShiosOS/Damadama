@@ -209,7 +209,7 @@ onUnmounted(() => {
         <UButton variant="outline" @click="refresh">Retry</UButton>
       </div>
       <template v-else>
-        <p class="heatmap-range">
+        <p class="sr-only">
           <time :datetime="state.heatmap.start">{{
             dateLabel(state.heatmap.start)
           }}</time>
@@ -218,11 +218,16 @@ onUnmounted(() => {
             dateLabel(state.heatmap.end)
           }}</time>
         </p>
-        <p class="heatmap-instructions">
+        <p id="heatmap-instructions" class="sr-only">
           Select a day to see its activity. Use arrow keys to move between days.
         </p>
         <div class="heatmap-scroll">
-          <div class="heatmap-grid" role="group" aria-label="Daily activity">
+          <div
+            class="heatmap-grid"
+            role="group"
+            aria-label="Daily activity"
+            aria-describedby="heatmap-instructions heatmap-scoring"
+          >
             <span
               v-for="space in padding"
               :key="`padding-${space}`"
@@ -252,7 +257,7 @@ onUnmounted(() => {
             {{ description(selected) }}</template
           >
         </p>
-        <p class="heatmap-legend">
+        <p id="heatmap-scoring" class="sr-only">
           Good earns 1 point, Better 2, Best 3, and Rest 0.
         </p>
       </template>
@@ -273,13 +278,6 @@ onUnmounted(() => {
 .heatmap-title {
   font-size: 1.25rem;
   font-weight: 700;
-}
-.heatmap-range,
-.heatmap-instructions,
-.heatmap-legend {
-  margin-top: 8px;
-  color: var(--ui-text-muted);
-  font-size: 0.875rem;
 }
 .heatmap-scroll {
   max-width: 100%;
