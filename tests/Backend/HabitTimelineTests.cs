@@ -102,6 +102,23 @@ public class HabitTimelineTests
         Assert.That(timeline.IsScheduled(new(2026, 10, 26)), Is.False);
     }
 
+    [TestCase(TodayChoice.Remove, false)]
+    [TestCase(TodayChoice.Keep, true)]
+    public void Explicit_date_choice_survives_a_later_recurrence_edit_from_an_earlier_travel_date(TodayChoice choice, bool scheduled)
+    {
+        var now = DateTimeOffset.Parse("2026-10-21T00:30:00Z");
+        var habit = Create();
+        var tokyo = HabitChange.Edit(habit, 1,
+            new(Guid.NewGuid(), "2026-10-21", "Asia/Tokyo", "Walking", "5", "15", "30", new([2], 1), choice.ToString()),
+            new(2026, 10, 21), choice, "tokyo", now);
+        int[] nextDays = choice == TodayChoice.Remove ? [1, 2, 3, 4, 5, 6, 7] : [2];
+        var losAngeles = HabitChange.Edit(habit, 2,
+            new(Guid.NewGuid(), "2026-10-20", "America/Los_Angeles", "Walking", "5", "15", "30", new(nextDays, 1), null),
+            new(2026, 10, 20), null, "los-angeles", now);
+        var timeline = new HabitTimeline(habit, [HabitChange.Baseline(habit), tokyo, losAngeles]);
+        Assert.That(timeline.IsScheduled(new(2026, 10, 21)), Is.EqualTo(scheduled));
+    }
+
     private static HabitChange Edit(Habit habit, long sequence, string date, int[] days, int weeks) =>
         HabitChange.Edit(habit, sequence, new(Guid.NewGuid(), date, "UTC", "Walking", "5", "15", "30",
             new(days, weeks), null), DateOnly.Parse(date), null, "payload", DateTimeOffset.Parse(date + "T12:00:00Z"));

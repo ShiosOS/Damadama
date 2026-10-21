@@ -45,8 +45,8 @@ public sealed class HabitTimeline(Habit habit, IReadOnlyList<HabitChange> change
                 schedule = habit.Schedule.WithRecurrence(change.Weekdays, change.RepeatEveryWeeks!.Value,
                     change.FirstWeekMonday!.Value);
             if (change.Kind == HabitChangeKind.Archive) archived = true;
-            if (change.Kind == HabitChangeKind.Archive || change.Kind == HabitChangeKind.Edit && change.Weekdays is not null)
-                choice = change.EffectiveDate == date ? change.Choice : null;
+            if (change.EffectiveDate == date && change.Choice is not null)
+                choice = change.Choice;
         }
         if (choice is not null) return choice == TodayChoice.Keep;
         return !archived && ScheduleEligibility.IsScheduled(schedule, date);
