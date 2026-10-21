@@ -91,7 +91,7 @@ async function screenshot(
   name: string,
 ): Promise<void> {
   const image = await page.screenshot({
-    path: testInfo.outputPath(name + ".png"),
+    path: `.audit/${name}.png`,
     fullPage: true,
   });
   await testInfo.attach(name, { body: image, contentType: "image/png" });
@@ -141,7 +141,7 @@ test("committed Good Better Best and Rest appear as six of twelve points before 
     await screenshot(page, testInfo, "heatmap-reloaded");
   } finally {
     await context.close();
-    const recording = testInfo.outputPath("heatmap-flow.webm");
+    const recording = ".audit/heatmap-flow.webm";
     await video.saveAs(recording);
     await testInfo.attach("heatmap-flow", {
       path: recording,
@@ -306,7 +306,7 @@ test("committed definition schedule and archive choices refresh real totals and 
     await screenshot(page, testInfo, "heatmap-archive-choices-reloaded");
   } finally {
     await context.close();
-    const recording = testInfo.outputPath("heatmap-history-flow.webm");
+    const recording = ".audit/heatmap-history-flow.webm";
     await video.saveAs(recording);
     await testInfo.attach("heatmap-history-flow", {
       path: recording,
