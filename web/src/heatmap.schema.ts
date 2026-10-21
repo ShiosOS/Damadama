@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { NewHabit } from "./habits.schema";
 
 const heatmapDateSchema = z
   .object({
@@ -36,3 +37,6 @@ export const heatmapSchema = z
 
 export type Heatmap = z.infer<typeof heatmapSchema>;
 export type HeatmapDate = Heatmap["days"][number];
+export type HeatmapAnchor = Pick<NewHabit, "timeZone"> & {
+  deviceToday: Heatmap["end"];
+};

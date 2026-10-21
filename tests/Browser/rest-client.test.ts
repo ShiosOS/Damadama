@@ -412,7 +412,7 @@ void test("validation messages and authentication status keep their reference", 
         "Use a name. Use a good level. Support reference: validation-probe-01.",
   );
   respond(
-    { title: "Sign in to continue.", traceId: "authentication-probe-01" },
+    { title: "Authentication required.", traceId: "authentication-probe-01" },
     401,
   );
   await assert.rejects(
@@ -420,7 +420,9 @@ void test("validation messages and authentication status keep their reference", 
     (error: unknown) =>
       error instanceof ApiError &&
       error.status === 401 &&
-      error.traceId === "authentication-probe-01",
+      error.traceId === "authentication-probe-01" &&
+      error.message ===
+        "Sign in to continue. Support reference: authentication-probe-01.",
   );
 });
 

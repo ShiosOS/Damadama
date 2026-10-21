@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "generationSHA": "50869e334401e381a503cd4760a8f81e7c228ddc",
+  "generationSHA": "d57c4da9de6c14b22ef389f86e3d672617427c1a",
   "images": [
     {
       "id": "desktop-creation",
-      "sha256": "76b4ec4f26ec15fc60951b2e05c72d76e28d6850aba9b2db65155322633c8f77",
+      "sha256": "fba6c9e37142a20ab1c16183edcc86792b2f4df855fa6c05784368b2a066490a",
       "environment": {
         "browserVersion": "156.0.8078.4",
         "playwrightVersion": "1.64.1",
@@ -68,7 +68,7 @@
     },
     {
       "id": "mobile-layout",
-      "sha256": "bd8a49f64eea79d34b0b960fe6d2ff15fe298d3fcef8359e6013fd3b1891630b",
+      "sha256": "be015bcf519b0603754b62644b2a22ef132a8203ce2f63a603a833eeb272d7ad",
       "environment": {
         "browserVersion": "156.0.8078.4",
         "playwrightVersion": "1.64.1",

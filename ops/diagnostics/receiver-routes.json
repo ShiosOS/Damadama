@@ -1,6 +1,7 @@
 [
   "/api/config",
   "/api/entries",
+  "/api/habit-days/{date}",
   "/api/habits",
   "/api/habits/{id:guid}",
   "/api/habits/{id:guid}/archives",

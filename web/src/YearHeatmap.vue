@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
-import { ApiError } from "./habits";
-import { heatmapApi, type HeatmapAnchor } from "./heatmap";
-import type { Heatmap, HeatmapDate } from "./heatmap.schema";
+import { ApiError, habitsApi } from "./habits";
+import type { Heatmap, HeatmapDate, HeatmapAnchor } from "./heatmap.schema";
 
 type Props = {
   accountId: string | null;
@@ -26,7 +25,7 @@ function currentAnchor(): HeatmapAnchor {
   };
 }
 
-const read = heatmapApi(() => props.getToken());
+const api = habitsApi(() => props.getToken());
 const state = shallowRef<HeatmapState>({
   kind: "loading",
 });
@@ -105,7 +104,7 @@ async function refresh(): Promise<void> {
   if (!accountId) return;
   const load: Load = { generation: current, accountId };
   try {
-    const heatmap = await read(anchor);
+    const heatmap = await api.heatmap(anchor);
     if (!isCurrent(load)) return;
     if (!sameAnchor(anchor, currentAnchor())) {
       void refresh();
