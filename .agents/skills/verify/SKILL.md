@@ -52,6 +52,8 @@ Label that result as an integrated browser replay. It does not produce the nativ
 
 Keep the canonical acceptance reporter when changing this config's reporter list. It rejects skipped, expected-failure, retried and unexecuted cases. The inherited `forbidOnly` rejects focused tests. [The runner probes](../../../scripts/acceptance-browser.test.ts) exercise both configurations without application servers. They prove the execution policy, not the mapped application journeys. Compatibility's project-routing skips and manual Provider checks are separate from this canonical completeness policy.
 
+The observations align browser time with BrowserHost's fixed `2026-01-05T00:30:00Z` instant. Their ordinary creation and saved-list states require a real successful yearly read with 365 cells and no error alert. Authentication refusal requires all three private panels to offer sign-in. The Today button requires the current date's successful Day response. Do not weaken production date validation to repair a mismatching observation clock.
+
 The provider branch of session access needs its separately authorized workflow. Read the selected spec before attributing results. A routed failure response proves the UI's refusal/retry handling; it does not prove a real storage outage. Seeding through the real API establishes a precondition and does not replace driving the feature under test.
 
 ## Evidence

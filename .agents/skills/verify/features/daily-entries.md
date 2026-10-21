@@ -35,4 +35,4 @@ node node_modules/@playwright/test/cli.js test --config tests/Browser/playwright
 
 ## Gotchas
 
-Browser edit instants and calendar dates have separate meanings. A routed 503 or aborted request proves client retry/refusal behavior, not a real database rollback. PostgreSQL conflict/rollback coverage belongs to the backend tests. Synthetic fixture controls do not prove provider sign-out or JWT revocation.
+Browser edit instants and calendar dates have separate meanings. Retry preserves the entry result and original edit timestamp while recomputing the current device date and timezone. Equal complete request bodies are proved in the unchanged-clock archive example. A routed 503 or aborted request proves client retry/refusal behavior, not a real database rollback. PostgreSQL conflict/rollback coverage belongs to the backend tests. Synthetic fixture controls do not prove provider sign-out or JWT revocation.
