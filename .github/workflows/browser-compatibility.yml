@@ -43,6 +43,26 @@ jobs:
       - run: bun x --no-install vite build --config tests/Browser/compatibility.vite.config.ts
       - run: node node_modules/@playwright/test/cli.js install --with-deps chromium firefox webkit
       - run: bun run browser:compatibility:${{ matrix.mode }}
+      - name: Select the Node version from the original failing run
+        if: matrix.mode == 'verify'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24.21.0
+      - name: Observe five complete verification invocations on one VM
+        if: matrix.mode == 'verify'
+        id: lifecycle
+        continue-on-error: true
+        run: node .github/diagnostics/compatibility-lifecycle-probe.mjs
+      - if: always() && matrix.mode == 'verify'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: compatibility-lifecycle-observations-${{ github.sha }}
+          path: .audit/compatibility-lifecycle-probe/observations.jsonl
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+      - if: matrix.mode == 'verify' && steps.lifecycle.outcome != 'success'
+        run: exit 1
       - if: always() && matrix.mode == 'capture'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
