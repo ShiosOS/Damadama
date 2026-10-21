@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   browser-compatibility:
+    if: github.event_name != 'workflow_dispatch'
     name: Browser compatibility (${{ matrix.mode }})
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -69,4 +70,38 @@ jobs:
             .audit/browser-quality/test-results/**/*-diff.png
           include-hidden-files: true
           if-no-files-found: ignore
+          retention-days: 7
+  quiet-save-probe:
+    if: github.event_name == 'workflow_dispatch'
+    name: Quiet save boundary diagnostic
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - run: echo "QUIET_JOB_STARTED=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24.21.0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.3
+      - run: bun install --frozen-lockfile
+      - run: dotnet restore --locked-mode --artifacts-path .audit/check-build
+      - run: dotnet build --no-restore --artifacts-path .audit/check-build
+      - run: bun x --no-install vite build --config tests/Browser/compatibility.vite.config.ts
+      - run: node node_modules/@playwright/test/cli.js install --with-deps chromium firefox webkit
+      - run: node --test .github/diagnostics/quiet-save.test.mjs .github/diagnostics/quiet-save-held.test.mjs
+      - run: node .github/diagnostics/quiet-save-run.mjs
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: quiet-save-diagnostic-${{ github.sha }}
+          path: .audit/quiet-save/evidence/
+          include-hidden-files: true
+          if-no-files-found: error
           retention-days: 7
