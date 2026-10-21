@@ -289,9 +289,13 @@ test("selected-test evidence requires every configured file and actual passing o
   const good = summarizeTests(browserReport(), selectedFiles);
   assert.equal(good.passed, true);
   assert.equal(good.count, selectedFiles.length);
-  const missing = browserReport();
-  missing.suites.pop();
-  assert.equal(summarizeTests(missing, selectedFiles).passed, false);
+  for (const file of selectedFiles) {
+    const missing = browserReport();
+    missing.suites = missing.suites.filter(
+      (suite) => suite.specs[0].file !== file,
+    );
+    assert.equal(summarizeTests(missing, selectedFiles).passed, false, file);
+  }
   for (const status of ["skipped", "failed", "timedOut", "interrupted"]) {
     const bad = browserReport();
     bad.suites[0].specs[0].tests[0].results[0].status = status;
