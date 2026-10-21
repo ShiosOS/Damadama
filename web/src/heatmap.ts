@@ -17,7 +17,7 @@ export function heatmapApi(
     const token = await getToken();
     if (!token) throw new ApiError("Sign in to continue.", 401);
     const query = new URLSearchParams(anchor);
-    const response = await fetch(`/api/heatmap?${query.toString()}`, {
+    const response = await fetch(`/api/heatmaps?${query.toString()}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     let data: unknown;

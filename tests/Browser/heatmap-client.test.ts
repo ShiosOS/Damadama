@@ -59,7 +59,7 @@ void test("a heatmap read sends the device anchor with its authenticated request
   );
   assert.deepEqual(requests, [
     {
-      path: "/api/heatmap?deviceToday=2026-01-04&timeZone=America%2FNew_York",
+      path: "/api/heatmaps?deviceToday=2026-01-04&timeZone=America%2FNew_York",
       authorization: "Bearer owner-token",
     },
   ]);

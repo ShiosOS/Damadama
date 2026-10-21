@@ -7,7 +7,7 @@ public static class HeatmapEndpoints
 {
     public static void MapHeatmap(this WebApplication app)
     {
-        app.MapGet("/api/heatmap", ReadHeatmap).WithName("yearly-heatmap").WithTags("Heatmap")
+        app.MapGet("/api/heatmaps", ReadHeatmap).WithName("yearly-heatmap").WithTags("Heatmap")
             .WithSummary("Read 365 days of account-owned habit activity")
             .Produces<HeatmapResponse>().ProducesProblem(400).ProducesProblem(401)
             .ProducesProblem(503).RequireAuthorization();

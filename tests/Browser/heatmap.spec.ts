@@ -11,7 +11,7 @@ import { habitSchema, type Habit } from "../../web/src/habits.schema";
 import { heatmapSchema, type Heatmap } from "../../web/src/heatmap.schema";
 
 const instant = new Date("2026-01-05T00:30:00Z");
-const heatmapPath = "**/api/heatmap?**";
+const heatmapPath = "**/api/heatmaps?**";
 const heatmap = (page: Page): Locator =>
   page.getByRole("region", { name: "Yearly activity", exact: true });
 const day = (page: Page, date = "2026-01-04"): Locator =>
