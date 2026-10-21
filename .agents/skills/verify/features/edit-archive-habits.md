@@ -30,7 +30,7 @@ node node_modules/@playwright/test/cli.js test --config tests/Browser/playwright
 - Run both `archiving with Keep` and `archiving with Remove` examples. Require the choice, committed archived badge, saved history, future scheduled exclusion and reload. Keep today changes schedule inclusion for that date; Remove today retains the saved entry outside the schedule.
 - Run `retrying a lost acknowledgement reuses the committed mutation identity`. Require the identical mutation payload on retry and one accepted revision. Run `changing a failed draft starts a new command instead of replaying its older values`. Edit the failed draft, submit it, and require its corrected text with a new mutation identity.
 - Run `a held old-account mutation response cannot restore private habits`. Release the committed response after switching accounts and require the current account's view to remain unchanged.
-- Run `the editor keeps invalid drafts and supports mobile keyboard controls`. Require retained invalid values, usable correction, focus containment and the actual saved result. Retain the mobile editor PNG. Run the [pending-entry overlap journeys](daily-entries.md) in the same selection.
+- Run `the editor keeps invalid drafts and supports mobile keyboard controls`. Require retained invalid values, usable correction, a clean WCAG scan, no page overflow, and Escape returning focus to Edit. Retain the mobile editor PNG. This case closes the corrected draft without saving it. Run the [pending-entry overlap journeys](daily-entries.md) in the same selection.
 
 ## Gotchas
 
