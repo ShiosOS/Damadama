@@ -10,6 +10,7 @@ Record Good, Better, Best, Rest or Clear for an eligible habit/date. The visible
 - `entry-retry` retries the same edit after a failed save.
 - `entry-support` shows a safe support reference and a usable Retry save control after a simulated service refusal.
 - `entry-boundaries` protects account/date transitions and retained historical definitions.
+- `entry-overlap` preserves pending commands through habit changes and adopts the current stored winner after refresh.
 
 ## How to get to it (user POV)
 
@@ -17,10 +18,10 @@ In Today or a past Calendar date, find the habit and the group named `Result for
 
 ## Driving it with Playwright
 
-Preconditions: [canonical fresh session](../SKILL.md). [entries.spec.ts](../../../../tests/Browser/entries.spec.ts) provides real API seeds, controlled clocks and separate accounts.
+Preconditions: [canonical fresh session](../SKILL.md). [entries.spec.ts](../../../../tests/Browser/entries.spec.ts) and [history.spec.ts](../../../../tests/Browser/history.spec.ts) provide real API seeds, controlled clocks and separate accounts.
 
 ```sh
-node node_modules/@playwright/test/cli.js test --config tests/Browser/playwright.config.ts entries.spec.ts
+node node_modules/@playwright/test/cli.js test --config tests/Browser/playwright.config.ts entries.spec.ts history.spec.ts
 ```
 
 - Use `the committed result appears before any reload`. Click Good in the named result group, require the real PUT response, `aria-pressed="true"` and `Good is saved.` before reloading. Its screenshot is `.audit/entries-immediate.png`.
@@ -28,6 +29,9 @@ node node_modules/@playwright/test/cli.js test --config tests/Browser/playwright
 - Hold the save response to prove the UI waits for acknowledgement. Exercise retry and competing-edit examples using their existing assertions, not a local UI setter.
 - Run account/sign-out/date transitions, past dates and retained-definition cases. Require the selected date's actual result and original recorded definitions. Distinguish API seeding from the result action under test.
 - Use `a simulated entry failure displays its safe support reference`. Require the simulated 503 message, `Support reference: fixture-entry-support-01.`, unchanged saved status and Retry save fully in the viewport. Retain its named PNG and WEBM. This proves client refusal presentation, not a storage outage.
+- Use `an entry acknowledgement survives a completed habit-change refresh`. Hold the actual first PUT, edit the habit's Good definition and let the refresh finish. Release the PUT and require the saved result with the edited definition immediately and after reload. First insert captures the current locked definitions; an already recorded entry keeps its original definitions.
+- Use `a pending entry removed by archive retains its failed command and unchanged retry`. Archive while the first PUT is held, require `Pending entry`, then abort the held request. Require a visible error and `Retry save`. Inspect an empty real entry read before retry, equal original/retry bodies, acknowledged Good, `Retained entry` and the independently reloaded result.
+- Use `a delayed entry acknowledgement cannot replace a newer stored winner after refresh`. Hold the older Good acknowledgement, complete the habit-change refresh and store a newer Best. Require Best before and after releasing Good and after reload. A stale response must trigger an authoritative reread rather than replace that winner.
 
 ## Gotchas
 
