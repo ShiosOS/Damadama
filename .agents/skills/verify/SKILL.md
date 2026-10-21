@@ -50,6 +50,8 @@ The provider branch of session access needs its separately authorized workflow. 
 
 Retain the source identities and diff, actual command, stdout/stderr, exit code, selected test names, environment and concrete limitations in a per-run evidence directory outside the cleanup scope. Record the pre-reload result and the independently reloaded view for persistence claims. A screenshot or a successful save status alone is insufficient.
 
+When comparing an intermittent compatibility failure with a passing run, record the actual Node patch version, Bun version, Playwright and browser versions, runner image and kernel for both runs. Compare these alongside the source revision before selecting a reproduction environment. Identical source does not establish an identical environment, and a passing replay does not establish a repair.
+
 Existing specs write named synthetic screenshots under `.audit/`, browser output under `test-results/`, and the HTML report under `tests/Browser/playwright-report/`. Copy only the run's named non-secret evidence before another invocation can replace it. Record the full source revision separately from any deployed source or controls revision.
 
 The complete-map command writes raw JSON, an HTML report and failure output under `.audit/verification-skill/`. Its observations add `habit-immediate.png`, `habit-reloaded.png`, `saved-list-loading.png`, `saved-list-refused.png`, `calendar-past.png` and `calendar-today.png` there. The saved-list assertions require no empty prose during loading or authentication refusal. The attachment retains those observed booleans, both `false`, alongside the screenshots.
