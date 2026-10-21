@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -15,6 +15,10 @@ import { passiveFailure } from "./quiet-save-schema.mjs";
 import { mediaDirectory } from "./quiet-save-media.mjs";
 import QuietSaveReporter from "./quiet-save-reporter.mjs";
 import { chromium, firefox, webkit } from "@playwright/test";
+import {
+  passiveCalibrationCases,
+  validatePassiveCalibrationCapture,
+} from "./quiet-save-validate.mjs";
 
 const engine = process.env.QUIET_PASSIVE_ENGINE ?? "chromium";
 assert(["chromium", "firefox", "webkit"].includes(engine));
@@ -459,7 +463,6 @@ test.afterEach(async ({page},info) => {
                 QUIET_ITERATION: "0",
                 QUIET_PHASE: "calibration",
                 QUIET_PASSIVE_CASE: mode,
-                COMPAT_CURRENT_SHA: "",
               },
               stdio: ["ignore", "pipe", "pipe"],
             },
@@ -697,7 +700,6 @@ test(
                 QUIET_CONTROL: "presave-assertion",
                 QUIET_ITERATION: "0",
                 QUIET_PHASE: "calibration",
-                COMPAT_CURRENT_SHA: "",
               },
               stdio: "ignore",
             },
@@ -770,5 +772,25 @@ test("record actual calibration engine identity", async () => {
     );
   } finally {
     await browser.close();
+  }
+  if (process.platform === "linux") {
+    const directory = await mkdtemp(resolve(root, "admission-"));
+    for (const name of [
+      ...passiveCalibrationCases.map((mode) => `${mode}.jsonl`),
+      "engine.json",
+    ])
+      await writeFile(
+        resolve(directory, name),
+        await readFile(resolve(root, name)),
+        { flag: "wx" },
+      );
+    assert.deepEqual(
+      await validatePassiveCalibrationCapture(
+        directory,
+        engine,
+        process.env.COMPAT_CURRENT_SHA ?? "",
+      ),
+      { matched: true, mediaFiles: 0, mediaBytes: 0 },
+    );
   }
 });

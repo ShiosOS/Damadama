@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { spawnSync } from "node:child_process";
-import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { generate, prepare, replaceOnce } from "./quiet-save-generate.mjs";
 import { digest, loadPassiveSources } from "./quiet-save-source.mjs";
 import {
@@ -15,6 +16,10 @@ import {
 import { caseNames, ownerSchema } from "./quiet-save-media.mjs";
 import { runOwned } from "./quiet-save-run.mjs";
 import QuietSaveReporter from "./quiet-save-reporter.mjs";
+import {
+  passiveCalibrationCases,
+  validatePassiveCalibrationCapture,
+} from "./quiet-save-validate.mjs";
 
 const root = resolve(".audit/quiet-save-integration-tests");
 const started = {
@@ -107,6 +112,135 @@ test("normal wrapper and original Bun runner retain exact executable selections"
     assert.equal(hash, digest(files[name]));
   for (const [name, hash] of Object.entries(proof.passive.diagnostics))
     assert.equal(hash, digest(await readFile(`.github/diagnostics/${name}`)));
+});
+
+test("controlled fixture admission accepts actual owned absence metadata and refuses media bytes", async () => {
+  await mkdir(root, { recursive: true });
+  const capture = await mkdtemp(resolve(root, "media-admission-"));
+  const owner = {
+    control: "presave-assertion",
+    iteration: 0,
+    phase: "calibration",
+    project: "chromium-desktop",
+    case: 1,
+  };
+  const mediaModule = pathToFileURL(
+    resolve(".github/diagnostics/quiet-save-media.mjs"),
+  ).href;
+  const baseline = resolve("tests/Browser/baselines/desktop-creation.png");
+  async function produce(image) {
+    const directory = await mkdtemp(resolve(root, "media-producer-"));
+    const program = `import {mkdir,readFile,writeFile} from "node:fs/promises";
+import {resolve} from "node:path";
+import {retainFailureMedia} from ${JSON.stringify(mediaModule)};
+const outputRoot=resolve("output");
+const outputDir=resolve(outputRoot,"case");
+await mkdir(outputDir,{recursive:true});
+const started=Date.now();
+if (${image}) await writeFile(resolve(outputDir,"desktop-creation-actual.png"),await readFile(${JSON.stringify(baseline)}));
+console.log(JSON.stringify(await retainFailureMedia({owner:${JSON.stringify(owner)},outputRoot,outputDir,started,head:"",selfTest:true})));`;
+    const run = spawnSync(
+      process.execPath,
+      ["--input-type=module", "-e", program],
+      { cwd: directory, encoding: "utf8", timeout: 10000 },
+    );
+    assert.equal(run.status, 0, run.stderr);
+    return JSON.parse(run.stdout);
+  }
+  const absent = await produce(false);
+  assert.equal(absent.refusal, "none");
+  assert(absent.entries.length > 0);
+  assert(absent.entries.every((entry) => entry.state === "absent"));
+  const base = {
+    control: owner.control,
+    iteration: owner.iteration,
+    phase: owner.phase,
+  };
+  const result = {
+    ...base,
+    kind: "test-result",
+    project: owner.project,
+    case: owner.case,
+    status: "failed",
+    durationMs: 0,
+    retry: 0,
+    errorCategories: [],
+    errorOverflow: false,
+    observation: null,
+    observationRejected: false,
+    failure: null,
+    passive: null,
+    media: absent,
+    mediaRejected: false,
+    classification: "unknown",
+  };
+  const receipt = resolve(capture, `${passiveCalibrationCases[0]}.jsonl`);
+  const retain = async (media) =>
+    writeFile(
+      receipt,
+      serialize([
+        { ...base, kind: "phase-start", cases: 1 },
+        { ...result, media },
+      ]),
+    );
+  const admit = () =>
+    validatePassiveCalibrationCapture(capture, "chromium", "");
+  await retain(absent);
+  assert.deepEqual(await admit(), {
+    matched: false,
+    mediaFiles: 0,
+    mediaBytes: 0,
+  });
+  const present = await produce(true);
+  assert.equal(present.refusal, "none");
+  assert(present.entries.some((entry) => entry.state === "present"));
+  await retain(present);
+  await assert.rejects(admit(), /Controlled fixture emitted media/);
+  for (const mutate of [
+    (value) => {
+      value.entries[0].state = "refused";
+    },
+    (value) => {
+      value.refusal = "ownership";
+    },
+    (value) => {
+      value.owner.case = 0;
+    },
+    (value) => {
+      value.token = "privacy-canary";
+    },
+  ]) {
+    const rejected = structuredClone(absent);
+    mutate(rejected);
+    await retain(rejected);
+    await assert.rejects(admit());
+  }
+  await writeFile(
+    receipt,
+    serialize([
+      { ...base, kind: "phase-start", cases: 1 },
+      { ...result, status: "skipped" },
+    ]),
+  );
+  await assert.rejects(admit(), /Skipped calibration media differs/);
+  await writeFile(
+    receipt,
+    serialize([
+      { ...base, kind: "phase-start", cases: 1 },
+      { ...result, status: "skipped", media: null },
+    ]),
+  );
+  assert.deepEqual(await admit(), {
+    matched: false,
+    mediaFiles: 0,
+    mediaBytes: 0,
+  });
+  await retain(absent);
+  await writeFile(
+    resolve(capture, "desktop-creation-actual.png"),
+    await readFile(baseline),
+  );
+  await assert.rejects(admit(), /Unexpected calibration evidence file/);
 });
 
 test("actual generated wrapper discovers each canonical case once with inherited projects", async () => {

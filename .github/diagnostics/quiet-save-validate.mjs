@@ -173,6 +173,8 @@ export async function validatePassiveCalibrationCapture(
       const key = `${row.project}:${row.case}`;
       if (seen.has(key)) throw new Error("Duplicate calibration case.");
       seen.add(key);
+      if (row.status === "skipped" && row.media !== null)
+        throw new Error("Skipped calibration media differs.");
       if (row.passive) admitPassiveSites(row.passive, sources);
     }
     const result = results.find((row) => row.status !== "skipped");
@@ -194,7 +196,11 @@ export async function validatePassiveCalibrationCapture(
           mediaFiles++;
           mediaBytes += entry.bytes;
         }
-    } else if (result.media !== null)
+    } else if (
+      result.media !== null &&
+      (result.media.refusal !== "none" ||
+        result.media.entries.some((entry) => entry.state !== "absent"))
+    )
       throw new Error("Controlled fixture emitted media.");
     if (
       rows.at(-1)?.kind !== "phase-end" ||
