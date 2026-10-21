@@ -20,97 +20,6 @@ const accounts = {
 } as const;
 const habitName = "Walking";
 
-const formDiagnostic = z.object({
-  event: z.enum(["focusin", "input", "keydown", "invalid", "submit"]),
-  saveFocused: z.boolean(),
-  saveEnabled: z.boolean(),
-  fields: z
-    .array(
-      z.object({
-        label: z.enum([
-          "Name",
-          "Good",
-          "Better",
-          "Best",
-          "Repeat every (weeks)",
-        ]),
-        present: z.boolean(),
-        focused: z.boolean(),
-        populated: z.boolean(),
-        valid: z.boolean(),
-      }),
-    )
-    .max(5),
-});
-
-function recordDiagnostic(event: string, details: object = {}): void {
-  console.info("compatibility-diagnostic", {
-    monotonicMs: Math.round(performance.now()),
-    event,
-    ...details,
-  });
-}
-
-test.beforeEach(async ({ page }) => {
-  recordDiagnostic("test-start");
-  page.on("request", (request) => {
-    if (request.method() === "POST" && request.url().endsWith("/api/habits"))
-      recordDiagnostic("create-request");
-  });
-  page.on("response", (response) => {
-    if (
-      response.request().method() === "POST" &&
-      response.url().endsWith("/api/habits")
-    )
-      recordDiagnostic("create-response", { status: response.status() });
-  });
-  page.on("requestfailed", (request) => {
-    if (request.method() === "POST" && request.url().endsWith("/api/habits"))
-      recordDiagnostic("create-request-failed");
-  });
-  page.on("console", (message) => {
-    const prefix = "compatibility-form ";
-    if (!message.text().startsWith(prefix)) return;
-    const payload: unknown = JSON.parse(message.text().slice(prefix.length));
-    recordDiagnostic("form-event", formDiagnostic.parse(payload));
-  });
-  await page.addInitScript(() => {
-    const labels = ["Name", "Good", "Better", "Best", "Repeat every (weeks)"];
-    for (const event of ["focusin", "input", "keydown", "invalid", "submit"])
-      document.addEventListener(
-        event,
-        (observed) => {
-          if (observed instanceof KeyboardEvent && observed.key !== "Enter")
-            return;
-          const form = document.querySelector("form.habit-form");
-          if (!form) return;
-          const save = form.querySelector("button[type=submit]");
-          const fields = labels.map((label) => {
-            const input = form.querySelector(`input[aria-label="${label}"]`);
-            return {
-              label,
-              present: input instanceof HTMLInputElement,
-              focused: input === document.activeElement,
-              populated:
-                input instanceof HTMLInputElement && input.value.length > 0,
-              valid: input instanceof HTMLInputElement && input.validity.valid,
-            };
-          });
-          console.info(
-            "compatibility-form",
-            JSON.stringify({
-              event,
-              saveFocused: save === document.activeElement,
-              saveEnabled: save instanceof HTMLButtonElement && !save.disabled,
-              fields,
-            }),
-          );
-        },
-        true,
-      );
-  });
-});
-
 async function start(page: Page, account: string): Promise<void> {
   await page.clock.setFixedTime(new Date(clockInstant));
   const initialList = page.waitForResponse(
@@ -125,7 +34,6 @@ async function start(page: Page, account: string): Promise<void> {
   await expect(
     page.getByRole("region", { name: "Saved habits" }),
   ).toContainText("No habits saved yet.");
-  recordDiagnostic("initial-list-ready");
 }
 
 async function openByKeyboard(page: Page): Promise<void> {
@@ -180,9 +88,7 @@ async function fillAndSave(page: Page): Promise<void> {
   const save = dialog.getByRole("button", { name: "Save habit", exact: true });
   await page.keyboard.press("Tab");
   await expect(save).toBeFocused();
-  recordDiagnostic("before-save-enter");
   await page.keyboard.press("Enter");
-  recordDiagnostic("after-save-enter");
 }
 
 async function expectSaved(page: Page): Promise<void> {
@@ -223,9 +129,7 @@ async function saveAndReload(
   afterSave?: () => Promise<void>,
 ): Promise<void> {
   await openByKeyboard(page);
-  recordDiagnostic("dialog-open");
   if (beforeSave) await beforeSave();
-  recordDiagnostic("creation-checkpoint-complete");
   const created = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
