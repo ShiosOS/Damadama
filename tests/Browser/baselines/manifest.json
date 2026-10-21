@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generationSHA": "0cef08fbd24d57eee08764031d84469e68600830",
+  "generationSHA": "50869e334401e381a503cd4760a8f81e7c228ddc",
   "images": [
     {
       "id": "desktop-creation",
@@ -12,9 +12,9 @@
         "architecture": "x64",
         "osDistribution": "ubuntu",
         "osVersion": "24.04",
-        "kernelRelease": "6.17.0-1022-azure",
+        "kernelRelease": "7.0.0-1017-azure",
         "imageOS": "ubuntu24",
-        "imageVersion": "20261012.334.1",
+        "imageVersion": "20261018.339.1",
         "viewport": {
           "width": 1280,
           "height": 900
@@ -36,7 +36,7 @@
     },
     {
       "id": "desktop-saved",
-      "sha256": "9948a6e2338ff2d4dad51b41270bfff14907cfd9335ec2e460a5e3456cf546fc",
+      "sha256": "92b705507cd3581640899a1ecc61b785f22051e25b78db3baad7507e131bd02a",
       "environment": {
         "browserVersion": "156.0.8078.4",
         "playwrightVersion": "1.64.1",
@@ -44,9 +44,9 @@
         "architecture": "x64",
         "osDistribution": "ubuntu",
         "osVersion": "24.04",
-        "kernelRelease": "6.17.0-1022-azure",
+        "kernelRelease": "7.0.0-1017-azure",
         "imageOS": "ubuntu24",
-        "imageVersion": "20261012.334.1",
+        "imageVersion": "20261018.339.1",
         "viewport": {
           "width": 1280,
           "height": 900
@@ -68,7 +68,7 @@
     },
     {
       "id": "mobile-layout",
-      "sha256": "c80934caa5fb55370aa3f146f077bd6930324369341bd015fdbd58512995108c",
+      "sha256": "bd8a49f64eea79d34b0b960fe6d2ff15fe298d3fcef8359e6013fd3b1891630b",
       "environment": {
         "browserVersion": "156.0.8078.4",
         "playwrightVersion": "1.64.1",
@@ -76,9 +76,9 @@
         "architecture": "x64",
         "osDistribution": "ubuntu",
         "osVersion": "24.04",
-        "kernelRelease": "6.17.0-1022-azure",
+        "kernelRelease": "7.0.0-1017-azure",
         "imageOS": "ubuntu24",
-        "imageVersion": "20261012.334.1",
+        "imageVersion": "20261018.339.1",
         "viewport": {
           "width": 390,
           "height": 844
