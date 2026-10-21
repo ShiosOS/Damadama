@@ -7,6 +7,8 @@ export const habitSchema = z.object({
   better: z.string(),
   best: z.string(),
   createdAt: z.iso.datetime({ offset: true }),
+  archived: z.boolean().default(false),
+  revision: z.number().int().nonnegative().default(0),
   schedule: z.object({
     weekdays: z.array(z.number().int().min(1).max(7)).nonempty(),
     repeatEveryWeeks: z.number().int().positive(),
@@ -19,6 +21,24 @@ export const habitSchema = z.object({
 export type Habit = z.infer<typeof habitSchema>;
 export type NewHabit = Pick<Habit, "name" | "good" | "better" | "best"> &
   Pick<Habit["schedule"], "weekdays" | "repeatEveryWeeks" | "timeZone">;
+
+const mutationSchema = z.object({
+  mutationId: z.uuid(),
+  deviceToday: z.iso.date(),
+  timeZone: z.string().min(1),
+  todayChoice: z.enum(["Keep", "Remove"]).optional(),
+});
+export const editHabitSchema = mutationSchema.extend({
+  name: z.string(),
+  good: z.string(),
+  better: z.string(),
+  best: z.string(),
+  schedule: habitSchema.shape.schedule
+    .pick({ weekdays: true, repeatEveryWeeks: true })
+    .optional(),
+});
+export type HabitEdit = z.infer<typeof editHabitSchema>;
+export type HabitArchive = z.infer<typeof mutationSchema>;
 
 export const weekdays = [
   { value: 1, label: "Monday" },

@@ -11,7 +11,22 @@ public enum EntryResult
     Best = 4
 }
 
-public sealed record EntryEdit(DateOnly CalendarDate, EntryResult Result, DateTimeOffset EditedAt);
+public sealed record EntryEdit(DateOnly CalendarDate, EntryResult Result, DateTimeOffset EditedAt)
+{
+    internal static EntryEdit Parse(string date, WriteEntry input, TimeProvider clock)
+    {
+        var calendarDate = DeviceCalendar.ParseDate(date, nameof(date));
+        var today = DeviceCalendar.Today(input.DeviceToday, input.TimeZone, clock);
+        if (calendarDate > today)
+            throw new ArgumentException("Choose today or a past scheduled date.", nameof(date));
+        if (!Enum.TryParse<EntryResult>(input.Result, out var result) || !Enum.IsDefined(result) ||
+            input.Result != result.ToString())
+            throw new ArgumentException("Choose Good, Better, Best, Rest, or Clear.", nameof(input.Result));
+        if (input.EditedAt is not { } editedAt)
+            throw new ArgumentException("Include the edit timestamp.", nameof(input.EditedAt));
+        return new EntryEdit(calendarDate, result, editedAt);
+    }
+}
 
 public sealed class Entry
 {

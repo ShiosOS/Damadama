@@ -9,7 +9,7 @@ using NUnit.Framework;
 
 namespace Damadama.Protocol;
 
-internal enum ResourceKind { Collection, Member, Configuration }
+internal enum ResourceKind { Collection, Member, Archive, Configuration }
 internal sealed record ApiScenario(string Method, string Path, string Name, ResourceKind Kind, Func<ContractRun, Task> Exercise)
 {
     internal string Key => $"{Method} {Path}";
@@ -49,7 +49,8 @@ internal static class ApiContractAssertions
                 var allowed = scenario.Kind switch
                 {
                     ResourceKind.Collection => method is "GET" or "POST",
-                    ResourceKind.Member => method is "GET" or "PUT",
+                    ResourceKind.Member => method is "GET" or "PUT" || method == "PATCH" && path == "/api/habits/{id}",
+                    ResourceKind.Archive => method == "POST" && path == "/api/habits/{id}/archives",
                     ResourceKind.Configuration => method == "GET" && path == "/api/config",
                     _ => false
                 };

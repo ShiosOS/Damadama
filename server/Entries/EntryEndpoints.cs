@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Security.Claims;
 using Damadama.Habits;
 using Microsoft.EntityFrameworkCore;
@@ -25,22 +24,13 @@ public static class EntryEndpoints
             .ProducesProblem(503).RequireAuthorization();
     }
     private static async Task<IResult> SaveEntry(Guid id, string date, WriteEntry input,
-        ClaimsPrincipal user, HabitsDb db, TimeProvider clock, CancellationToken cancellationToken)
+        ClaimsPrincipal user, HabitHistory history, CancellationToken cancellationToken)
     {
         var owner = user.FindFirst("sub")!.Value;
-        var habit = await db.Habits.AsNoTracking().Include(h => h.Schedule)
-            .SingleOrDefaultAsync(h => h.Id == id && h.OwnerId == owner, cancellationToken);
-        if (habit is null) return Results.NotFound();
-
-        var edit = ReadEdit(date, input, clock);
-
-        var retained = await db.Entries.AnyAsync(e => e.HabitId == id && e.CalendarDate == edit.CalendarDate,
-            cancellationToken);
-        if (!retained && !ScheduleEligibility.IsScheduled(habit.Schedule, edit.CalendarDate))
-            throw new ArgumentException("This habit was not scheduled on that date.", nameof(date));
-
-        var saved = await EntryStore.Save(db, habit, edit, cancellationToken);
-        var representation = EntryResponse.From(saved.Entry, habit.Name);
+        var result = await history.SaveEntry(id, owner, date, input, cancellationToken);
+        if (result is null) return Results.NotFound();
+        var saved = result.Value.Outcome;
+        var representation = EntryResponse.From(saved.Entry, result.Value.HabitName);
         return saved switch
         {
             EntrySaveOutcome.Created => TypedResults.Created($"/api/habits/{id}/entries/{date}", representation),
@@ -53,7 +43,7 @@ public static class EntryEndpoints
     private static async Task<IResult> ReadEntries(string date, ClaimsPrincipal user, HabitsDb db,
         CancellationToken cancellationToken)
     {
-        var calendarDate = ParseDate(date, nameof(date));
+        var calendarDate = DeviceCalendar.ParseDate(date, nameof(date));
         var owner = user.FindFirst("sub")!.Value;
         var entries = await (from entry in db.Entries.AsNoTracking()
                              join habit in db.Habits on entry.HabitId equals habit.Id
@@ -69,43 +59,10 @@ public static class EntryEndpoints
         var habit = await db.Habits.AsNoTracking().SingleOrDefaultAsync(
             habit => habit.Id == id && habit.OwnerId == user.FindFirst("sub")!.Value, cancellationToken);
         if (habit is null) return Results.NotFound();
-        var calendarDate = ParseDate(date, nameof(date));
+        var calendarDate = DeviceCalendar.ParseDate(date, nameof(date));
         var entry = await db.Entries.AsNoTracking().SingleOrDefaultAsync(
             entry => entry.HabitId == id && entry.CalendarDate == calendarDate, cancellationToken);
         return entry is null ? Results.NotFound() : TypedResults.Ok(EntryResponse.From(entry, habit.Name));
     }
 
-    private static DateOnly ParseDate(string? value, string field)
-    {
-        if (!DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
-            throw new ArgumentException("Use a calendar date in YYYY-MM-DD format.", field);
-        return date;
-    }
-
-    private static EntryEdit ReadEdit(string date, WriteEntry input, TimeProvider clock)
-    {
-        var calendarDate = ParseDate(date, nameof(date));
-        var today = DeviceToday(input, clock);
-        if (calendarDate > today)
-            throw new ArgumentException("Choose today or a past scheduled date.", nameof(date));
-        if (!Enum.TryParse<EntryResult>(input.Result, out var result) || !Enum.IsDefined(result) ||
-            input.Result != result.ToString())
-            throw new ArgumentException("Choose Good, Better, Best, Rest, or Clear.", nameof(input.Result));
-        if (input.EditedAt is not { } editedAt)
-            throw new ArgumentException("Include the edit timestamp.", nameof(input.EditedAt));
-        return new EntryEdit(calendarDate, result, editedAt);
-    }
-
-    private static DateOnly DeviceToday(WriteEntry input, TimeProvider clock)
-    {
-        if (string.IsNullOrWhiteSpace(input.TimeZone) ||
-            !TimeZoneInfo.TryFindSystemTimeZoneById(input.TimeZone, out var zone) ||
-            !zone.HasIanaId && input.TimeZone != "UTC")
-            throw new ArgumentException("Use a valid IANA timezone from your device.", nameof(input.TimeZone));
-        var deviceToday = ParseDate(input.DeviceToday, nameof(input.DeviceToday));
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), zone).DateTime);
-        if (deviceToday != today)
-            throw new ArgumentException("Your device date has changed. Refresh and try again.", nameof(input.DeviceToday));
-        return today;
-    }
 }

@@ -21,6 +21,8 @@ const beforeBackend: Command[] = [
     "scripts/doctor.test.ts",
     "scripts/developer.test.ts",
     "scripts/check.test.ts",
+    "scripts/acceptance-results.test.ts",
+    "scripts/acceptance-browser.test.ts",
   ],
   ["node", "--test", "tests/Provider/*.test.mjs"],
   ["node", "--test", "ops/monitoring/monitor.test.mjs"],
@@ -48,6 +50,7 @@ const beforeBackend: Command[] = [
   ],
   ["dotnet", "build", "--no-restore", "--artifacts-path", ".audit/check-build"],
   ["dotnet", "format", "--no-restore", "--verify-no-changes"],
+  ["bun", "test", "scripts/acceptance-native.test.ts"],
   [
     "bun",
     "test",
@@ -90,7 +93,7 @@ const steps: CheckStep[] = [
       "--artifacts-path",
       ".audit/check-build",
       "--logger",
-      "trx",
+      "trx;LogFileName=backend.trx",
       "--results-directory",
       ".audit/TestResults",
     ],
@@ -127,6 +130,7 @@ export async function runCheck(options: {
     if (step.kind === "command") {
       await requireSuccess(step.argv);
     } else {
+      await rm(join(root, ".audit/TestResults/backend.trx"), { force: true });
       await rm(join(root, ".audit/receiver-console-fixture.json"), {
         force: true,
       });
@@ -137,6 +141,11 @@ export async function runCheck(options: {
         "ops/diagnostics/receiver.test.mjs",
         "ops/diagnostics/receiver-handshake.test.mjs",
       ]);
+      const { requireCompleteBackendResults } =
+        await import("./acceptance-results");
+      requireCompleteBackendResults(
+        join(root, ".audit/TestResults/backend.trx"),
+      );
     }
   }
 }

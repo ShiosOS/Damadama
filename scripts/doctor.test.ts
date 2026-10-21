@@ -1,4 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
+import * as childProcess from "node:child_process";
+import { once } from "node:events";
+import { readFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -445,32 +448,49 @@ describe("real operating-system effects", () => {
     ).toEqual({ kind: "missing" });
   });
 
-  test("bounds real child time and stdout/stderr output", async () => {
-    expect(
-      await captureCommand(
-        [
-          process.execPath,
-          "--no-env-file",
-          "-e",
-          "setTimeout(() => {}, 30000)",
-        ],
-        { timeoutMs: 100 },
-      ),
-    ).toEqual({ kind: "timeout" });
-    for (const stream of ["stdout", "stderr"]) {
-      const result = await captureCommand(
-        [
-          process.execPath,
-          "--no-env-file",
-          "-e",
-          `process.${stream}.write('${secret}'.repeat(1000))`,
-        ],
-        { maxBytes: 128 },
-      );
-      expect(result).toEqual({ kind: "output-limit" });
-      expect(JSON.stringify(result)).not.toContain(secret);
-    }
-  });
+  test.each(["timeout", "stdout", "stderr"])(
+    "waits for a real child to exit and release its working directory after %s",
+    async (limit) => {
+      const directory = await mkdtemp(join(tmpdir(), "damadama-doctor-child-"));
+      const marker = join(directory, "pid.txt");
+      const observation = spyOn(childProcess, "spawn");
+      let child: childProcess.ChildProcess | undefined;
+      try {
+        let output = "";
+        let expected: Capture = { kind: "timeout" };
+        if (limit !== "timeout") {
+          output = `process.${limit}.write('${secret}'.repeat(1000));`;
+          expected = { kind: "output-limit" };
+        }
+        const result = await captureCommand(
+          [
+            process.execPath,
+            "--no-env-file",
+            "-e",
+            `process.chdir(${JSON.stringify(directory)}); require('node:fs').writeFileSync(${JSON.stringify(marker)}, String(process.pid)); ${output} setInterval(() => {}, 30000);`,
+          ],
+          { timeoutMs: 1000, maxBytes: 128 },
+        );
+        const observed = observation.mock.results[0]?.value;
+        if (!(observed instanceof childProcess.ChildProcess)) {
+          throw new Error("Expected a real spawned child process.");
+        }
+        child = observed;
+        expect(observation).toHaveBeenCalledTimes(1);
+        expect(result).toEqual(expected);
+        expect(JSON.stringify(result)).not.toContain(secret);
+        expect(readFileSync(marker, "utf8")).toBe(String(child.pid));
+        expect(child.signalCode).toBe("SIGKILL");
+        await rm(directory, { recursive: true, force: true });
+      } finally {
+        observation.mockRestore();
+        if (child?.exitCode === null && child.signalCode === null) {
+          await once(child, "close");
+        }
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+  );
 
   test("real CLI returns usage exit 2 without leaking arbitrary arguments", async () => {
     const child = Bun.spawn(

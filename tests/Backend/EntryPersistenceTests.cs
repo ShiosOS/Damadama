@@ -252,10 +252,10 @@ public class EntryPersistenceTests
         Task<EntrySaveOutcome>? second = null;
         try
         {
-            first = EntryStore.Save(firstDb, habit, new EntryEdit(Day, winnerFirst ? winnerResult : loserResult,
+            first = Save(firstDb, habit, new EntryEdit(Day, winnerFirst ? winnerResult : loserResult,
                 winnerFirst ? winnerTime : Instant), timeout.Token);
             await AssertBlockedBy(firstPid, gatePid);
-            second = EntryStore.Save(secondDb, habit, new EntryEdit(Day, winnerFirst ? loserResult : winnerResult,
+            second = Save(secondDb, habit, new EntryEdit(Day, winnerFirst ? loserResult : winnerResult,
                 winnerFirst ? Instant : winnerTime), timeout.Token);
             await AssertBlockedBy(secondPid, firstPid);
             Assert.Multiple(() =>
@@ -330,7 +330,19 @@ public class EntryPersistenceTests
     private async Task<Entry> Save(Habit habit, DateOnly date, EntryResult result, DateTimeOffset editedAt)
     {
         await using var db = new HabitsDb(options);
-        return (await EntryStore.Save(db, habit, new EntryEdit(date, result, editedAt), CancellationToken.None)).Entry;
+        return (await Save(db, habit, new EntryEdit(date, result, editedAt), CancellationToken.None)).Entry;
+    }
+
+    private static async Task<EntrySaveOutcome> Save(HabitsDb db, Habit habit, EntryEdit edit, CancellationToken ct)
+    {
+        var result = await new HabitHistory(db, new EntryClock()).SaveEntry(habit.Id, habit.OwnerId,
+            edit.CalendarDate.ToString("yyyy-MM-dd"), new(edit.Result.ToString(), edit.EditedAt, "2026-10-15", "UTC"), ct);
+        return result?.Outcome ?? throw new InvalidOperationException("The owned test habit is missing.");
+    }
+
+    private sealed class EntryClock : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => Instant;
     }
 
     private async Task Execute(string sql)

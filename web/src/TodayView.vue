@@ -22,6 +22,7 @@ type Props = {
   getToken: () => Promise<string | null>;
 };
 const props = defineProps<Props>();
+const emit = defineEmits<{ committed: [] }>();
 type TodayState =
   | { kind: "loading"; date: string }
   | { kind: "ready"; date: string; habits: Habit[]; entries: Entry[] }
@@ -130,6 +131,7 @@ function acceptEntry(entry: Entry): void {
       entry,
     ],
   };
+  emit("committed");
 }
 
 function signInRequired(): void {
@@ -227,7 +229,11 @@ async function refreshAfterCreate(): ReturnType<
   return () => isCurrentLoad(load) && load.date === requestedDate();
 }
 
-defineExpose({ refreshAfterCreate } satisfies TodayHandle);
+async function refreshAfterChange(): Promise<void> {
+  await refresh();
+}
+
+defineExpose({ refreshAfterCreate, refreshAfterChange } satisfies TodayHandle);
 
 watch(
   () => ({

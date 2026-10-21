@@ -1,4 +1,6 @@
 import { spawn } from "bun";
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
 
 const prettierPaths = [
   "web",
@@ -70,7 +72,7 @@ function developerCommands(target: string): string[][] | undefined {
       "--artifacts-path",
       ".audit/check-build",
       "--logger",
-      "trx",
+      "trx;LogFileName=backend.trx",
       "--results-directory",
       ".audit/TestResults",
     ]);
@@ -98,21 +100,53 @@ function developerCommands(target: string): string[][] | undefined {
   return commands;
 }
 
-if (import.meta.main) {
-  const commands = developerCommands(process.argv[2] ?? "");
-  if (!commands || process.argv.length !== 3) {
-    console.error(
+export async function runDeveloper(options: {
+  target: string;
+  root: string;
+  execute?: (command: string[], root: string) => Promise<number>;
+}): Promise<number> {
+  const commands = developerCommands(options.target);
+  if (!commands)
+    throw new RangeError(
       "Use bun scripts/developer.ts format|format:check|test:backend|test:browser.",
     );
-    process.exit(2);
-  }
   for (const command of commands) {
+    const backend = command[0] === "dotnet" && command[1] === "test";
+    const report = join(options.root, ".audit/TestResults/backend.trx");
+    if (backend) await rm(report, { force: true });
     console.info(`Running ${command.join(" ")}`);
-    const exitCode = await spawn(command, {
-      stdin: "inherit",
-      stdout: "inherit",
-      stderr: "inherit",
-    }).exited;
-    if (exitCode !== 0) process.exit(exitCode);
+    let exitCode: number;
+    if (options.execute)
+      exitCode = await options.execute(command, options.root);
+    else
+      exitCode = await spawn(command, {
+        cwd: options.root,
+        stdin: "inherit",
+        stdout: "inherit",
+        stderr: "inherit",
+      }).exited;
+    if (exitCode !== 0) return exitCode;
+    if (backend) {
+      const { requireCompleteBackendResults } =
+        await import("./acceptance-results");
+      requireCompleteBackendResults(report);
+    }
+  }
+  return 0;
+}
+
+if (import.meta.main) {
+  try {
+    if (process.argv.length !== 3)
+      throw new RangeError(
+        "Use bun scripts/developer.ts format|format:check|test:backend|test:browser.",
+      );
+    process.exitCode = await runDeveloper({
+      target: process.argv[2] ?? "",
+      root: process.cwd(),
+    });
+  } catch (error) {
+    console.error(error);
+    process.exitCode = error instanceof RangeError ? 2 : 1;
   }
 }

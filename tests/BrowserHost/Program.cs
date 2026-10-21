@@ -15,8 +15,8 @@ await using (var seed = new HabitsDb(new DbContextOptionsBuilder<HabitsDb>()
         [7], 1, "America/New_York"), "entries-retained-account", TestApp.CreationInstant);
     seed.Habits.Add(retained);
     await seed.SaveChangesAsync();
-    await EntryStore.Save(seed, retained,
-        new EntryEdit(new DateOnly(2026, 1, 4), EntryResult.Good, TestApp.CreationInstant), CancellationToken.None);
+    await new HabitHistory(seed, new FixtureClock()).SaveEntry(retained.Id, retained.OwnerId, "2026-01-04",
+        new WriteEntry("Good", TestApp.CreationInstant, "2026-01-05", "UTC"), CancellationToken.None);
     await seed.Database.ExecuteSqlInterpolatedAsync($"""
         UPDATE "InitialSchedules" SET "Weekdays" = ARRAY[3] WHERE "HabitId" = {retained.Id};
         UPDATE "Habits" SET "Good" = 'new good', "Better" = 'new better', "Best" = 'new best' WHERE "Id" = {retained.Id};
@@ -79,7 +79,23 @@ var fixture = JsonSerializer.Serialize(new
     entriesMobile = app.Token("entries-mobile-account"),
     entriesTravel = app.Token("entries-travel-account"),
     entriesRetained = app.Token("entries-retained-account"),
-    entriesCreation = app.Token("entries-creation-account")
+    entriesCreation = app.Token("entries-creation-account"),
+    historyEdit = app.Token("history-edit-account"),
+    historySchedule = app.Token("history-schedule-account"),
+    historyArchive = app.Token("history-archive-account"),
+    historyArchiveRemove = app.Token("history-archive-remove-account"),
+    historyRetry = app.Token("history-retry-account"),
+    historyAccount = app.Token("history-account-change-account"),
+    historyMobile = app.Token("history-mobile-account"),
+    heatmap = app.Token("heatmap-account"),
+    heatmapReload = app.Token("heatmap-reload-account"),
+    heatmapLoading = app.Token("heatmap-loading-account"),
+    heatmapError = app.Token("heatmap-error-account"),
+    heatmapAccount = app.Token("heatmap-account-change-account"),
+    heatmapDate = app.Token("heatmap-date-account"),
+    heatmapTravel = app.Token("heatmap-travel-account"),
+    heatmapMobile = app.Token("heatmap-mobile-account"),
+    heatmapHistory = app.Token("heatmap-history-account")
 });
 await File.WriteAllTextAsync("tests/Browser/fixture.json", fixture);
 if (Directory.Exists(".audit/browser-build"))
@@ -90,3 +106,8 @@ var stopped = new TaskCompletionSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; stopped.TrySetResult(); };
 System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += _ => stopped.TrySetResult();
 await stopped.Task;
+
+sealed class FixtureClock : TimeProvider
+{
+    public override DateTimeOffset GetUtcNow() => TestApp.CreationInstant;
+}

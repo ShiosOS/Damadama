@@ -73,5 +73,22 @@ public class MigrationTests
             Assert.That(response.Schedule.CreationDate, Is.EqualTo(new DateOnly(2026, 1, 4)));
             Assert.That(response.Schedule.FirstWeekMonday, Is.EqualTo(new DateOnly(2025, 12, 29)));
         });
+        await using (var connection = new NpgsqlConnection(database.GetConnectionString()))
+        {
+            await connection.OpenAsync();
+            await using var legacyCreate = new NpgsqlCommand("""
+                INSERT INTO "Habits" ("Id", "OwnerId", "Name", "Good", "Better", "Best", "CreatedAt")
+                VALUES ('9452dcec-8cbe-4d2a-b94a-8701f4114858', 'legacy-writer', 'Legacy create',
+                    '5', '15', '30', '2026-01-05T00:30:00Z');
+                INSERT INTO "InitialSchedules" ("HabitId", "Weekdays", "RepeatEveryWeeks", "TimeZone", "CreationDate", "FirstWeekMonday")
+                VALUES ('9452dcec-8cbe-4d2a-b94a-8701f4114858', ARRAY[1,7], 1, 'UTC', '2026-01-05', '2026-01-05');
+                """, connection);
+            await legacyCreate.ExecuteNonQueryAsync();
+        }
+        var history = await new HabitHistory(fresh, TimeProvider.System).ReadOwnedRange("legacy-writer",
+            new(new(2026, 1, 5), new(2026, 1, 5)), CancellationToken.None);
+        Assert.That(history.Records.Count, Is.EqualTo(1));
+        Assert.That(history.Records[0].Scheduled, Is.True);
+        Assert.That(await fresh.HabitChanges.CountAsync(), Is.Zero);
     }
 }

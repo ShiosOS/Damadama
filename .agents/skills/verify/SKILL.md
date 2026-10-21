@@ -42,6 +42,8 @@ The [native wrapper](native-session.mjs) requires Linux `/proc`, `ps`, `lsof` an
 
 [The skill config](playwright.config.mjs) reuses canonical startup, readiness, serial driving and browser settings. It selects `habits.spec.ts`, `today.spec.ts`, `entries.spec.ts` and `accessibility.spec.ts`, plus [focused observations](observations.spec.mjs) for cancelled-draft retention with immediate/reloaded values, initial unfiltered saved-list loading/authentication refusal and the actual past-date `Today` button. It stops after the first failure and bounds the invocation to five minutes. It adds no application server or fixture account. The creation observation uses the existing `performance` account because the performance spec is excluded from this invocation. The other observations use the empty `other` account without writing rows.
 
+Keep the canonical acceptance reporter when changing this config's reporter list. It rejects skipped, expected-failure, retried and unexecuted cases. The inherited `forbidOnly` rejects focused tests. [The runner probes](../../../scripts/acceptance-browser.test.ts) exercise both configurations without application servers. They prove the execution policy, not the mapped application journeys. Compatibility's project-routing skips and manual Provider checks are separate from this canonical completeness policy.
+
 The provider branch of session access needs its separately authorized workflow. Read the selected spec before attributing results. A routed failure response proves the UI's refusal/retry handling; it does not prove a real storage outage. Seeding through the real API establishes a precondition and does not replace driving the feature under test.
 
 ## Evidence

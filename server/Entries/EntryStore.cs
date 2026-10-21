@@ -1,15 +1,13 @@
-using System.Data;
 using Damadama.Habits;
 using Microsoft.EntityFrameworkCore;
 
 namespace Damadama.Entries;
 
-public static class EntryStore
+internal static class EntryStore
 {
-    public static async Task<EntrySaveOutcome> Save(HabitsDb db, Habit habit, EntryEdit edit,
+    internal static async Task<EntrySaveOutcome> SaveLocked(HabitsDb db, Habit habit, EntryEdit edit,
         CancellationToken cancellationToken)
     {
-        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
         var inserted = await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "DailyEntries" ("HabitId", "CalendarDate", "Result", "EditedAtTicks", "Good", "Better", "Best")
             VALUES ({habit.Id}, {edit.CalendarDate}, {(int)edit.Result}, {edit.EditedAt.UtcTicks},
@@ -28,7 +26,6 @@ public static class EntryStore
         // A separate Read Committed statement sees a conflicting insert after its transaction commits.
         var winner = await db.Entries.AsNoTracking()
             .SingleAsync(entry => entry.HabitId == habit.Id && entry.CalendarDate == edit.CalendarDate, cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
         if (inserted == 1) return new EntrySaveOutcome.Created(winner);
         return winner.EditedAt.UtcTicks == edit.EditedAt.UtcTicks && winner.Result == edit.Result
             ? new EntrySaveOutcome.Accepted(winner)
