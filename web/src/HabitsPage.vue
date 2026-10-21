@@ -150,6 +150,8 @@ async function save(): Promise<void> {
 }
 
 function acceptHabit(saved: Habit): void {
+  const current = habits.value?.find((habit) => habit.id === saved.id);
+  if (!current || saved.revision < current.revision) return;
   habits.value = (habits.value ?? []).map((habit) =>
     habit.id === saved.id ? saved : habit,
   );
