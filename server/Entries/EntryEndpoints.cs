@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Security.Claims;
 using Damadama.Habits;
 using Microsoft.EntityFrameworkCore;
@@ -44,7 +43,7 @@ public static class EntryEndpoints
     private static async Task<IResult> ReadEntries(string date, ClaimsPrincipal user, HabitsDb db,
         CancellationToken cancellationToken)
     {
-        var calendarDate = ParseDate(date, nameof(date));
+        var calendarDate = DeviceCalendar.ParseDate(date, nameof(date));
         var owner = user.FindFirst("sub")!.Value;
         var entries = await (from entry in db.Entries.AsNoTracking()
                              join habit in db.Habits on entry.HabitId equals habit.Id
@@ -60,31 +59,10 @@ public static class EntryEndpoints
         var habit = await db.Habits.AsNoTracking().SingleOrDefaultAsync(
             habit => habit.Id == id && habit.OwnerId == user.FindFirst("sub")!.Value, cancellationToken);
         if (habit is null) return Results.NotFound();
-        var calendarDate = ParseDate(date, nameof(date));
+        var calendarDate = DeviceCalendar.ParseDate(date, nameof(date));
         var entry = await db.Entries.AsNoTracking().SingleOrDefaultAsync(
             entry => entry.HabitId == id && entry.CalendarDate == calendarDate, cancellationToken);
         return entry is null ? Results.NotFound() : TypedResults.Ok(EntryResponse.From(entry, habit.Name));
-    }
-
-    private static DateOnly ParseDate(string? value, string field)
-    {
-        if (!DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
-            throw new ArgumentException("Use a calendar date in YYYY-MM-DD format.", field);
-        return date;
-    }
-
-    internal static EntryEdit ReadEdit(string date, WriteEntry input, TimeProvider clock)
-    {
-        var calendarDate = ParseDate(date, nameof(date));
-        var today = DeviceCalendar.Today(input.DeviceToday, input.TimeZone, clock);
-        if (calendarDate > today)
-            throw new ArgumentException("Choose today or a past scheduled date.", nameof(date));
-        if (!Enum.TryParse<EntryResult>(input.Result, out var result) || !Enum.IsDefined(result) ||
-            input.Result != result.ToString())
-            throw new ArgumentException("Choose Good, Better, Best, Rest, or Clear.", nameof(input.Result));
-        if (input.EditedAt is not { } editedAt)
-            throw new ArgumentException("Include the edit timestamp.", nameof(input.EditedAt));
-        return new EntryEdit(calendarDate, result, editedAt);
     }
 
 }

@@ -1,22 +1,10 @@
-using System.Data;
 using Damadama.Habits;
 using Microsoft.EntityFrameworkCore;
 
 namespace Damadama.Entries;
 
-public static class EntryStore
+internal static class EntryStore
 {
-    public static async Task<EntrySaveOutcome> Save(HabitsDb db, Habit habit, EntryEdit edit,
-        CancellationToken cancellationToken)
-    {
-        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
-        var current = await HabitHistory.LockOwned(db, habit.Id, habit.OwnerId, cancellationToken)
-            ?? throw new InvalidOperationException("The owned habit no longer exists.");
-        var saved = await SaveLocked(db, current, edit, cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return saved;
-    }
-
     internal static async Task<EntrySaveOutcome> SaveLocked(HabitsDb db, Habit habit, EntryEdit edit,
         CancellationToken cancellationToken)
     {

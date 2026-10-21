@@ -22,7 +22,7 @@ public sealed class HabitHistory(HabitsDb db, TimeProvider clock) : IHistoryRead
     private async Task<HabitMutationOutcome> Mutate(Guid id, string owner, Command command, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        var habit = await LockOwned(db, id, owner, ct);
+        var habit = await LockOwned(id, owner, ct);
         if (habit is null) return new HabitMutationOutcome.Missing();
         if (command.Id == Guid.Empty)
             throw new ArgumentException("Include a nonempty mutation identifier.", "mutationId");
@@ -86,9 +86,9 @@ public sealed class HabitHistory(HabitsDb db, TimeProvider clock) : IHistoryRead
         WriteEntry input, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
-        var habit = await LockOwned(db, id, owner, ct);
+        var habit = await LockOwned(id, owner, ct);
         if (habit is null) return null;
-        var edit = EntryEndpoints.ReadEdit(date, input, clock);
+        var edit = EntryEdit.Parse(date, input, clock);
         var retained = await db.Entries.AnyAsync(entry => entry.HabitId == id && entry.CalendarDate == edit.CalendarDate, ct);
         if (!retained && !new HabitTimeline(habit, await Changes(id, ct)).CanStartEntry(edit.CalendarDate))
             throw new ArgumentException("This habit was not scheduled on that date.", nameof(date));
@@ -141,7 +141,7 @@ public sealed class HabitHistory(HabitsDb db, TimeProvider clock) : IHistoryRead
         return new(range, result);
     }
 
-    internal static async Task<Habit?> LockOwned(HabitsDb db, Guid id, string owner, CancellationToken ct)
+    private async Task<Habit?> LockOwned(Guid id, string owner, CancellationToken ct)
     {
         var locked = await db.Database.SqlQuery<Guid>($"""
             SELECT "Id" AS "Value" FROM "Habits" WHERE "Id" = {id} AND "OwnerId" = {owner} FOR UPDATE
