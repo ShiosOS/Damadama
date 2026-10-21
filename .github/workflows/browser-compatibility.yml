@@ -43,6 +43,28 @@ jobs:
       - run: bun x --no-install vite build --config tests/Browser/compatibility.vite.config.ts
       - run: node node_modules/@playwright/test/cli.js install --with-deps chromium firefox webkit
       - run: bun run browser:compatibility:${{ matrix.mode }}
+      - name: Observe twenty fresh accounts at normal CPU
+        if: matrix.mode == 'verify'
+        id: normal
+        continue-on-error: true
+        run: node .github/diagnostics/compatibility-cpu-probe.mjs 1
+      - name: Observe twenty fresh accounts at eightfold CPU throttling
+        if: matrix.mode == 'verify'
+        id: throttled
+        continue-on-error: true
+        run: node .github/diagnostics/compatibility-cpu-probe.mjs 8
+      - if: always() && matrix.mode == 'verify'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: compatibility-cpu-observations-${{ github.sha }}
+          path: |
+            .audit/compatibility-cpu-probe/rate-1.jsonl
+            .audit/compatibility-cpu-probe/rate-8.jsonl
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+      - if: matrix.mode == 'verify' && (steps.normal.outcome != 'success' || steps.throttled.outcome != 'success')
+        run: exit 1
       - if: always() && matrix.mode == 'capture'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
