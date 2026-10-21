@@ -162,6 +162,62 @@ void test("creation and exact replay accept their documented statuses", async ()
   assert.deepEqual(await api.saveEntry(habitId, date, input), entry);
 });
 
+void test("one authenticated day read contains scheduled habits and retained entries", async () => {
+  const requests: { path: string; authorization: string | null }[] = [];
+  const day = { date, habits: [editedHabit], entries: [entry] };
+  globalThis.fetch = Object.assign(
+    async (url: Parameters<typeof fetch>[0], options?: RequestInit) => {
+      requests.push({
+        path: url instanceof Request ? url.url : url.toString(),
+        authorization: new Headers(options?.headers).get("Authorization"),
+      });
+      return Response.json(day);
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  assert.deepEqual(await api.day(date), day);
+  assert.deepEqual(requests, [
+    { path: `/api/habit-days/${date}`, authorization: "Bearer token" },
+  ]);
+});
+
+for (const day of [
+  { date: "2026-01-03", habits: [], entries: [] },
+  { date, habits: [], entries: [{ ...entry, calendarDate: "2026-01-03" }] },
+  { date, habits: [editedHabit, editedHabit], entries: [] },
+  { date, habits: [], entries: [entry, entry] },
+  { date, habits: null, entries: [] },
+  { date, habits: [], entries: null },
+]) {
+  void test(`a day read rejects inconsistent or malformed data ${JSON.stringify(day)}`, async () => {
+    respond(day);
+    await assert.rejects(api.day(date), { status: 502 });
+  });
+}
+
+void test("day reads preserve media status refusal and session boundaries", async () => {
+  const day = { date, habits: [], entries: [] };
+  for (const [status, headers] of [
+    [201, {}],
+    [200, { "Content-Type": "text/plain" }],
+  ] satisfies [number, Record<string, string>][]) {
+    respond(day, status, headers);
+    await assert.rejects(api.day(date), { status: 502 });
+  }
+  respond({ title: "Temporarily unavailable.", traceId: "day-read-01" }, 503);
+  await assert.rejects(api.day(date), {
+    status: 503,
+    message: "Temporarily unavailable. Support reference: day-read-01.",
+  });
+  globalThis.fetch = Object.assign(
+    async () => {
+      throw new Error("Unexpected request");
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  await assert.rejects(habitsApi(async () => null).day(date), { status: 401 });
+});
+
 void test("409 adopts a validated current entry in the same request", async () => {
   const current = { ...entry, result: "Best" };
   let requests = 0;

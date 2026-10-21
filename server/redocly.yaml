@@ -60,6 +60,12 @@ rules:
       filterInParentKeys: [/api/heatmaps]
     assertions:
       disallowed: [post, put, patch, delete, head, options, trace]
+  rule/habit-day-read-only:
+    subject:
+      type: PathItem
+      filterInParentKeys: ["/api/habit-days/{date}"]
+    assertions:
+      disallowed: [post, put, patch, delete, head, options, trace]
   rule/config-singleton:
     subject:
       type: PathItem
@@ -70,7 +76,7 @@ rules:
     subject:
       type: Paths
     assertions:
-      pattern: '^/api/(config|habits(/\{id\}(/entries/\{date\}|/archives)?)?|entries|heatmaps)$'
+      pattern: '^/api/(config|habits(/\{id\}(/entries/\{date\}|/archives)?)?|entries|heatmaps|habit-days/\{date\})$'
   rule/created-location:
     subject:
       type: Response
@@ -98,7 +104,7 @@ rules:
     where:
       - subject:
           type: PathItem
-          matchParentKeys: "^/api/(habits|entries|heatmaps)"
+          matchParentKeys: "^/api/(habits|entries|heatmaps|habit-days)"
         assertions:
           defined: true
     subject:
@@ -122,7 +128,7 @@ rules:
     where:
       - subject:
           type: PathItem
-          matchParentKeys: "^/api/(habits|entries|heatmaps)"
+          matchParentKeys: "^/api/(habits|entries|heatmaps|habit-days)"
         assertions:
           defined: true
     subject:

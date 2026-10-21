@@ -34,6 +34,7 @@ assert.equal(valid.status, 0, valid.output);
 const habits = "/api/habits";
 const member = "/api/habits/{id}";
 const entry = "/api/habits/{id}/entries/{date}";
+const habitDay = "/api/habit-days/{date}";
 const mutations = [
   [
     "struct",
@@ -181,6 +182,18 @@ const mutations = [
     },
   ],
   [
+    "rule/habit-day-read-only",
+    (doc) => {
+      doc.paths[habitDay].put = doc.paths[entry].put;
+    },
+  ],
+  [
+    "rule/resource-paths",
+    (doc) => {
+      doc.paths["/api/habit-days/{date}/entries"] = doc.paths[habitDay];
+    },
+  ],
+  [
     "rule/config-singleton",
     (doc) => {
       doc.paths["/api/config"].put = doc.paths[entry].put;
@@ -233,6 +246,18 @@ const mutations = [
     "rule/private-unauthorized",
     (doc) => {
       delete doc.paths["/api/heatmaps"].get.responses[401];
+    },
+  ],
+  [
+    "rule/private-security",
+    (doc) => {
+      delete doc.paths[habitDay].get.security;
+    },
+  ],
+  [
+    "rule/private-unauthorized",
+    (doc) => {
+      delete doc.paths[habitDay].get.responses[401];
     },
   ],
 ];
@@ -355,6 +380,7 @@ for (const [path, name, validValue, invalidValue] of [
   [member, "id", "be3990ed-527d-451e-8a11-981648333ac9", "123"],
   [entry, "date", "2026-01-04", "2026-02-30"],
   [habits, "scheduledOn", "2026-01-04", "2026-1-4"],
+  [habitDay, "date", "2026-01-04", "2026-02-30"],
 ]) {
   const index = document.paths[path].get.parameters.findIndex(
     (parameter) => parameter.name === name,
@@ -375,6 +401,29 @@ for (const [path, name, validValue, invalidValue] of [
     `Parameter schema accepted invalid ${name}`,
   );
 }
+const validateDay = validator(
+  "paths",
+  habitDay,
+  "get",
+  "responses",
+  "200",
+  "content",
+  "application/json",
+  "schema",
+);
+const validDay = { date: "2026-01-04", habits: [], entries: [] };
+assert.equal(validateDay(validDay), true, ajv.errorsText(validateDay.errors));
+for (const key of Object.keys(validDay)) {
+  const missing = { ...validDay };
+  delete missing[key];
+  assert.equal(
+    validateDay(missing),
+    false,
+    `Day schema did not require ${key}`,
+  );
+  assert.equal(validateDay({ ...validDay, [key]: null }), false);
+}
+assert.equal(validateDay({ ...validDay, date: "2026-02-30" }), false);
 if (!smoke) {
   const observations = JSON.parse(
     await readFile(`${directory}/responses.json`, "utf8"),

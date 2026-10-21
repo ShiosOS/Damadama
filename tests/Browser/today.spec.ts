@@ -4,7 +4,7 @@ import { habitSchema, type Habit } from "../../web/src/habits.schema";
 
 const instant = new Date("2026-01-05T00:30:00Z");
 const travelInstant = new Date("2026-01-12T00:30:00Z");
-const scheduledPath = "**/api/habits?scheduledOn=*";
+const dayPath = "**/api/habit-days/*";
 const today = (page: Page): Locator =>
   page.getByRole("region", { name: "Today", exact: true });
 const walking = (page: Page): Locator =>
@@ -168,7 +168,7 @@ test("Today loading waits for a real scheduled read without showing an empty res
   const received = Promise.withResolvers<void>();
   const release = Promise.withResolvers<void>();
   let reads = 0;
-  await page.route(scheduledPath, async (route) => {
+  await page.route(dayPath, async (route) => {
     reads++;
     const response = await route.fetch();
     expect(response.status()).toBe(200);
@@ -200,7 +200,7 @@ test("a Today service error stays distinct from empty and Retry reads the server
   await seed(page, "todayError");
   await page.clock.install({ time: instant });
   let reads = 0;
-  await page.route(scheduledPath, async (route) => {
+  await page.route(dayPath, async (route) => {
     reads++;
     if (reads > 1) return route.continue();
     await route.fulfill({
@@ -298,7 +298,7 @@ for (const outcome of ["Success", "Error"]) {
     const received = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     let reads = 0;
-    await page.route(scheduledPath, async (route) => {
+    await page.route(dayPath, async (route) => {
       if (++reads > 1) return route.continue();
       const response = await route.fetch();
       received.resolve();
@@ -319,7 +319,7 @@ for (const outcome of ["Success", "Error"]) {
         .click();
       await expect(today(page)).toContainText("Nothing scheduled for today.");
       const acknowledgement = page.waitForResponse((response) =>
-        response.url().includes("/api/habits?scheduledOn=2026-01-04"),
+        response.url().includes("/api/habit-days/2026-01-04"),
       );
       release.resolve();
       await (await acknowledgement).finished();
@@ -342,7 +342,7 @@ for (const outcome of ["Success", "Error"]) {
     const received = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     let reads = 0;
-    await page.route(scheduledPath, async (route) => {
+    await page.route(dayPath, async (route) => {
       if (++reads > 1) return route.continue();
       const response = await route.fetch();
       received.resolve();
@@ -360,7 +360,7 @@ for (const outcome of ["Success", "Error"]) {
     artificialClockMismatch.add(page);
     await page.clock.setSystemTime(new Date("2026-01-05T12:00:00Z"));
     const acknowledgement = page.waitForResponse((response) =>
-      response.url().includes("/api/habits?scheduledOn=2026-01-04"),
+      response.url().includes("/api/habit-days/2026-01-04"),
     );
     release.resolve();
     await (await acknowledgement).finished();
@@ -525,7 +525,7 @@ test("a read finishing after sign-out cannot restore Today or start midnight rea
   const received = Promise.withResolvers<void>();
   const release = Promise.withResolvers<void>();
   let reads = 0;
-  await page.route(scheduledPath, async (route) => {
+  await page.route(dayPath, async (route) => {
     reads++;
     const response = await route.fetch();
     received.resolve();
@@ -538,7 +538,7 @@ test("a read finishing after sign-out cannot restore Today or start midnight rea
     .getByRole("button", { name: "Fixture sign out", exact: true })
     .click();
   const acknowledgement = page.waitForResponse((response) =>
-    response.url().includes("/api/habits?scheduledOn="),
+    response.url().includes("/api/habit-days/"),
   );
   release.resolve();
   await (await acknowledgement).finished();

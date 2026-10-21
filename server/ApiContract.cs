@@ -74,7 +74,7 @@ public static class ApiContract
                 if (type == typeof(CreateHabit) || type == typeof(WriteEntry) || type == typeof(HabitResponse) ||
                     type == typeof(EntryResponse) || type == typeof(InitialSchedule) || type == typeof(ApplicationConfig) ||
                     type == typeof(EditHabit) || type == typeof(ArchiveHabit) || type == typeof(Recurrence) ||
-                    type == typeof(HeatmapResponse) || type == typeof(HeatmapDate))
+                    type == typeof(HeatmapResponse) || type == typeof(HeatmapDate) || type == typeof(HabitDayResponse))
                 {
                     schema.Required = schema.Properties?.Keys.ToHashSet() ?? [];
                     if (type == typeof(EditHabit)) schema.Required.ExceptWith(["schedule", "todayChoice"]);
