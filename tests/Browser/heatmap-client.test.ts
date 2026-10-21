@@ -1,7 +1,6 @@
 import { afterEach, test } from "node:test";
 import assert from "node:assert/strict";
-import { ApiError } from "../../web/src/habits";
-import { heatmapApi } from "../../web/src/heatmap";
+import { ApiError, habitsApi } from "../../web/src/habits";
 import { heatmapSchema, type Heatmap } from "../../web/src/heatmap.schema";
 
 const originalFetch = globalThis.fetch;
@@ -54,7 +53,7 @@ void test("a heatmap read sends the device anchor with its authenticated request
   );
 
   assert.deepEqual(
-    await heatmapApi(async () => "owner-token")(anchor),
+    await habitsApi(async () => "owner-token").heatmap(anchor),
     heatmap,
   );
   assert.deepEqual(requests, [
@@ -76,7 +75,7 @@ void test("an absent session refuses before sending a heatmap request", async ()
   );
 
   await assert.rejects(
-    heatmapApi(async () => null)(anchor),
+    habitsApi(async () => null).heatmap(anchor),
     (error: unknown) => error instanceof ApiError && error.status === 401,
   );
   assert.equal(requests, 0);
@@ -149,7 +148,7 @@ for (const [label, malformed] of [
   void test(`the response boundary refuses ${label}`, async () => {
     respond(malformed(emptyHeatmap()));
     await assert.rejects(
-      heatmapApi(async () => "token")(anchor),
+      habitsApi(async () => "token").heatmap(anchor),
       (error: unknown) => error instanceof ApiError && error.status === 502,
     );
   });
@@ -158,7 +157,10 @@ for (const [label, malformed] of [
 void test("a structurally valid response for another anchor is refused", async () => {
   respond(emptyHeatmap());
   await assert.rejects(
-    heatmapApi(async () => "token")({ ...anchor, deviceToday: "2026-01-05" }),
+    habitsApi(async () => "token").heatmap({
+      ...anchor,
+      deviceToday: "2026-01-05",
+    }),
     (error: unknown) => error instanceof ApiError && error.status === 502,
   );
 });
@@ -170,7 +172,7 @@ void test("successful reads require the JSON media type and HTTP 200 status", as
   ] satisfies [number, string][]) {
     respond(emptyHeatmap(), status, media);
     await assert.rejects(
-      heatmapApi(async () => "token")(anchor),
+      habitsApi(async () => "token").heatmap(anchor),
       (error: unknown) => error instanceof ApiError && error.status === 502,
     );
   }
@@ -183,7 +185,7 @@ void test("a service refusal retains its safe support reference", async () => {
     "application/problem+json",
   );
   await assert.rejects(
-    heatmapApi(async () => "token")(anchor),
+    habitsApi(async () => "token").heatmap(anchor),
     (error: unknown) =>
       error instanceof ApiError &&
       error.status === 503 &&
@@ -202,7 +204,7 @@ void test("expired authentication explains sign-in and retains only a safe suppo
       "application/problem+json",
     );
     await assert.rejects(
-      heatmapApi(async () => "expired-token")(anchor),
+      habitsApi(async () => "expired-token").heatmap(anchor),
       (error: unknown) =>
         error instanceof ApiError &&
         error.status === 401 &&

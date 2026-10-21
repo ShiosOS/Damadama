@@ -2,6 +2,11 @@ import { z } from "zod";
 import { entrySchema, type Entry, type EntryEdit } from "./entries.schema";
 import { habitDaySchema, type HabitDay } from "./habit-day.schema";
 import {
+  heatmapSchema,
+  type Heatmap,
+  type HeatmapAnchor,
+} from "./heatmap.schema";
+import {
   habitSchema,
   type Habit,
   type NewHabit,
@@ -14,6 +19,7 @@ export type WriteEntryInput = EntryEdit & {
   timeZone: string;
 };
 export interface HabitsApi {
+  heatmap(anchor: HeatmapAnchor): Promise<Heatmap>;
   day(date: string): Promise<HabitDay>;
   entries(date: string): Promise<Entry[]>;
   saveEntry(
@@ -85,13 +91,15 @@ function parse<T>(data: unknown, schema: z.ZodType<T>, traceId?: string): T {
 
 function refuse(data: unknown, status: number): never {
   const problem = problemSchema.safeParse(data);
-  const message = problem.success
-    ? Object.values(problem.data.errors ?? {})
+  let message = "The request could not be completed.";
+  if (status === 401) message = "Sign in to continue.";
+  else if (problem.success)
+    message =
+      Object.values(problem.data.errors ?? {})
         .flat()
         .join(" ") ||
       problem.data.detail ||
-      problem.data.title
-    : "The request could not be completed.";
+      problem.data.title;
   throw new ApiError(
     message,
     status,
@@ -143,6 +151,16 @@ export function habitsApi(getToken: () => Promise<string | null>): HabitsApi {
     return parse(data, schema, traceId);
   }
   return {
+    async heatmap(anchor): Promise<Heatmap> {
+      const query = new URLSearchParams(anchor);
+      const heatmap = await request(
+        `/api/heatmaps?${query.toString()}`,
+        heatmapSchema,
+      );
+      if (heatmap.end !== anchor.deviceToday)
+        throw new ApiError("The service returned an unexpected response.", 502);
+      return heatmap;
+    },
     async day(date): Promise<HabitDay> {
       const day = await request(
         `/api/habit-days/${encodeURIComponent(date)}`,
