@@ -76,7 +76,11 @@ public sealed class InitialSchedule
 
     internal InitialSchedule WithRecurrence(int[] weekdays, int repeatEveryWeeks, DateOnly firstWeekMonday) => new()
     {
-        HabitId = HabitId, Weekdays = weekdays, RepeatEveryWeeks = repeatEveryWeeks,
-        TimeZone = TimeZone, CreationDate = CreationDate, FirstWeekMonday = firstWeekMonday
+        HabitId = HabitId,
+        Weekdays = weekdays,
+        RepeatEveryWeeks = repeatEveryWeeks,
+        TimeZone = TimeZone,
+        CreationDate = CreationDate,
+        FirstWeekMonday = firstWeekMonday
     };
 }

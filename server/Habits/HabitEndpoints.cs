@@ -78,7 +78,9 @@ public static class HabitEndpoints
         HabitMutationOutcome.Missing => Results.NotFound(),
         HabitMutationOutcome.Conflict conflict => TypedResults.Problem(new HabitMutationProblem
         {
-            Status = 409, Title = "The habit change needs attention.", Code = conflict.Code,
+            Status = 409,
+            Title = "The habit change needs attention.",
+            Code = conflict.Code,
             Detail = conflict.Code == "today_choice_required"
                 ? "This habit has an entry today. Choose whether to keep or remove today from the schedule."
                 : "This mutation identifier already belongs to a different change."
