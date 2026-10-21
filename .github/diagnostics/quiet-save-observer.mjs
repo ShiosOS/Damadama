@@ -32,7 +32,7 @@ export function installBrowserObserver() {
         )
           return;
         const eventTarget = target(event.target);
-        if (eventTarget === "other") return;
+        if (eventTarget === "other" && type !== "focusin") return;
         if (records.length + pending >= 256 || overflow) {
           overflow = true;
           return;

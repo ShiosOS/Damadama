@@ -135,7 +135,7 @@ test("real browser exports only allowlisted booleans after dispatch and refuses 
     await page.goto(
       "data:text/html," +
         encodeURIComponent(
-          `<form class="habit-form"><input aria-label="Name" required value="privacy-canary"><input aria-label="Good" value="privacy-canary"><input aria-label="Better" value="privacy-canary"><input aria-label="Best" value="privacy-canary"><input aria-label="Repeat every (weeks)" value="2"><button type="submit">Save</button></form>`,
+          `<form class="habit-form"><input aria-label="Name" required value="privacy-canary"><input aria-label="Good" value="privacy-canary"><input aria-label="Better" value="privacy-canary"><input aria-label="Best" value="privacy-canary"><input aria-label="Repeat every (weeks)" value="2"><button type="submit">Save</button></form><button id="outside">Outside privacy-canary</button>`,
         ),
     );
     await page.evaluate(() => {
@@ -150,7 +150,7 @@ test("real browser exports only allowlisted booleans after dispatch and refuses 
     });
     await page.locator('input[aria-label="Name"]').focus();
     await page.keyboard.type("canary-input");
-    await page.locator("button").focus();
+    await page.locator('button[type="submit"]').focus();
     await page.keyboard.press("Enter");
     let snapshot = await page.evaluate(() => window.__quietSaveSnapshot());
     assert.equal(
@@ -183,6 +183,34 @@ test("real browser exports only allowlisted booleans after dispatch and refuses 
         .defaultPrevented,
       true,
     );
+    await page.keyboard.press("Tab");
+    assert.equal(
+      await page
+        .locator("#outside")
+        .evaluate((element) => element === document.activeElement),
+      true,
+    );
+    snapshot = await page.evaluate(() => window.__quietSaveSnapshot());
+    const leftForm = snapshot.records
+      .filter((entry) => entry.event === "focus")
+      .at(-1);
+    assert.equal(leftForm.target, "other");
+    assert.equal(leftForm.focus, "other");
+    assert.equal(leftForm.saveFocused, false);
+    assert.equal(
+      leftForm.fields.some((field) => field.focused),
+      false,
+    );
+    const enterCount = snapshot.records.filter(
+      (entry) => entry.event === "enter",
+    ).length;
+    await page.keyboard.press("Enter");
+    snapshot = await page.evaluate(() => window.__quietSaveSnapshot());
+    assert.equal(
+      snapshot.records.filter((entry) => entry.event === "enter").length,
+      enterCount,
+    );
+    assert.equal(JSON.stringify(snapshot).includes("privacy-canary"), false);
     await page.evaluate(() => {
       for (let index = 0; index < 300; index++)
         document
