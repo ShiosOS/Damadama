@@ -15,6 +15,12 @@ const receiver = [
 ];
 const provider = ["node", "--test", "tests/Provider/*.test.mjs"];
 const monitor = ["node", "--test", "ops/monitoring/monitor.test.mjs"];
+const clients = [
+  "bun",
+  "test",
+  "tests/Browser/rest-client.test.ts",
+  "tests/Browser/heatmap-client.test.ts",
+];
 type Producer = "valid" | "missing" | "malformed" | "empty" | "failure";
 
 async function child(argv: string[], root: string): Promise<number> {
@@ -177,6 +183,23 @@ test("common check executes Provider and monitor before Docker and both real rec
       "tests/Browser/playwright.config.ts",
     ]),
   );
+}, 30_000);
+
+test("common check runs both client boundary suites and refuses their failure before backend production", async () => {
+  const passing = await exercise("valid");
+  expect(passing.error).toBeUndefined();
+  expect(
+    passing.receipts.filter((command) => command === JSON.stringify(clients)),
+  ).toHaveLength(1);
+
+  const failing = await exercise("valid", clients);
+  expect(failing.error).toBeInstanceOf(Error);
+  expect(failing.commands.at(-1)).toEqual(clients);
+  expect(
+    failing.commands.some(
+      (command) => command[0] === "dotnet" && command[1] === "test",
+    ),
+  ).toBe(false);
 }, 30_000);
 
 for (const producer of [

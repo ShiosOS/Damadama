@@ -48,7 +48,12 @@ const beforeBackend: Command[] = [
   ],
   ["dotnet", "build", "--no-restore", "--artifacts-path", ".audit/check-build"],
   ["dotnet", "format", "--no-restore", "--verify-no-changes"],
-  ["bun", "test", "tests/Browser/rest-client.test.ts"],
+  [
+    "bun",
+    "test",
+    "tests/Browser/rest-client.test.ts",
+    "tests/Browser/heatmap-client.test.ts",
+  ],
   prettierCommand(false),
   ["bun", "run", "--cwd", "web", "build"],
   ["bun", "run", "check:performance"],
