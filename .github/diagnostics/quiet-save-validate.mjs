@@ -1,3 +1,4 @@
+import { readOwnedFile } from "./quiet-save-files.mjs";
 import { readdir } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -6,18 +7,24 @@ import { z } from "zod";
 import {
   controls,
   mediaDirectory,
-  readOwnedFile,
   validateRetainedMedia,
 } from "./quiet-save-media.mjs";
 import { parseReceipt } from "./quiet-save-receipt.mjs";
-import { digest, loadSources, normalizeSite } from "./quiet-save-source.mjs";
+import {
+  digest,
+  loadSources,
+  normalizeSite,
+  fontBuildProof,
+  readFontAssets,
+} from "./quiet-save-source.mjs";
 
 const hex = z.string().regex(/^[a-f0-9]{64}$/);
 const sha = z.string().regex(/^[a-f0-9]{40}$/);
 const token = z.string().regex(/^[A-Za-z0-9._+-]{1,80}$/);
 const sourceSchema = z
   .object({
-    schema: z.literal(1),
+    schema: z.literal(2),
+    fontBuild: fontBuildProof,
     head: sha,
     tree: sha,
     node: z.literal("v24.21.0"),
@@ -89,6 +96,11 @@ export async function validateEvidence(
       ),
     );
   const source = sourceSchema.parse(await json("source.json", 16384));
+  if (
+    JSON.stringify(source.fontBuild) !==
+    JSON.stringify((await readFontAssets()).proof)
+  )
+    throw new Error("Retained font inventory differs.");
   for (const [key, reference] of [
     ["head", "HEAD"],
     ["tree", "HEAD^{tree}"],

@@ -1,14 +1,12 @@
-import {
-  lstat,
-  mkdir,
-  open,
-  readdir,
-  realpath,
-  writeFile,
-} from "node:fs/promises";
+import { mkdir, readdir, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { release } from "node:os";
 import { z } from "zod";
+import {
+  readOwnedFile,
+  directoryIdentity,
+  checkDirectories,
+} from "./quiet-save-files.mjs";
 import { digest } from "./quiet-save-source.mjs";
 
 export const controls = [
@@ -183,76 +181,6 @@ export function mediaDirectory(owner, selfTest = false) {
     `media-${owner.control}-${owner.iteration}-${phaseNames.indexOf(owner.phase)}-${owner.project}-${owner.case}`,
   );
 }
-async function directoryIdentity(path) {
-  const identities = [];
-  let current = resolve(path);
-  while (true) {
-    const stat = await lstat(current);
-    if (
-      !stat.isDirectory() ||
-      stat.isSymbolicLink() ||
-      (await realpath(current)) !== current
-    )
-      throw new Error("Directory ownership refused.");
-    identities.push({ path: current, dev: stat.dev, ino: stat.ino });
-    const parent = dirname(current);
-    if (parent === current) break;
-    current = parent;
-  }
-  return identities;
-}
-async function checkDirectories(identities) {
-  for (const identity of identities) {
-    const stat = await lstat(identity.path);
-    if (
-      stat.isSymbolicLink() ||
-      !stat.isDirectory() ||
-      stat.dev !== identity.dev ||
-      stat.ino !== identity.ino
-    )
-      throw new Error("Directory replaced.");
-  }
-}
-export async function readOwnedFile(
-  path,
-  minimumTime = 0,
-  maximumBytes = 4 * 1024 * 1024,
-) {
-  const parents = await directoryIdentity(dirname(path));
-  const before = await lstat(path);
-  if (
-    !before.isFile() ||
-    before.isSymbolicLink() ||
-    before.nlink !== 1 ||
-    before.size < 1 ||
-    before.size > maximumBytes ||
-    before.mtimeMs < minimumTime
-  )
-    throw new Error("File ownership refused.");
-  const handle = await open(path, "r");
-  try {
-    const opened = await handle.stat();
-    if (opened.dev !== before.dev || opened.ino !== before.ino)
-      throw new Error("File replaced.");
-    const bytes = await handle.readFile();
-    const after = await handle.stat();
-    const current = await lstat(path);
-    if (
-      after.size !== before.size ||
-      bytes.length !== before.size ||
-      after.mtimeMs !== before.mtimeMs ||
-      current.ino !== before.ino ||
-      current.dev !== before.dev ||
-      current.isSymbolicLink()
-    )
-      throw new Error("File changed.");
-    await checkDirectories(parents);
-    return bytes;
-  } finally {
-    await handle.close();
-  }
-}
-
 function validatePNG(bytes) {
   if (
     !bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))

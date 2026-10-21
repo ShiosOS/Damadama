@@ -80,7 +80,8 @@ test("receipt validates every row and the complete six-phase routed case set", (
 
 test("strict observation boundary refuses secrets, unknown values and overflow", () => {
   const good = {
-    schema: 1,
+    schema: 2,
+    font: null,
     node: [nodeEvent("test-start")],
     browser: [],
     refusal: "none",

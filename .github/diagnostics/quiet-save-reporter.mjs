@@ -111,7 +111,13 @@ export default class QuietSaveReporter {
         if (!body || body.length > 65536)
           throw new Error("Observation bytes refused.");
         safe = observation.parse(JSON.parse(body.toString("utf8")));
+        if (
+          (safe.font === null) !==
+          ["passed", "skipped"].includes(result.status)
+        )
+          throw new Error("Font observation status differs.");
       } catch {
+        safe = null;
         refusal = true;
       }
     }

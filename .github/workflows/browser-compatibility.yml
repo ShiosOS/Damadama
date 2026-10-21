@@ -95,7 +95,7 @@ jobs:
       - run: dotnet build --no-restore --artifacts-path .audit/check-build
       - run: bun x --no-install vite build --config tests/Browser/compatibility.vite.config.ts
       - run: node node_modules/@playwright/test/cli.js install --with-deps chromium firefox webkit
-      - run: node --test --test-concurrency=1 .github/diagnostics/quiet-save.test.mjs .github/diagnostics/quiet-save-held.test.mjs .github/diagnostics/quiet-save-evidence.test.mjs
+      - run: node --test --test-concurrency=1 .github/diagnostics/quiet-save.test.mjs .github/diagnostics/quiet-save-held.test.mjs .github/diagnostics/quiet-save-evidence.test.mjs .github/diagnostics/quiet-save-font.test.mjs .github/diagnostics/quiet-save-font-boundary.test.mjs .github/diagnostics/quiet-save-proxy.test.mjs
       - run: node .github/diagnostics/quiet-save-run.mjs
       - if: always()
         id: quiet-evidence

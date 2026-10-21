@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { cpus, release as kernelRelease, totalmem } from "node:os";
 import { z } from "zod";
 import { generate } from "./quiet-save-generate.mjs";
+import { readFontAssets } from "./quiet-save-source.mjs";
 import {
   calibrationMatched,
   invocationPassed,
@@ -53,7 +54,8 @@ const head = identity("HEAD");
 await writeFile(
   resolve(directory, "source.json"),
   JSON.stringify({
-    schema: 1,
+    schema: 2,
+    fontBuild: (await readFontAssets()).proof,
     head,
     tree: identity("HEAD^{tree}"),
     node: process.version,

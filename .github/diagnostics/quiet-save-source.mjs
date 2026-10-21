@@ -1,12 +1,83 @@
+import { readOwnedFile, readInstalledNunitoFile } from "./quiet-save-files.mjs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { opendir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { z } from "zod";
+import { fontKinds } from "./quiet-save-schema.mjs";
 
 export const digest = (bytes) =>
   createHash("sha256").update(bytes).digest("hex");
 const hex = z.string().regex(/^[a-f0-9]{64}$/);
+export const fontBuildProof = z
+  .object({
+    schema: z.literal(1),
+    assets: z
+      .array(
+        z
+          .object({
+            kind: z.enum(fontKinds),
+            sha256: hex,
+            bytes: z
+              .number()
+              .int()
+              .min(1)
+              .max(1024 * 1024),
+          })
+          .strict(),
+      )
+      .length(5),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      JSON.stringify(value.assets.map((asset) => asset.kind)) ===
+      JSON.stringify(fontKinds),
+    "Font asset order differs.",
+  );
+
+export async function readFontAssets(selfTest = false) {
+  const directory = resolve(
+    selfTest
+      ? ".audit/quiet-save-font-tests/assets"
+      : ".audit/browser-build/assets",
+  );
+  const names = [];
+  const entries = await opendir(directory);
+  for await (const entry of entries) {
+    if (names.length >= 128) throw new Error("Font inventory bound exceeded.");
+    names.push(entry.name);
+  }
+  const port = z
+    .string()
+    .regex(/^[1-9][0-9]{0,4}$/)
+    .transform(Number)
+    .pipe(z.number().int().max(65535))
+    .parse(process.env.DAMADAMA_BROWSER_PORT ?? "5174");
+  const lookup = new Map();
+  const assets = [];
+  for (const kind of fontKinds) {
+    const pattern = new RegExp(
+      `^nunito-${kind}-wght-normal-[A-Za-z0-9_-]{8}\\.woff2$`,
+    );
+    const matches = names.filter((name) => pattern.test(name));
+    if (matches.length !== 1) throw new Error("Font asset selection differs.");
+    const expected = await readInstalledNunitoFile(kind);
+    const actual = await readOwnedFile(
+      resolve(directory, matches[0]),
+      0,
+      1024 * 1024,
+    );
+    if (!expected.equals(actual)) throw new Error("Font asset bytes differ.");
+    assets.push({ kind, sha256: digest(actual), bytes: actual.length });
+    lookup.set(`http://127.0.0.1:${port}/assets/${matches[0]}`, kind);
+  }
+  return {
+    proof: fontBuildProof.parse({ schema: 1, assets }),
+    kindForUrl: (url) => lookup.get(url) ?? null,
+  };
+}
 const coordinate = z.number().int().min(1).max(10000);
 export const sourceSite = z.discriminatedUnion("source", [
   z

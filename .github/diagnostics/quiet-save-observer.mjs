@@ -2,8 +2,14 @@ import {
   observation,
   browserSnapshot,
   nodeRecord,
+  fontRead,
+  fontEvidence,
+  fontFailureCategory,
 } from "./quiet-save-schema.mjs";
 import { caseNames, retainFailureMedia } from "./quiet-save-media.mjs";
+import { readFontAssets, fontBuildProof } from "./quiet-save-source.mjs";
+import { readOwnedFile } from "./quiet-save-files.mjs";
+import { resolve } from "node:path";
 
 const states = new WeakMap();
 
@@ -99,8 +105,38 @@ export function installBrowserObserver() {
       true,
     );
   }
+  function readFontSnapshot() {
+    const counts = { unloaded: 0, loading: 0, loaded: 0, error: 0 };
+    let total = 0;
+    for (const face of document.fonts) {
+      if (++total > 32) return { refusal: "face-bound-exceeded" };
+      if (face.family.replaceAll('"', "") !== "Nunito Variable") continue;
+      if (!Object.hasOwn(counts, face.status)) return null;
+      counts[face.status]++;
+    }
+    let family = { state: "missing" };
+    if (Object.values(counts).some((count) => count > 0))
+      family = { state: "present", counts };
+    return {
+      origin: "browser-performance",
+      ms: performance.now(),
+      sampledAt: "failure-drain",
+      setStatus: document.fonts.status,
+      family,
+    };
+  }
   Object.defineProperty(window, "__quietSaveSnapshot", {
-    value: () => ({ records: records.map((record) => record()), overflow }),
+    value: (includeFont = false) => {
+      let font = null;
+      if (includeFont) {
+        try {
+          font = readFontSnapshot();
+        } catch {
+          font = { refusal: "read-failed" };
+        }
+      }
+      return { records: records.map((record) => record()), overflow, font };
+    },
     configurable: false,
     writable: false,
   });
@@ -132,6 +168,7 @@ export async function begin(page, control = "normal") {
     cancel: null,
     cancelled: false,
     started: Date.now(),
+    font: await observeFonts(page),
   };
   states.set(page, state);
   mark(page, "test-start");
@@ -188,6 +225,130 @@ export async function begin(page, control = "normal") {
   }
 }
 
+async function observeFonts(page) {
+  const collector = {
+    requests: new WeakMap(),
+    events: [],
+    nextRequest: 1,
+    document: 0,
+    documentOverflow: false,
+    documentChangedAfterStop: false,
+    refusal: "none",
+    stoppedAt: null,
+    sample: { state: "read-failed" },
+    detach: () => {},
+  };
+  let inventory;
+  try {
+    const selfTest = process.env.QUIET_SELF_TEST === "1";
+    inventory = await readFontAssets(selfTest);
+    if (!selfTest) {
+      const source = JSON.parse(
+        (
+          await readOwnedFile(
+            resolve(".audit/quiet-save/evidence/source.json"),
+            0,
+            16384,
+          )
+        ).toString("utf8"),
+      );
+      const proof = fontBuildProof.parse(source.fontBuild);
+      if (JSON.stringify(proof) !== JSON.stringify(inventory.proof))
+        throw new Error("Font source proof differs.");
+    }
+  } catch {
+    collector.refusal = "selection-unavailable";
+  }
+  const active = () =>
+    collector.stoppedAt === null && collector.refusal === "none";
+  const append = (event, identity, details = {}) => {
+    if (!active()) return;
+    const record = {
+      origin: "node-performance",
+      ms: performance.now(),
+      ...identity,
+      event,
+      ...details,
+    };
+    if (
+      collector.events.length >= 32 ||
+      Buffer.byteLength(JSON.stringify([...collector.events, record])) > 3200
+    ) {
+      collector.refusal = "overflow";
+      return;
+    }
+    collector.events.push(record);
+  };
+  const request = (item) => {
+    if (!active() || !inventory) return;
+    try {
+      if (
+        item.method() !== "GET" ||
+        item.resourceType() !== "font" ||
+        item.frame() !== page.mainFrame()
+      )
+        return;
+      const kind = inventory.kindForUrl(item.url());
+      if (!kind) return;
+      if (collector.nextRequest > 8) {
+        collector.refusal = "overflow";
+        return;
+      }
+      const identity = {
+        request: collector.nextRequest++,
+        document: collector.document,
+        kind,
+      };
+      collector.requests.set(item, identity);
+      append("font-request", identity);
+    } catch {
+      collector.refusal = "selection-unavailable";
+    }
+  };
+  const response = (item) => {
+    const identity = collector.requests.get(item.request());
+    if (identity) append("font-response", identity, { status: item.status() });
+  };
+  const finished = (item) => {
+    const identity = collector.requests.get(item);
+    if (identity) append("font-request-finished", identity);
+  };
+  const failed = (item) => {
+    const identity = collector.requests.get(item);
+    if (!identity || !active()) return;
+    let category = "unknown";
+    try {
+      category = fontFailureCategory(item.failure()?.errorText);
+    } catch {}
+    append("font-request-failed", identity, { category });
+  };
+  const navigated = (frame) => {
+    if (frame !== page.mainFrame()) return;
+    if (collector.stoppedAt !== null) {
+      collector.documentChangedAfterStop = true;
+      return;
+    }
+    if (collector.document >= 4) {
+      collector.documentOverflow = true;
+      collector.refusal = "overflow";
+      return;
+    }
+    collector.document++;
+  };
+  const listeners = [
+    ["request", request],
+    ["response", response],
+    ["requestfinished", finished],
+    ["requestfailed", failed],
+    ["framenavigated", navigated],
+  ];
+  for (const [event, listener] of listeners) page.on(event, listener);
+  collector.detach = () => {
+    for (const [event, listener] of listeners) page.off(event, listener);
+  };
+  return collector;
+}
+
 export function isDeadline(page) {
   return states.get(page)?.control === "deadline";
 }
@@ -201,15 +362,16 @@ export async function deadlineGate(page) {
   return false;
 }
 
-async function read(page, state) {
+async function read(page, state, includeFont = false) {
   if (page.isClosed()) {
     state.refusal = "missing-page";
+    if (includeFont) state.font.sample = { state: "missing-page" };
     return;
   }
   let timer;
   try {
     const raw = await Promise.race([
-      page.evaluate(() => window.__quietSaveSnapshot?.()),
+      page.evaluate((font) => window.__quietSaveSnapshot?.(font), includeFont),
       new Promise((_, reject) => {
         timer = setTimeout(
           () => reject(new Error("Observation deadline.")),
@@ -220,7 +382,24 @@ async function read(page, state) {
     const parsed = browserSnapshot.safeParse(raw);
     if (!parsed.success) {
       state.refusal = "schema-rejected";
+      if (includeFont) state.font.sample = { state: "schema-rejected" };
       return;
+    }
+    if (includeFont) {
+      const font = fontRead.safeParse(parsed.data.font);
+      if (state.font.documentChangedAfterStop)
+        state.font.sample = { state: "document-changed" };
+      else if (state.font.documentOverflow)
+        state.font.sample = { state: "document-bound-exceeded" };
+      else if (!font.success) state.font.sample = { state: "schema-rejected" };
+      else if ("refusal" in font.data)
+        state.font.sample = { state: font.data.refusal };
+      else
+        state.font.sample = {
+          state: "available",
+          document: state.font.document,
+          snapshot: font.data,
+        };
     }
     if (
       parsed.data.overflow ||
@@ -232,6 +411,7 @@ async function read(page, state) {
     state.browser.push(...parsed.data.records);
   } catch {
     state.refusal = "read-failed";
+    if (includeFont) state.font.sample = { state: "read-failed" };
   } finally {
     clearTimeout(timer);
   }
@@ -244,50 +424,86 @@ export async function preserveBeforeReload(page) {
 export async function finish(page, testInfo) {
   const state = states.get(page);
   if (!state) return;
-  state.cancelled = true;
-  if (state.cancel && state.control === "deadline") {
-    mark(page, "gate-cancelled");
-    state.cancel();
-  }
-  if (
-    (testInfo.status !== "passed" && testInfo.status !== "skipped") ||
-    state.refusal !== "none"
-  ) {
-    await read(page, state);
-    const safe = observation.parse({
-      schema: 1,
-      node: state.node,
-      browser: state.browser,
-      refusal: state.refusal,
-    });
-    await testInfo.attach("quiet-save-observation", {
-      body: Buffer.from(JSON.stringify(safe)),
-      contentType: "application/json",
-    });
+  state.font.stoppedAt = performance.now();
+  try {
+    state.cancelled = true;
+    if (state.cancel && state.control === "deadline") {
+      mark(page, "gate-cancelled");
+      state.cancel();
+    }
     if (
-      testInfo.outputDir &&
-      testInfo.project?.outputDir &&
-      process.env.QUIET_CONTROL
+      (testInfo.status !== "passed" && testInfo.status !== "skipped") ||
+      state.refusal !== "none"
     ) {
-      const manifest = await retainFailureMedia({
-        outputDir: testInfo.outputDir,
-        outputRoot: testInfo.project.outputDir,
-        started: state.started,
-        owner: {
-          control: process.env.QUIET_CONTROL,
-          iteration: Number(process.env.QUIET_ITERATION),
-          phase: process.env.QUIET_PHASE,
-          project: testInfo.project.name,
-          case: caseNames.indexOf(testInfo.title),
-        },
-        head: process.env.COMPAT_CURRENT_SHA,
-        selfTest: process.env.QUIET_SELF_TEST === "1",
+      const failed =
+        testInfo.status !== "passed" && testInfo.status !== "skipped";
+      await read(page, state, failed);
+      let font = null;
+      if (failed) {
+        const transport = {
+          events: state.font.events,
+          refusal: state.font.refusal,
+          stop: {
+            origin: "node-performance",
+            ms: state.font.stoppedAt,
+            reason: "case-finished",
+          },
+        };
+        const parsed = fontEvidence.safeParse({
+          scope: "verified-bundled-nunito-main-frame",
+          transport,
+          sample: state.font.sample,
+        });
+        if (parsed.success) font = parsed.data;
+        else
+          font = {
+            scope: "verified-bundled-nunito-main-frame",
+            transport: {
+              ...transport,
+              events: [],
+              refusal: "selection-unavailable",
+            },
+            sample: { state: "schema-rejected" },
+          };
+      }
+      const safe = observation.parse({
+        schema: 2,
+        node: state.node,
+        browser: state.browser,
+        refusal: state.refusal,
+        font,
       });
-      await testInfo.attach("quiet-save-media", {
-        body: Buffer.from(JSON.stringify(manifest)),
+      await testInfo.attach("quiet-save-observation", {
+        body: Buffer.from(JSON.stringify(safe)),
         contentType: "application/json",
       });
+      if (
+        testInfo.outputDir &&
+        testInfo.project?.outputDir &&
+        process.env.QUIET_CONTROL
+      ) {
+        const manifest = await retainFailureMedia({
+          outputDir: testInfo.outputDir,
+          outputRoot: testInfo.project.outputDir,
+          started: state.started,
+          owner: {
+            control: process.env.QUIET_CONTROL,
+            iteration: Number(process.env.QUIET_ITERATION),
+            phase: process.env.QUIET_PHASE,
+            project: testInfo.project.name,
+            case: caseNames.indexOf(testInfo.title),
+          },
+          head: process.env.COMPAT_CURRENT_SHA,
+          selfTest: process.env.QUIET_SELF_TEST === "1",
+        });
+        await testInfo.attach("quiet-save-media", {
+          body: Buffer.from(JSON.stringify(manifest)),
+          contentType: "application/json",
+        });
+      }
     }
+    if (state.cancel && state.control === "held-response") state.cancel();
+  } finally {
+    state.font.detach();
   }
-  if (state.cancel && state.control === "held-response") state.cancel();
 }

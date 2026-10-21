@@ -12,6 +12,194 @@ export const targets = [
   "other",
 ];
 const time = z.number().finite().nonnegative();
+export const fontKinds = [
+  "latin",
+  "latin-ext",
+  "cyrillic",
+  "cyrillic-ext",
+  "vietnamese",
+];
+const fontCount = z.number().int().min(0).max(32);
+const documentOrdinal = z.number().int().min(0).max(4);
+const fontFailureCodes = new Map([
+  ["net::ERR_ABORTED", "aborted"],
+  ["net::ERR_CONNECTION_RESET", "connection-reset"],
+  ["net::ERR_CONNECTION_CLOSED", "connection-closed"],
+  ["net::ERR_CONNECTION_REFUSED", "connection-refused"],
+  ["net::ERR_TIMED_OUT", "timed-out"],
+  ["net::ERR_CONNECTION_TIMED_OUT", "timed-out"],
+  ["net::ERR_NAME_NOT_RESOLVED", "name-resolution"],
+  ["net::ERR_CACHE_READ_FAILURE", "cache-read"],
+  ["net::ERR_CONTENT_LENGTH_MISMATCH", "content-length"],
+]);
+export function fontFailureCategory(value) {
+  if (typeof value !== "string") return "unknown";
+  return fontFailureCodes.get(value) ?? "other";
+}
+export const fontSnapshot = z
+  .object({
+    origin: z.literal("browser-performance"),
+    ms: time,
+    sampledAt: z.literal("failure-drain"),
+    setStatus: z.enum(["loading", "loaded"]),
+    family: z.discriminatedUnion("state", [
+      z.object({ state: z.literal("missing") }).strict(),
+      z
+        .object({
+          state: z.literal("present"),
+          counts: z
+            .object({
+              unloaded: fontCount,
+              loading: fontCount,
+              loaded: fontCount,
+              error: fontCount,
+            })
+            .strict(),
+        })
+        .strict(),
+    ]),
+  })
+  .strict()
+  .refine((value) => {
+    if (value.family.state === "missing") return true;
+    const count = Object.values(value.family.counts).reduce((a, b) => a + b, 0);
+    return count > 0 && count <= 32;
+  }, "Font face count differs.");
+export const fontRead = z.union([
+  fontSnapshot,
+  z
+    .object({ refusal: z.enum(["face-bound-exceeded", "read-failed"]) })
+    .strict(),
+]);
+const fontEventBase = {
+  origin: z.literal("node-performance"),
+  ms: time,
+  request: z.number().int().min(1).max(8),
+  document: documentOrdinal,
+  kind: z.enum(fontKinds),
+};
+export const fontEvent = z.discriminatedUnion("event", [
+  z.object({ ...fontEventBase, event: z.literal("font-request") }).strict(),
+  z
+    .object({
+      ...fontEventBase,
+      event: z.literal("font-response"),
+      status: z.number().int().min(100).max(599),
+    })
+    .strict(),
+  z
+    .object({
+      ...fontEventBase,
+      event: z.literal("font-request-finished"),
+    })
+    .strict(),
+  z
+    .object({
+      ...fontEventBase,
+      event: z.literal("font-request-failed"),
+      category: z.enum([
+        ...new Set(fontFailureCodes.values()),
+        "unknown",
+        "other",
+      ]),
+    })
+    .strict(),
+]);
+export const fontEvidence = z
+  .object({
+    scope: z.literal("verified-bundled-nunito-main-frame"),
+    transport: z
+      .object({
+        events: z.array(fontEvent).max(32),
+        stop: z
+          .object({
+            origin: z.literal("node-performance"),
+            ms: time,
+            reason: z.literal("case-finished"),
+          })
+          .strict(),
+        refusal: z.enum(["none", "overflow", "selection-unavailable"]),
+      })
+      .strict(),
+    sample: z.discriminatedUnion("state", [
+      z
+        .object({
+          state: z.literal("available"),
+          document: documentOrdinal,
+          snapshot: fontSnapshot,
+        })
+        .strict(),
+      z
+        .object({
+          state: z.enum([
+            "missing-page",
+            "read-failed",
+            "schema-rejected",
+            "face-bound-exceeded",
+            "document-bound-exceeded",
+            "document-changed",
+          ]),
+        })
+        .strict(),
+    ]),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const reject = () =>
+      context.addIssue({ code: "custom", message: "Font evidence differs." });
+    if (Buffer.byteLength(JSON.stringify(value)) > 4096)
+      context.addIssue({
+        code: "custom",
+        message: "Font evidence byte bound exceeded.",
+      });
+    const requests = new Map();
+    let previousTime = 0;
+    let previousDocument = 0;
+    for (const event of value.transport.events) {
+      if (event.ms < previousTime || event.ms > value.transport.stop.ms)
+        reject();
+      previousTime = event.ms;
+      if (event.event === "font-request") {
+        if (
+          requests.has(event.request) ||
+          event.request !== requests.size + 1 ||
+          event.document < previousDocument
+        )
+          reject();
+        previousDocument = event.document;
+        requests.set(event.request, {
+          kind: event.kind,
+          document: event.document,
+          response: false,
+          terminal: false,
+        });
+        continue;
+      }
+      const request = requests.get(event.request);
+      if (
+        !request ||
+        request.kind !== event.kind ||
+        request.document !== event.document ||
+        request.terminal
+      ) {
+        reject();
+        continue;
+      }
+      if (event.event === "font-response") {
+        if (request.response) reject();
+        request.response = true;
+      } else {
+        if (event.event === "font-request-finished" && !request.response)
+          reject();
+        request.terminal = true;
+      }
+    }
+    if (
+      value.sample.state === "available" &&
+      value.sample.document < previousDocument
+    )
+      reject();
+  });
 const field = z
   .object({
     label: z.enum(targets.slice(0, 5)),
@@ -41,7 +229,11 @@ export const browserRecord = z
   })
   .strict();
 export const browserSnapshot = z
-  .object({ records: z.array(browserRecord).max(256), overflow: z.boolean() })
+  .object({
+    records: z.array(browserRecord).max(256),
+    overflow: z.boolean(),
+    font: z.unknown(),
+  })
   .strict();
 export const nodeRecord = z.discriminatedUnion("event", [
   z
@@ -97,9 +289,10 @@ export const nodeRecord = z.discriminatedUnion("event", [
 ]);
 export const observation = z
   .object({
-    schema: z.literal(1),
+    schema: z.literal(2),
     node: z.array(nodeRecord).max(64),
     browser: z.array(browserRecord).max(256),
+    font: fontEvidence.nullable(),
     refusal: z.enum([
       "none",
       "overflow",

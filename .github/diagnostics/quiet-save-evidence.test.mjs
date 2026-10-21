@@ -1,3 +1,4 @@
+import { readOwnedFile } from "./quiet-save-files.mjs";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import {
@@ -17,11 +18,11 @@ import {
   normalizeSite,
   sourceSite,
   unavailableSite,
+  readFontAssets,
 } from "./quiet-save-source.mjs";
 import {
   mediaDirectory,
   mediaManifest,
-  readOwnedFile,
   retainFailureMedia,
   validateRetainedMedia,
 } from "./quiet-save-media.mjs";
@@ -437,7 +438,8 @@ test("upload boundary validates complete owned proof and refuses unknown files a
       encoding: "utf8",
     }).stdout.trim();
   const source = {
-    schema: 1,
+    schema: 2,
+    fontBuild: (await readFontAssets()).proof,
     head: git("HEAD"),
     tree: git("HEAD^{tree}"),
     node: "v24.21.0",
@@ -464,6 +466,14 @@ test("upload boundary validates complete owned proof and refuses unknown files a
     mediaFiles: 0,
     mediaBytes: 0,
   });
+  const wrongFont = structuredClone(source);
+  wrongFont.fontBuild.assets[0].sha256 = "f".repeat(64);
+  await writeFile(resolve(directory, "source.json"), JSON.stringify(wrongFont));
+  await assert.rejects(
+    validateEvidence(directory),
+    /Retained font inventory differs/,
+  );
+  await writeFile(resolve(directory, "source.json"), JSON.stringify(source));
   await writeFile(resolve(directory, "privacy-canary.txt"), "privacy-canary");
   await assert.rejects(validateEvidence(directory));
   await rm(resolve(directory, "privacy-canary.txt"));

@@ -89,6 +89,13 @@ export function parseReceipt(text, control, iteration) {
     if (Buffer.byteLength(line) > 66560)
       throw new Error("Receipt row byte bound exceeded.");
     const row = receiptRow.parse(JSON.parse(line));
+    if (
+      row.kind === "test-result" &&
+      row.observation &&
+      (row.observation.font === null) !==
+        ["passed", "skipped"].includes(row.status)
+    )
+      throw new Error("Receipt font status differs.");
     if (row.control !== control || row.iteration !== iteration)
       throw new Error("Receipt owner differs.");
     if (control === "normal") {
