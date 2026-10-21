@@ -15,7 +15,17 @@ const receiver = [
 ];
 const provider = ["node", "--test", "tests/Provider/*.test.mjs"];
 const monitor = ["node", "--test", "ops/monitoring/monitor.test.mjs"];
-type Producer = "valid" | "missing" | "malformed" | "empty" | "failure";
+type Producer =
+  | "valid"
+  | "missing"
+  | "malformed"
+  | "empty"
+  | "failure"
+  | "skipped"
+  | "missing-trx";
+
+const passingTrx =
+  '<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010"><Results><UnitTestResult executionId="1" testName="passing" outcome="Passed"/></Results><ResultSummary outcome="Completed"><Counters total="1" executed="1" passed="1" failed="0" notExecuted="0"/></ResultSummary></TestRun>';
 
 async function child(argv: string[], root: string): Promise<number> {
   const process = Bun.spawn(argv, {
@@ -74,6 +84,8 @@ async function exercise(
   let error: unknown;
   try {
     await mkdir(join(root, ".audit"));
+    await mkdir(join(root, ".audit/TestResults"));
+    await writeFile(join(root, ".audit/TestResults/backend.trx"), passingTrx);
     await cp(join(source, "ops/diagnostics"), join(root, "ops/diagnostics"), {
       recursive: true,
     });
@@ -91,7 +103,18 @@ async function exercise(
           if (JSON.stringify(command) === JSON.stringify(failCommand))
             code += "process.exit(9);";
           if (command[0] === "dotnet" && command[1] === "test") {
-            if (producer === "valid") {
+            expect(
+              await Bun.file(
+                join(cwd, ".audit/TestResults/backend.trx"),
+              ).exists(),
+            ).toBe(false);
+            if (producer !== "missing-trx") {
+              let trx = passingTrx;
+              if (producer === "skipped")
+                trx = trx.replace('outcome="Passed"', 'outcome="NotExecuted"');
+              await writeFile(join(cwd, ".audit/TestResults/backend.trx"), trx);
+            }
+            if (["valid", "skipped", "missing-trx"].includes(producer)) {
               expect(
                 await child(
                   ["node", "--input-type=module", "-e", produce],
@@ -160,7 +183,7 @@ test("common check executes Provider and monitor before Docker and both real rec
       "--artifacts-path",
       ".audit/check-build",
       "--logger",
-      "trx",
+      "trx;LogFileName=backend.trx",
       "--results-directory",
       ".audit/TestResults",
     ],
@@ -216,5 +239,16 @@ for (const required of [provider, monitor]) {
     expect(error).toBeInstanceOf(Error);
     expect(commands.at(-1)).toEqual(required);
     expect(commands.some((command) => command[0] === "docker")).toBe(false);
+  }, 30_000);
+}
+
+for (const producer of ["skipped", "missing-trx"] satisfies Producer[]) {
+  test(`common check refuses ${producer} after the immediate receiver consumers and cannot reuse a seeded passing TRX`, async () => {
+    const { commands, error } = await exercise(producer);
+    expect(error).toBeInstanceOf(Error);
+    expect(commands.at(-1)).toEqual(receiver);
+    expect(
+      commands.some((command) => command.includes("scripts/api-contract.mjs")),
+    ).toBe(false);
   }, 30_000);
 }

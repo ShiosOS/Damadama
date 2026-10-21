@@ -41,30 +41,53 @@ public sealed class HabitChange
 
     internal static HabitChange Baseline(Habit habit) => new()
     {
-        HabitId = habit.Id, Sequence = 0, Kind = HabitChangeKind.Baseline,
-        EffectiveDate = habit.Schedule.CreationDate, CommittedAt = habit.CreatedAt,
-        Name = habit.Name, Good = habit.Levels.Good, Better = habit.Levels.Better, Best = habit.Levels.Best,
-        Weekdays = habit.Schedule.Weekdays, RepeatEveryWeeks = habit.Schedule.RepeatEveryWeeks,
+        HabitId = habit.Id,
+        Sequence = 0,
+        Kind = HabitChangeKind.Baseline,
+        EffectiveDate = habit.Schedule.CreationDate,
+        CommittedAt = habit.CreatedAt,
+        Name = habit.Name,
+        Good = habit.Levels.Good,
+        Better = habit.Levels.Better,
+        Best = habit.Levels.Best,
+        Weekdays = habit.Schedule.Weekdays,
+        RepeatEveryWeeks = habit.Schedule.RepeatEveryWeeks,
         FirstWeekMonday = habit.Schedule.FirstWeekMonday
     };
 
     internal static HabitChange Edit(Habit habit, long sequence, EditHabit input, DateOnly date,
         TodayChoice? choice, string payload, DateTimeOffset now) => new()
         {
-            HabitId = habit.Id, Sequence = sequence, MutationId = input.MutationId,
-            Payload = payload, Kind = HabitChangeKind.Edit, EffectiveDate = date, CommittedAt = now,
+            HabitId = habit.Id,
+            Sequence = sequence,
+            MutationId = input.MutationId,
+            Payload = payload,
+            Kind = HabitChangeKind.Edit,
+            EffectiveDate = date,
+            CommittedAt = now,
             AdmissionThrough = input.Schedule is null ? null : DeviceCalendar.AdmissionCutoff(now),
-            Name = input.Name, Good = input.Good, Better = input.Better, Best = input.Best,
-            Weekdays = input.Schedule?.Weekdays, RepeatEveryWeeks = input.Schedule?.RepeatEveryWeeks,
-            FirstWeekMonday = input.Schedule is null ? null : Monday(date), Choice = choice
+            Name = input.Name,
+            Good = input.Good,
+            Better = input.Better,
+            Best = input.Best,
+            Weekdays = input.Schedule?.Weekdays,
+            RepeatEveryWeeks = input.Schedule?.RepeatEveryWeeks,
+            FirstWeekMonday = input.Schedule is null ? null : Monday(date),
+            Choice = choice
         };
 
     internal static HabitChange Archive(Habit habit, long sequence, ArchiveHabit input, DateOnly date,
         TodayChoice? choice, string payload, DateTimeOffset now) => new()
         {
-            HabitId = habit.Id, Sequence = sequence, MutationId = input.MutationId,
-            Payload = payload, Kind = HabitChangeKind.Archive, EffectiveDate = date, CommittedAt = now,
-            AdmissionThrough = DeviceCalendar.AdmissionCutoff(now), Choice = choice
+            HabitId = habit.Id,
+            Sequence = sequence,
+            MutationId = input.MutationId,
+            Payload = payload,
+            Kind = HabitChangeKind.Archive,
+            EffectiveDate = date,
+            CommittedAt = now,
+            AdmissionThrough = DeviceCalendar.AdmissionCutoff(now),
+            Choice = choice
         };
 
     private static DateOnly Monday(DateOnly date) => date.AddDays(-(((int)date.DayOfWeek + 6) % 7));
