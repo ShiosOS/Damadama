@@ -12,6 +12,7 @@ import { weekdays, type Habit, type NewHabit } from "./habits.schema";
 import HabitDetails from "./HabitDetails.vue";
 import CheckeredD from "./CheckeredD.vue";
 import TodayView from "./TodayView.vue";
+import HabitEditor from "./HabitEditor.vue";
 import type { TodayHandle } from "./TodayView.types";
 
 type Props = {
@@ -19,6 +20,7 @@ type Props = {
   getToken: () => Promise<string | null>;
 };
 const props = defineProps<Props>();
+const emit = defineEmits<{ committed: [] }>();
 const api = habitsApi(() => props.getToken());
 const habits = ref<Habit[] | null>(null);
 type Activity =
@@ -131,6 +133,7 @@ async function save(): Promise<void> {
     });
     if (current !== generation) return;
     habits.value = [...(habits.value ?? []), saved];
+    emit("committed");
     const layout = today.value?.refreshAfterCreate();
     if (layout)
       pendingReveal = { habitId: saved.id, accountGeneration: current, layout };
@@ -144,6 +147,21 @@ async function save(): Promise<void> {
     if (current === generation && adding.value)
       document.getElementById("habit-creation-error")?.focus();
   }
+}
+
+function acceptHabit(saved: Habit): void {
+  habits.value = (habits.value ?? []).map((habit) =>
+    habit.id === saved.id ? saved : habit,
+  );
+  emit("committed");
+  void today.value?.refreshAfterChange();
+}
+
+function signInRequired(): void {
+  generation++;
+  habits.value = null;
+  adding.value = false;
+  activity.value = { kind: "error", message: "Sign in to continue." };
 }
 
 onBeforeUnmount(() => {
@@ -305,6 +323,7 @@ onBeforeUnmount(() => {
         :key="accountId ?? ''"
         :account-id="accountId"
         :get-token="getToken"
+        @committed="emit('committed')"
       />
       <section aria-label="Saved habits">
         <h2 class="page-title">Your habits</h2>
@@ -320,6 +339,12 @@ onBeforeUnmount(() => {
         >
           <h3 class="habit-name">{{ habit.name }}</h3>
           <HabitDetails :habit="habit" />
+          <HabitEditor
+            :habit="habit"
+            :get-token="getToken"
+            @saved="acceptHabit"
+            @unauthorized="signInRequired"
+          />
         </article>
       </section>
     </main>
