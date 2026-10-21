@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import assert from "node:assert/strict";
+import { cp, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { prettierCommand } from "./developer";
+import { prettierCommand, runDeveloper } from "./developer";
 
 test("both generated formatter commands cover Provider and repair a malformed supported file", async () => {
   const root = await mkdtemp(join(tmpdir(), "common-format-"));
@@ -93,3 +94,111 @@ test("developer CLI rejects unknown commands with a useful exit", async () => {
     "format|format:check|test:backend|test:browser",
   );
 });
+
+for (const outcome of ["Passed", "NotExecuted", "missing"]) {
+  test(`focused backend command requires fresh complete TRX after actual ${outcome} producer effects`, async () => {
+    const root = await mkdtemp(join(tmpdir(), "developer-trx-"));
+    try {
+      const report = join(root, ".audit/TestResults/backend.trx");
+      const trx =
+        '<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010"><Results><UnitTestResult executionId="1" testName="focused probe" outcome="Passed"/></Results><ResultSummary outcome="Completed"><Counters total="1" executed="1" passed="1" notExecuted="0"/></ResultSummary></TestRun>';
+      await mkdir(join(root, ".audit/TestResults"), { recursive: true });
+      await writeFile(report, trx);
+      const run = runDeveloper({
+        target: "test:backend",
+        root,
+        execute: async (command, cwd) => {
+          if (command[0] !== "dotnet" || command[1] !== "test") return 0;
+          expect(await Bun.file(report).exists()).toBe(false);
+          expect(command).toContain("trx;LogFileName=backend.trx");
+          if (outcome === "missing") return 0;
+          const child = Bun.spawn(
+            [
+              "node",
+              "-e",
+              `require("node:fs").writeFileSync(process.argv[1], process.argv[2]);`,
+              report,
+              trx.replace('outcome="Passed"', `outcome="${outcome}"`),
+            ],
+            { cwd, stdout: "pipe", stderr: "pipe" },
+          );
+          return await child.exited;
+        },
+      });
+      if (outcome === "Passed") expect(await run).toBe(0);
+      else await assert.rejects(run);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test("focused commands preserve a failing child's exit and stop before later effects", async () => {
+  const commands: string[][] = [];
+  const exit = await runDeveloper({
+    target: "test:backend",
+    root: process.cwd(),
+    execute: async (command, cwd) => {
+      commands.push(command);
+      return await Bun.spawn(["node", "-e", "process.exit(9)"], { cwd }).exited;
+    },
+  });
+  expect(exit).toBe(9);
+  expect(commands).toEqual([["bun", "scripts/doctor.ts", "backend"]]);
+});
+
+for (const entry of ["module load", "browser doctor"]) {
+  test(`cold checkout preserves ${entry} before installing acceptance dependencies`, async () => {
+    const root = await mkdtemp(join(tmpdir(), "developer-cold-"));
+    const source = fileURLToPath(new URL("../", import.meta.url));
+    try {
+      await mkdir(join(root, "scripts"));
+      await mkdir(join(root, "node_modules"));
+      for (const file of [
+        "package.json",
+        "global.json",
+        "scripts/check.ts",
+        "scripts/developer.ts",
+        "scripts/doctor.ts",
+        "scripts/acceptance-results.ts",
+      ]) {
+        await cp(join(source, file), join(root, file));
+      }
+      let args = [
+        "--eval",
+        'await import("./scripts/check.ts"); console.info("cold module loaded");',
+      ];
+      if (entry === "browser doctor")
+        args = ["scripts/developer.ts", "test:browser"];
+      const child = Bun.spawn(
+        [process.execPath, "--no-install", "--no-env-file", ...args],
+        {
+          cwd: root,
+          env: {
+            ...process.env,
+            DAMADAMA_BROWSER_PORT: "invalid",
+            DAMADAMA_API_PORT: "0",
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const [stdout, stderr, exit] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+      ]);
+      if (entry === "module load") {
+        expect(exit, stdout + stderr).toBe(0);
+        expect(stdout).toContain("cold module loaded");
+      } else {
+        expect(exit, stdout + stderr).toBe(1);
+        expect(stdout).toContain("DAMADAMA_BROWSER_PORT must be an integer");
+        expect(stdout).not.toContain("Running bun install");
+      }
+      expect(stderr).not.toContain('Cannot find package "saxes"');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 30_000);
+}

@@ -1,7 +1,9 @@
 import { defineConfig } from "@playwright/test";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import canonical from "../../../tests/Browser/playwright.config.ts";
+import canonical, {
+  acceptanceReporter,
+} from "../../../tests/Browser/playwright.config.ts";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -24,6 +26,7 @@ export default defineConfig({
   ),
   outputDir: join(root, ".audit/verification-skill/test-results"),
   reporter: [
+    [acceptanceReporter],
     ["list"],
     [
       "json",
