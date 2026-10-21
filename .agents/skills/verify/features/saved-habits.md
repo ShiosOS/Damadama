@@ -9,10 +9,11 @@ The saved list shows the account's accepted name, Good, Better and Best definiti
 - `list-persist` preserves the displayed values after reload.
 - `list-empty-error` shows empty prose only after a successful empty read and keeps loading, authentication refusal and failed reads distinct, including after the creation panel opens and closes.
 - `list-owner` removes the previous account's private rows on account change.
+- `list-controls` provides separate Edit and Archive controls and preserves archived rows with an Archived badge.
 
 ## How to get to it (user POV)
 
-Open the signed-in habit page and inspect region `Saved habits`, headed `Your habits`. Create a habit through `Add habit` when no saved row exists. A habit name is a heading and has no opened-detail route.
+Open the signed-in habit page and inspect region `Saved habits`, headed `Your habits`. Create a habit through `Add habit` when no saved row exists. A habit name is a heading and has no opened-detail route. Use the separate `Edit <habit name>` or `Archive <habit name>` button for [habit changes](edit-archive-habits.md). An archived row retains Edit and its values, displays `Archived`, and removes Archive.
 
 ## Driving it with Playwright
 
@@ -23,7 +24,7 @@ node node_modules/@playwright/test/cli.js test --config tests/Browser/playwright
 ```
 
 - Use the existing `reloading preserves every saved value` test. It creates Walking, inspects Good/Better/Best, weekdays and repeat interval, reloads, and checks the same values again.
-- Use `saved values appear once with a non-interactive habit name` to require one article/heading and no habit-name button or `Opened habit` region.
+- Use `saved values appear once with a non-interactive habit name` to require one article/heading, separate Edit/Archive buttons and no habit-name button or `Opened habit` region. The [history recipe](edit-archive-habits.md) verifies the archived badge and accepted changed values immediately and after reload.
 - Use the `saved habit reveal` group for the immediate viewport result after creation. Its ten cases cover eligible/ineligible dates, reduced motion, a held real Today response, populated Today, simulated refresh refusal, and cancellation by reopen/account/sign-out/date changes. Require the accepted schedule to enter the viewport without scrolling it in the test; a cancelled reveal must leave the replacement view undisturbed. These checks complement the independent reload recipe.
 - Use `the saved list shows empty prose only after its initial read succeeds` to hold the real unfiltered `GET /api/habits` response. Require loading with zero articles and no empty prose, then require the empty message after the 200 response arrives.
 - Use `expired authentication explains how to continue` to require real authentication alerts, zero articles and no empty prose. Use `a failed saved-list read shows its error without empty prose` for a simulated 503 response. The simulated response proves UI error handling, not a storage outage.

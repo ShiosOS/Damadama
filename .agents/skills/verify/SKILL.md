@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Verify Damadama habit creation, saved habits, Today dates, daily entries and session boundaries through its existing browser and API harnesses. Use for user-visible behavior checks and verification-map upkeep.
+description: Verify Damadama habit creation, editing, archiving, Today dates, daily entries, yearly activity and session boundaries through its existing browser and API harnesses. Use for user-visible behavior checks and verification-map upkeep.
 ---
 
 # Verify Damadama
@@ -40,9 +40,17 @@ Use the production controls named by the feature map. After canonical preparatio
 node .agents/skills/verify/native-session.mjs
 ```
 
-The [native wrapper](native-session.mjs) requires Linux `/proc`, `ps`, `lsof` and the prepared Docker prerequisites. It runs its receipt tests, literal `bun run doctor browser`, then `node node_modules/@playwright/test/cli.js test --config .agents/skills/verify/playwright.config.mjs`. It records each actual exit separately and refuses unsupported platforms before doctor or Docker. Do not repeat a known-blocked Windows Docker or fullcheck attempt. Use the current source's Linux CI for the complete native proof.
+The [native wrapper](native-session.mjs) requires Linux `/proc`, `ps`, `lsof` and the prepared Docker prerequisites. It runs its receipt tests, literal `bun run doctor browser`, then the skill's Playwright configuration. It records each actual exit separately and refuses unsupported platforms before doctor or Docker. Use the current source's Linux CI for complete native proof when Linux is unavailable locally.
 
-[The skill config](playwright.config.mjs) reuses canonical startup, readiness, serial driving and browser settings. It selects `habits.spec.ts`, `today.spec.ts`, `entries.spec.ts` and `accessibility.spec.ts`, plus [focused observations](observations.spec.mjs) for cancelled-draft retention with immediate/reloaded values, initial unfiltered saved-list loading/authentication refusal and the actual past-date `Today` button. It stops after the first failure and bounds the invocation to five minutes. It adds no application server or fixture account. The creation observation uses the existing `performance` account because the performance spec is excluded from this invocation. The other observations use the empty `other` account without writing rows.
+After canonical preparation and doctor, a supported Windows checkout can replay the same complete browser selection directly:
+
+```sh
+node node_modules/@playwright/test/cli.js test --config .agents/skills/verify/playwright.config.mjs
+```
+
+Label that result as an integrated browser replay. It does not produce the native wrapper's Linux process, listener, container or cleanup receipts. Preserve named evidence before another invocation replaces it.
+
+[The skill config](playwright.config.mjs) reuses canonical startup, readiness, serial driving and browser settings. It selects the habit, Today, entry, history, heatmap and accessibility specs, plus [focused observations](observations.spec.mjs) for cancelled-draft retention with immediate/reloaded values, initial unfiltered saved-list loading/authentication refusal and the actual past-date `Today` button. It stops after the first failure and bounds the invocation to five minutes. It adds no application server or fixture account. The creation observation uses the existing `performance` account because the performance spec is excluded from this invocation. The other observations use the empty `other` account without writing rows.
 
 Keep the canonical acceptance reporter when changing this config's reporter list. It rejects skipped, expected-failure, retried and unexecuted cases. The inherited `forbidOnly` rejects focused tests. [The runner probes](../../../scripts/acceptance-browser.test.ts) exercise both configurations without application servers. They prove the execution policy, not the mapped application journeys. Compatibility's project-routing skips and manual Provider checks are separate from this canonical completeness policy.
 
@@ -70,7 +78,7 @@ Existing specs write named synthetic screenshots under `.audit/`, browser output
 
 The complete-map command writes raw JSON, an HTML report and failure output under `.audit/verification-skill/`. Its observations add `habit-immediate.png`, `habit-reloaded.png`, `saved-list-loading.png`, `saved-list-refused.png`, `calendar-past.png` and `calendar-today.png` there. The saved-list assertions require no empty prose during loading or authentication refusal. The attachment retains those observed booleans, both `false`, alongside the screenshots.
 
-Each native attempt retains `.audit/verification-skill/retained/<run UUID>/`, including failed or incomplete attempts. `session.json` records source and build fingerprints, doctor and invocation outcomes, baseline metadata, and observed process starts, listeners and container identity. `cleanup.json` records the separate cleanup outcome and retained-media hashes. `selected-tests.json` contains actual names, statuses and the saved-list observation's two booleans. It excludes raw output, errors and all other attachment data. Only thirteen fixed synthetic screenshots/recordings listed in [native-evidence.mjs](native-evidence.mjs) can be copied there, and only when fresh for that invocation. The distinct CI upload includes this retained directory. Raw JSON and HTML reports are outside that upload.
+Each native attempt retains `.audit/verification-skill/retained/<run UUID>/`, including failed or incomplete attempts. `session.json` records source and build fingerprints, doctor and invocation outcomes, baseline metadata, and observed process starts, listeners and container identity. `cleanup.json` records the separate cleanup outcome and retained-media hashes. `selected-tests.json` contains actual names, statuses and the saved-list observation's two booleans. It excludes raw output, errors and all other attachment data. Only the fixed synthetic screenshots and recordings listed in [native-evidence.mjs](native-evidence.mjs) can be copied there, and only when fresh for that invocation. They include edit/reload, archive choices, pending entry commands, yearly totals and keyboard/mobile views. Every listed file must be retained for a complete native pass. The distinct CI upload includes this retained directory. Raw JSON and HTML reports are outside that upload.
 
 Keep `fixture.json`, `.env` files, JWTs, connection strings, storage state and provider browser captures out of retained proof. Synthetic account controls are never evidence of Clerk sign-in or provider sign-out. [The provider runbook](../../../tests/Provider/README.md) defines its sanitized receipt and email/MFA limits.
 
