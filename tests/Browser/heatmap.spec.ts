@@ -552,6 +552,11 @@ test("neutral dates expose the same detail by hover keyboard and touch without p
   await expect(heatmap(page).getByRole("status")).toContainText(
     "Sunday, January 5, 2025. Nothing scheduled.",
   );
+  await day(page, "2025-01-12").hover();
+  await expect(day(page, "2025-01-05")).toBeFocused();
+  await expect(heatmap(page).getByRole("status")).toContainText(
+    "Sunday, January 12, 2025. Nothing scheduled.",
+  );
   const scan = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .analyze();

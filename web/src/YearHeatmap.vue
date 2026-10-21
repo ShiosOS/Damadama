@@ -240,7 +240,7 @@ onUnmounted(() => {
               :aria-pressed="selectedDate === day.date"
               :tabindex="focusedDate === day.date ? 0 : -1"
               :style="{ '--completion': day.completion ?? 0 }"
-              @pointerenter="select(day)"
+              @pointermove="select(day)"
               @focus="focus(day)"
               @click="select(day)"
               @keydown="move($event, index)"
