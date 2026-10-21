@@ -70,7 +70,6 @@ export default {
   outputDir: "results-${control}",
   projects: [desktop],
   reporter: [[${JSON.stringify(resolve(".github/diagnostics/compatibility-save-calibration-reporter.mjs").replaceAll("\\", "/"))}]],
-  maxFailures: 1,
 };
 `,
 );
