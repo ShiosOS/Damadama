@@ -1,5 +1,25 @@
-import { test, expect } from "@playwright/test";
+import { test as base, expect } from "@playwright/test";
 import { setTimeout as delay } from "node:timers/promises";
+
+const test = base.extend({
+  context: [
+    async ({ browser, baseURL }, use) => {
+      const context = await browser.newContext({ baseURL });
+      try {
+        await use(context);
+      } finally {
+        await context.close();
+      }
+    },
+    { timeout: 5000 },
+  ],
+  page: [
+    async ({ context }, use) => {
+      await use(await context.newPage());
+    },
+    { timeout: 5000 },
+  ],
+});
 
 async function fillAndSave(page) {
   await page.keyboard.press("Enter");
@@ -25,7 +45,7 @@ test("desktop creation and saved details remain stable", async ({
 }) => {
   await page.goto("/");
   await expect(page.getByRole("button")).toBeFocused();
-  if (process.env.QUIET_PASSIVE_CASE === "consumed") await delay(1500);
+  if (process.env.QUIET_PASSIVE_CASE === "consumed") await delay(2000);
   if (process.env.QUIET_PASSIVE_CASE === "foreign") {
     const foreign = await context.newPage();
     await foreign.goto("/");
