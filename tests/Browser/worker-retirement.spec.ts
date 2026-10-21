@@ -1,6 +1,8 @@
 import { createServer } from "node:http";
 import { expect, test } from "@playwright/test";
 
+const apiOrigin = `http://localhost:${process.env["DAMADAMA_API_PORT"] ?? "5055"}`;
+
 const legacyNavigationCacheWorker = `
 self.addEventListener("install", event => event.waitUntil(
   caches.open("legacy-shell").then(cache => cache.add("/"))
@@ -142,7 +144,7 @@ test("staging worker retires a cached shell without changing open drafts or stor
     await page.reload();
     await expect(page).toHaveTitle("Legacy journal");
 
-    const endpoint = await request.get("http://localhost:5055/sw.js", {
+    const endpoint = await request.get(`${apiOrigin}/sw.js`, {
       headers: { Host: "staging.damadama.app" },
     });
     expect(endpoint.status()).toBe(200);
