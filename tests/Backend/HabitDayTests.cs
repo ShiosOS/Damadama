@@ -41,24 +41,24 @@ public class HabitDayTests
         foreignEntry.EnsureSuccessStatusCode();
 
         using var response = await client.GetAsync("/api/habit-days/2026-01-05");
-        var day = (await response.Content.ReadFromJsonAsync<HabitDayResponse>())!;
+        var day = await response.Content.ReadFromJsonAsync<JsonElement>();
         using var empty = app.SignedIn("empty-day-owner");
-        var emptyDay = (await empty.GetFromJsonAsync<HabitDayResponse>("/api/habit-days/2026-01-05"))!;
-        var beforeCreation = (await client.GetFromJsonAsync<HabitDayResponse>("/api/habit-days/2026-01-03"))!;
+        var emptyDay = await empty.GetFromJsonAsync<JsonElement>("/api/habit-days/2026-01-05");
+        var beforeCreation = await client.GetFromJsonAsync<JsonElement>("/api/habit-days/2026-01-03");
 
         Assert.Multiple(() =>
         {
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
             Assert.That(response.Headers.CacheControl?.Private, Is.True);
             Assert.That(response.Headers.CacheControl?.NoStore, Is.True);
-            Assert.That(day.Date, Is.EqualTo(new DateOnly(2026, 1, 5)));
-            Assert.That(day.Habits.Select(habit => habit.Id), Is.EqualTo(new[] { missing }));
-            Assert.That(day.Entries.Select(entry => entry.HabitId), Is.EqualTo(new[] { retained }));
-            Assert.That(day.Entries.Single().Result, Is.EqualTo("Clear"));
-            Assert.That(emptyDay.Habits, Is.Empty);
-            Assert.That(emptyDay.Entries, Is.Empty);
-            Assert.That(beforeCreation.Habits, Is.Empty);
-            Assert.That(beforeCreation.Entries, Is.Empty);
+            Assert.That(day.GetProperty("date").GetString(), Is.EqualTo("2026-01-05"));
+            Assert.That(day.GetProperty("habits").EnumerateArray().Select(habit => habit.GetProperty("id").GetGuid()), Is.EqualTo(new[] { missing }));
+            Assert.That(day.GetProperty("entries").EnumerateArray().Select(entry => entry.GetProperty("habitId").GetGuid()), Is.EqualTo(new[] { retained }));
+            Assert.That(day.GetProperty("entries")[0].GetProperty("result").GetString(), Is.EqualTo("Clear"));
+            Assert.That(emptyDay.GetProperty("habits").GetArrayLength(), Is.Zero);
+            Assert.That(emptyDay.GetProperty("entries").GetArrayLength(), Is.Zero);
+            Assert.That(beforeCreation.GetProperty("habits").GetArrayLength(), Is.Zero);
+            Assert.That(beforeCreation.GetProperty("entries").GetArrayLength(), Is.Zero);
         });
     }
 
@@ -115,17 +115,17 @@ public class HabitDayTests
         }
         finally { gate.Release.TrySetResult(); }
         var original = await reading;
-        var fresh = (await client.GetFromJsonAsync<HabitDayResponse>("/api/habit-days/2026-01-05"))!;
+        var fresh = await client.GetFromJsonAsync<JsonElement>("/api/habit-days/2026-01-05");
         Assert.Multiple(() =>
         {
             Assert.That(gate.Reads, Is.EqualTo(3));
             Assert.That(original.Habits.Single().Name, Is.EqualTo("Walking"));
             Assert.That(original.Entries.Single().HabitName, Is.EqualTo("Walking"));
             Assert.That(original.Entries.Single().Result, Is.EqualTo("Good"));
-            Assert.That(fresh.Habits, Is.Empty);
-            Assert.That(fresh.Entries.Single().HabitName, Is.EqualTo("Renamed"));
-            Assert.That(fresh.Entries.Single().Result, Is.EqualTo("Best"));
-            Assert.That(fresh.Entries.Single().Good, Is.EqualTo(HabitTests.Walking.Good));
+            Assert.That(fresh.GetProperty("habits").GetArrayLength(), Is.Zero);
+            Assert.That(fresh.GetProperty("entries")[0].GetProperty("habitName").GetString(), Is.EqualTo("Renamed"));
+            Assert.That(fresh.GetProperty("entries")[0].GetProperty("result").GetString(), Is.EqualTo("Best"));
+            Assert.That(fresh.GetProperty("entries")[0].GetProperty("good").GetString(), Is.EqualTo(HabitTests.Walking.Good));
         });
     }
 
@@ -138,12 +138,12 @@ public class HabitDayTests
             using var saved = await client.PutAsJsonAsync($"/api/habits/{id}/entries/2026-01-05", EntrySteps.Change());
             saved.EnsureSuccessStatusCode();
         }
-        var day = (await client.GetFromJsonAsync<HabitDayResponse>("/api/habit-days/2026-01-05"))!;
+        var day = await client.GetFromJsonAsync<JsonElement>("/api/habit-days/2026-01-05");
         var expected = ids.Select(id => id.ToString()).Order(StringComparer.Ordinal).ToArray();
         Assert.Multiple(() =>
         {
-            Assert.That(day.Habits.Select(habit => habit.Id.ToString()), Is.EqualTo(expected));
-            Assert.That(day.Entries.Select(entry => entry.HabitId.ToString()), Is.EqualTo(expected));
+            Assert.That(day.GetProperty("habits").EnumerateArray().Select(habit => habit.GetProperty("id").GetString()), Is.EqualTo(expected));
+            Assert.That(day.GetProperty("entries").EnumerateArray().Select(entry => entry.GetProperty("habitId").GetString()), Is.EqualTo(expected));
         });
     }
 
