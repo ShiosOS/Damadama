@@ -409,6 +409,9 @@ test("the editor keeps invalid drafts and supports mobile keyboard controls", as
   await dialog
     .getByRole("textbox", { name: "Good", exact: true })
     .fill("10 minutes");
+  await dialog
+    .getByRole("button", { name: "Save changes", exact: true })
+    .hover();
   const scan = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .analyze();

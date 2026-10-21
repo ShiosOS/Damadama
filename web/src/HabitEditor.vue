@@ -281,6 +281,7 @@ onUnmounted(() => {
         <UButton
           v-else
           type="submit"
+          class="editor-save"
           block
           :loading="activity.kind === 'saving'"
           :disabled="formDisabled"
@@ -344,3 +345,9 @@ onUnmounted(() => {
     </template>
   </UModal>
 </template>
+
+<style scoped>
+.editor-save:hover {
+  background-color: var(--ui-primary);
+}
+</style>
