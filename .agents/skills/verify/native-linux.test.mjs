@@ -65,7 +65,7 @@ test("actual child/listener identity becomes absent after its owned termination"
 test(
   "an actual process exit between opening and reading stat is absence",
   { timeout: 10_000 },
-  async () => {
+  async (t) => {
     const child = spawn(
       process.execPath,
       ["-e", "console.log('ready'); setInterval(() => {}, 1000)"],
@@ -73,14 +73,14 @@ test(
     );
     let readErrorCode;
     try {
-      await once(child.stdout, "data");
+      await once(child.stdout, "data", { signal: t.signal });
       const identity = await processIdentity(
         child.pid,
         async (path, encoding) => {
           if (path.endsWith("boot_id")) return readFile(path, encoding);
           const handle = await open(path, "r");
           try {
-            const exited = once(child, "exit");
+            const exited = once(child, "exit", { signal: t.signal });
             child.kill("SIGTERM");
             await exited;
             return await handle.readFile(encoding);
