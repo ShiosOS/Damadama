@@ -175,6 +175,12 @@ const mutations = [
     },
   ],
   [
+    "rule/heatmap-read-only",
+    (doc) => {
+      doc.paths["/api/heatmaps"].post = doc.paths[habits].post;
+    },
+  ],
+  [
     "rule/config-singleton",
     (doc) => {
       doc.paths["/api/config"].put = doc.paths[entry].put;
@@ -215,6 +221,18 @@ const mutations = [
     "rule/private-unauthorized",
     (doc) => {
       delete doc.paths[habits].get.responses[401];
+    },
+  ],
+  [
+    "rule/private-security",
+    (doc) => {
+      delete doc.paths["/api/heatmaps"].get.security;
+    },
+  ],
+  [
+    "rule/private-unauthorized",
+    (doc) => {
+      delete doc.paths["/api/heatmaps"].get.responses[401];
     },
   ],
 ];

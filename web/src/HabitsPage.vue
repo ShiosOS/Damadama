@@ -13,6 +13,7 @@ import HabitDetails from "./HabitDetails.vue";
 import CheckeredD from "./CheckeredD.vue";
 import TodayView from "./TodayView.vue";
 import HabitEditor from "./HabitEditor.vue";
+import YearHeatmap from "./YearHeatmap.vue";
 import type { TodayHandle } from "./TodayView.types";
 
 type Props = {
@@ -21,6 +22,7 @@ type Props = {
 };
 const props = defineProps<Props>();
 const emit = defineEmits<{ committed: [] }>();
+const revision = ref(0);
 const api = habitsApi(() => props.getToken());
 const habits = ref<Habit[] | null>(null);
 type Activity =
@@ -47,6 +49,11 @@ const blank = (): Omit<NewHabit, "timeZone"> => ({
 });
 const form = reactive(blank());
 let generation = 0;
+
+function committed(): void {
+  revision.value++;
+  emit("committed");
+}
 
 function showError(error: unknown): void {
   let message =
@@ -133,7 +140,7 @@ async function save(): Promise<void> {
     });
     if (current !== generation) return;
     habits.value = [...(habits.value ?? []), saved];
-    emit("committed");
+    committed();
     const layout = today.value?.refreshAfterCreate();
     if (layout)
       pendingReveal = { habitId: saved.id, accountGeneration: current, layout };
@@ -155,7 +162,7 @@ function acceptHabit(saved: Habit): void {
   habits.value = (habits.value ?? []).map((habit) =>
     habit.id === saved.id ? saved : habit,
   );
-  emit("committed");
+  committed();
   void today.value?.refreshAfterChange();
 }
 
@@ -325,7 +332,7 @@ onBeforeUnmount(() => {
         :key="accountId ?? ''"
         :account-id="accountId"
         :get-token="getToken"
-        @committed="emit('committed')"
+        @committed="committed"
       />
       <section aria-label="Saved habits">
         <h2 class="page-title">Your habits</h2>
@@ -349,6 +356,11 @@ onBeforeUnmount(() => {
           />
         </article>
       </section>
+      <YearHeatmap
+        :account-id="accountId"
+        :get-token="getToken"
+        :revision="revision"
+      />
     </main>
   </section>
   <p v-else class="signed-out-message">

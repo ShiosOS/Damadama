@@ -13,7 +13,7 @@ public static class HeatmapEndpoints
             .ProducesProblem(503).RequireAuthorization();
     }
 
-    private static async Task<IResult> ReadHeatmap(string? deviceToday, string? timeZone, HttpRequest request,
+    private static async Task<IResult> ReadHeatmap(string deviceToday, string timeZone, HttpRequest request,
         ClaimsPrincipal user, IHistoryReader history, TimeProvider clock, CancellationToken cancellationToken)
     {
         if (request.Query["deviceToday"].Count != 1)

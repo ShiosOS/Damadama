@@ -181,6 +181,140 @@ test("an unacknowledged entry leaves heatmap totals unchanged until the committe
   await expect(day(page)).toHaveAttribute("data-completion", String(1 / 3));
 });
 
+test("committed definition schedule and archive choices refresh real totals and preserve retained entries after reload", async ({
+  page,
+  context,
+}, testInfo) => {
+  const video = page.video();
+  if (!video)
+    throw new Error("The history heatmap journey requires a recording.");
+  try {
+    const schedule = await seed(page, "heatmapChanges", "Schedule totals");
+    const keep = await seed(page, "heatmapChanges", "Keep totals");
+    const remove = await seed(page, "heatmapChanges", "Remove totals");
+    await open(page, "heatmapChanges");
+    for (const [name, result] of [
+      [schedule.name, "Good"],
+      [keep.name, "Better"],
+      [remove.name, "Best"],
+    ] satisfies [string, string][]) {
+      const controls = page.getByRole("group", {
+        name: `Result for ${name}`,
+        exact: true,
+      });
+      await controls.getByRole("button", { name: result, exact: true }).click();
+      await expect(controls.getByRole("status")).toHaveText(
+        `${result} is saved.`,
+      );
+    }
+    await expect(day(page)).toHaveAttribute(
+      "aria-label",
+      /6 of 9 points.*3 habits scheduled/,
+    );
+    await page
+      .getByRole("button", { name: `Edit ${schedule.name}`, exact: true })
+      .click();
+    const editor = page.getByRole("dialog", {
+      name: "Edit habit",
+      exact: true,
+    });
+    await editor
+      .getByRole("textbox", { name: "Good", exact: true })
+      .fill("A longer walk");
+    const definitionRefresh = page.waitForResponse(
+      (response) =>
+        response.request().method() === "GET" &&
+        new URL(response.url()).pathname === "/api/heatmaps",
+    );
+    await editor
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    expect((await definitionRefresh).status()).toBe(200);
+    await expect(editor).toBeHidden();
+    await expect(day(page)).toHaveAttribute(
+      "aria-label",
+      /6 of 9 points.*3 habits scheduled/,
+    );
+    await page
+      .getByRole("button", { name: `Edit ${schedule.name}`, exact: true })
+      .click();
+    await editor
+      .getByRole("checkbox", { name: "Sunday", exact: true })
+      .uncheck();
+    await editor.getByRole("checkbox", { name: "Monday", exact: true }).check();
+    await editor
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    await expect(
+      editor.getByRole("group", { name: "Today's saved entry" }),
+    ).toBeVisible();
+    await editor
+      .getByRole("button", { name: "Remove today", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    await expect(day(page)).toHaveAttribute(
+      "aria-label",
+      /5 of 6 points.*2 habits scheduled/,
+    );
+    await screenshot(page, testInfo, "heatmap-schedule-remove");
+    await page.reload();
+    await expect(day(page)).toHaveAttribute(
+      "aria-label",
+      /5 of 6 points.*2 habits scheduled/,
+    );
+    for (const [name, choice, total] of [
+      [keep.name, "Keep", /5 of 6 points.*2 habits scheduled/],
+      [remove.name, "Remove", /2 of 3 points.*1 habit scheduled/],
+    ] satisfies [string, string, RegExp][]) {
+      await page
+        .getByRole("button", { name: `Archive ${name}`, exact: true })
+        .click();
+      const archive = page.getByRole("dialog", {
+        name: "Archive habit",
+        exact: true,
+      });
+      await archive
+        .getByRole("button", { name: "Archive habit", exact: true })
+        .click();
+      await expect(
+        archive.getByRole("group", { name: "Today's saved entry" }),
+      ).toBeVisible();
+      await archive
+        .getByRole("button", { name: `${choice} today`, exact: true })
+        .click();
+      await expect(archive).toBeHidden();
+      await expect(day(page)).toHaveAttribute("aria-label", total);
+      await page.reload();
+      await expect(day(page)).toHaveAttribute("aria-label", total);
+    }
+    const today = page.getByRole("region", { name: "Today", exact: true });
+    for (const name of [schedule.name, keep.name, remove.name])
+      await expect(
+        today.getByRole("group", { name: `Result for ${name}`, exact: true }),
+      ).toBeVisible();
+    const token = await tokenFor(page, "heatmapChanges");
+    const future = await page.request.get(
+      "/api/habits?scheduledOn=2026-01-12",
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    expect(
+      z
+        .array(habitSchema)
+        .parse(await future.json())
+        .map((habit) => habit.id),
+    ).toEqual([schedule.id]);
+    await screenshot(page, testInfo, "heatmap-archive-choices-reloaded");
+  } finally {
+    await context.close();
+    const recording = testInfo.outputPath("heatmap-history-flow.webm");
+    await video.saveAs(recording);
+    await testInfo.attach("heatmap-history-flow", {
+      path: recording,
+      contentType: "video/webm",
+    });
+  }
+});
+
 test("loading waits for a real read and displays no invented empty cells", async ({
   page,
 }) => {

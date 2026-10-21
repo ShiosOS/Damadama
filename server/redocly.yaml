@@ -54,6 +54,12 @@ rules:
       matchParentKeys: '^/api/habits/\{id\}/archives$'
     assertions:
       disallowed: [get, put, patch, delete, head, options, trace]
+  rule/heatmap-read-only:
+    subject:
+      type: PathItem
+      filterInParentKeys: [/api/heatmaps]
+    assertions:
+      disallowed: [post, put, patch, delete, head, options, trace]
   rule/config-singleton:
     subject:
       type: PathItem
@@ -64,7 +70,7 @@ rules:
     subject:
       type: Paths
     assertions:
-      pattern: '^/api/(config|habits(/\{id\}(/entries/\{date\}|/archives)?)?|entries)$'
+      pattern: '^/api/(config|habits(/\{id\}(/entries/\{date\}|/archives)?)?|entries|heatmaps)$'
   rule/created-location:
     subject:
       type: Response
@@ -92,7 +98,7 @@ rules:
     where:
       - subject:
           type: PathItem
-          matchParentKeys: "^/api/(habits|entries)"
+          matchParentKeys: "^/api/(habits|entries|heatmaps)"
         assertions:
           defined: true
     subject:
@@ -116,7 +122,7 @@ rules:
     where:
       - subject:
           type: PathItem
-          matchParentKeys: "^/api/(habits|entries)"
+          matchParentKeys: "^/api/(habits|entries|heatmaps)"
         assertions:
           defined: true
     subject:

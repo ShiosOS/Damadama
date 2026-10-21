@@ -5,6 +5,7 @@
   "/api/habits/{id:guid}",
   "/api/habits/{id:guid}/archives",
   "/api/habits/{id:guid}/entries/{date}",
+  "/api/heatmaps",
   "/health/live",
   "/health/ready",
   "/openapi/{documentName}.json",

@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Damadama.Entries;
 using Damadama.Habits;
+using Damadama.Heatmap;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.OpenApi;
 
@@ -33,7 +34,7 @@ public static class ApiContract
             options.AddOperationTransformer((operation, context, cancellationToken) =>
             {
                 foreach (var parameter in operation.Parameters ?? [])
-                    if (parameter.Name is "date" or "scheduledOn" && parameter.Schema is OpenApiSchema schema)
+                    if (parameter.Name is "date" or "scheduledOn" or "deviceToday" && parameter.Schema is OpenApiSchema schema)
                     {
                         schema.Type = JsonSchemaType.String;
                         schema.Format = "date";
@@ -72,7 +73,8 @@ public static class ApiContract
                 var type = context.JsonTypeInfo.Type;
                 if (type == typeof(CreateHabit) || type == typeof(WriteEntry) || type == typeof(HabitResponse) ||
                     type == typeof(EntryResponse) || type == typeof(InitialSchedule) || type == typeof(ApplicationConfig) ||
-                    type == typeof(EditHabit) || type == typeof(ArchiveHabit) || type == typeof(Recurrence))
+                    type == typeof(EditHabit) || type == typeof(ArchiveHabit) || type == typeof(Recurrence) ||
+                    type == typeof(HeatmapResponse) || type == typeof(HeatmapDate))
                 {
                     schema.Required = schema.Properties?.Keys.ToHashSet() ?? [];
                     if (type == typeof(EditHabit)) schema.Required.ExceptWith(["schedule", "todayChoice"]);
@@ -80,7 +82,19 @@ public static class ApiContract
                     foreach (var (name, property) in schema.Properties?.AsEnumerable() ?? [])
                     {
                         if (property is not OpenApiSchema value) continue;
-                        if (type != typeof(ApplicationConfig) && name is not ("schedule" or "todayChoice")) value.Type &= ~JsonSchemaType.Null;
+                        if (type != typeof(ApplicationConfig) && name is not ("schedule" or "todayChoice" or "completion")) value.Type &= ~JsonSchemaType.Null;
+                        if (type == typeof(HeatmapDate) && name == "completion")
+                        {
+                            value.Minimum = "0";
+                            value.Maximum = "1";
+                        }
+                        if (type == typeof(HeatmapDate) && name is "scheduledCount" or "earnedPoints" or "maximumPoints")
+                            value.Minimum = "0";
+                        if (type == typeof(HeatmapResponse) && name == "days")
+                        {
+                            value.MinItems = 365;
+                            value.MaxItems = 365;
+                        }
                         if (name == "todayChoice") value.Pattern = "^(Keep|Remove)$";
                         if (name is "name" or "good" or "better" or "best" or "timeZone")
                         {

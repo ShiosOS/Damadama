@@ -19,6 +19,7 @@ test.use({ viewport: { width: 1280, height: 800 } });
 test("optimized habit page stays within layout and request budgets", async ({
   page,
 }, testInfo) => {
+  await page.clock.setFixedTime(new Date("2026-01-05T00:30:00Z"));
   let requests = 0;
   let runtimeErrors = 0;
   let failedRequests = 0;
