@@ -13,6 +13,67 @@ jobs:
         with:
           script: |
             const body = context.payload.pull_request.body ?? "";
+            function metadataFailure(markdown) {
+              const sections = new Map();
+              let current;
+              let fence;
+              const visible = markdown.replace(/<!--[\s\S]*?(?:-->|$)/g, "");
+              for (const line of visible.split(/\r?\n/)) {
+                if (fence) {
+                  current?.content.push(line);
+                  const closing = line.match(/^ {0,3}(`+|~+)[ \t]*$/)?.[1];
+                  if (closing?.[0] === fence[0] && closing.length >= fence.length) fence = undefined;
+                  continue;
+                }
+                const opening = line.match(/^ {0,3}(`{3,}|~{3,})[^\r\n]*$/)?.[1];
+                if (opening) {
+                  fence = opening;
+                  current?.content.push(line);
+                  continue;
+                }
+                const heading = line.match(/^ {0,3}(#{1,6})[ \t]+(.+?)[ \t]*$/);
+                if (heading && heading[1].length <= 2) {
+                  current = undefined;
+                  if (heading[1].length === 2) {
+                    const title = heading[2].replace(/[ \t]+#+[ \t]*$/, "");
+                    current = { content: [], prose: [] };
+                    const copies = sections.get(title) ?? [];
+                    copies.push(current);
+                    sections.set(title, copies);
+                  }
+                  continue;
+                }
+                current?.content.push(line);
+                if (!/^(?: {4}|\t)/.test(line)) current?.prose.push(line);
+              }
+              function meaningful(lines) {
+                const text = lines.join("\n")
+                  .replace(/^ {0,3}(?:`{3,}|~{3,})[^\r\n]*$/gm, "")
+                  .replace(/^ {0,3}#{1,6}[ \t]+[^\r\n]*$/gm, "")
+                  .replace(/<[^>]*>/g, "")
+                  .replace(/[`*_#[\]>-]/g, "")
+                  .trim();
+                return /[\p{L}\p{N}]/u.test(text) &&
+                  !/^(?:TODO|TBD|Describe the problem and who the change helps\.|State what this PR includes and any deferred work\.|List the commands you ran and their results\. Link the actual output in a CI run or PR attachment\.)$/i.test(text);
+              }
+              const requirements = sections.get("Requirements") ?? [];
+              if (requirements.length !== 1) return "Use exactly one ## Requirements section.";
+              const prose = requirements[0].prose.join("\n");
+              const stories = [...prose.matchAll(/^ {0,3}Story:[ \t]*(.*)$/gm)];
+              if (stories.length !== 1 || !/^https:\/\/app\.notion\.com\/p\/[0-9a-f]{32}$/.test(stories[0][1].trim())) {
+                return "Add exactly one Story field under ## Requirements with a canonical https://app.notion.com/p/<32-character-page-id> URL.";
+              }
+              const outcomes = [...prose.matchAll(/^ {0,3}Outcome:[ \t]*(.*)$/gm)];
+              if (outcomes.length !== 1 || !meaningful([outcomes[0][1]])) {
+                return "Add exactly one nonblank Outcome field under ## Requirements. Replace template prompts with the intended result.";
+              }
+              for (const heading of ["Scope", "Acceptance examples", "Verification"]) {
+                const copies = sections.get(heading) ?? [];
+                if (copies.length !== 1) return `Use exactly one ## ${heading} section.`;
+                if (!meaningful(copies[0].content)) return `Fill ## ${heading} with the PR's actual ${heading.toLowerCase()}. Replace template prompts.`;
+              }
+              if ((sections.get("Evidence") ?? []).length !== 1) return "Use exactly one ## Evidence section.";
+            }
             const files = await github.paginate(github.rest.pulls.listFiles, {
               ...context.repo,
               pull_number: context.payload.pull_request.number,
@@ -69,4 +130,8 @@ jobs:
               core.setFailed(`Move generated verification output out of Git and link PR attachments or CI artifacts instead: ${generated.filename}`);
             } else if (repositoryMedia) {
               core.setFailed("Use PR attachments or CI artifacts for screenshot and recording evidence, not repository blob or raw URLs.");
+            } else {
+              const failure = metadataFailure(body);
+              if (failure) core.setFailed(failure);
+              else core.notice("PR metadata format passed. Linked-story contents and semantic focus remain unverified.");
             }
