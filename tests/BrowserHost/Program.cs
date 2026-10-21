@@ -87,6 +87,7 @@ var fixture = JsonSerializer.Serialize(new
     historyRetry = app.Token("history-retry-account"),
     historyAccount = app.Token("history-account-change-account"),
     historyMobile = app.Token("history-mobile-account"),
+    historyRetryDraft = app.Token("history-retry-draft-account"),
     heatmap = app.Token("heatmap-account"),
     heatmapReload = app.Token("heatmap-reload-account"),
     heatmapLoading = app.Token("heatmap-loading-account"),

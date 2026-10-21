@@ -422,3 +422,72 @@ test("the editor keeps invalid drafts and supports mobile keyboard controls", as
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
 });
+
+test("changing a failed draft starts a new command instead of replaying its older values", async ({
+  page,
+}) => {
+  const { habit, token } = await open(
+    page,
+    "historyRetryDraft",
+    "Corrected retry draft",
+  );
+  const commands: string[] = [];
+  await page.route(`**/api/habits/${habit.id}`, async (route) => {
+    if (route.request().method() !== "PATCH") {
+      await route.continue();
+      return;
+    }
+    const input = editHabitSchema.parse(route.request().postDataJSON());
+    commands.push(input.mutationId);
+    if (commands.length === 1) {
+      const committed = await route.fetch();
+      expect(committed.status()).toBe(200);
+      await route.abort("failed");
+      return;
+    }
+    await route.continue();
+  });
+  await savedRow(page, habit.name)
+    .getByRole("button", { name: `Edit ${habit.name}`, exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Edit habit", exact: true });
+  await dialog
+    .getByRole("textbox", { name: "Good", exact: true })
+    .fill("8 minutes");
+  await dialog
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  await expect(dialog.getByRole("alert")).toBeVisible();
+  const first = habitSchema.parse(
+    await (
+      await page.request.get(`/api/habits/${habit.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).json(),
+  );
+  expect(first.good).toBe("8 minutes");
+  expect(first.revision).toBe(1);
+  await dialog
+    .getByRole("textbox", { name: "Good", exact: true })
+    .fill("10 minutes");
+  await expect(
+    dialog.getByRole("button", { name: "Retry change", exact: true }),
+  ).toBeHidden();
+  await dialog
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  await expect(dialog).toBeHidden();
+  expect(commands).toHaveLength(2);
+  expect(commands[1]).not.toBe(commands[0]);
+  const corrected = habitSchema.parse(
+    await (
+      await page.request.get(`/api/habits/${habit.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).json(),
+  );
+  expect(corrected.good).toBe("10 minutes");
+  expect(corrected.revision).toBe(2);
+  await page.reload();
+  await expect(savedRow(page, habit.name)).toContainText("10 minutes");
+});
