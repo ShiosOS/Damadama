@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import {
   mkdir,
+  copyFile,
   mkdtemp,
   lstat,
   readFile,
@@ -16,6 +17,7 @@ import { createServer } from "node:http";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
+import { fixtureFormatCommand, runDeveloper } from "./developer";
 
 type ResponseFixture =
   | { kind: "os"; os: string }
@@ -514,3 +516,84 @@ test("doctor refuses an actual Docker template failure even after it prints linu
   assert.equal(JSON.stringify(result.result).includes(privateMarker), false);
   assert.deepEqual(current.invocations, []);
 }, 20_000);
+
+test("contributor and acceptance formatting refuse and repair real fixture C# whitespace", async () => {
+  const scope = await mkdtemp(join(directory, "format-"));
+  const fixture = join(scope, "scripts/fixtures/docker-doctorprobe");
+  await mkdir(fixture, { recursive: true });
+  await copyFile(join(root, ".editorconfig"), join(scope, ".editorconfig"));
+  const path = join(fixture, "Program.cs");
+  const malformed = "class Example\n{\npublic int Value{get;set;}\n}\n";
+  await writeFile(path, malformed);
+  const lifetime: { kind: "retired" | "unknown" } = { kind: "retired" };
+  const observed: string[][] = [];
+  async function format(target: "format" | "format:check"): Promise<number> {
+    return await runDeveloper({
+      target,
+      root: scope,
+      execute: async (command, cwd) => {
+        if (command[0] !== "dotnet" || !command.includes("--folder")) return 0;
+        observed.push(command);
+        lifetime.kind = "unknown";
+        const child = Bun.spawn(command, {
+          cwd,
+          stdout: "pipe",
+          stderr: "pipe",
+          timeout: 20_000,
+          killSignal: "SIGKILL",
+          env: {
+            ...process.env,
+            MSBUILDDISABLENODEREUSE: "1",
+            DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER: "1",
+          },
+        });
+        const [exit] = await Promise.all([
+          child.exited,
+          new Response(child.stdout).text(),
+          new Response(child.stderr).text(),
+        ]);
+        assert.equal(
+          child.signalCode,
+          null,
+          "An interrupted formatter preserves its fixture.",
+        );
+        lifetime.kind = "retired";
+        return exit;
+      },
+    });
+  }
+  try {
+    assert.notEqual(await format("format:check"), 0);
+    assert.equal(await readFile(path, "utf8"), malformed);
+    assert.equal(await format("format"), 0);
+    const repaired = await readFile(path, "utf8");
+    assert.notEqual(repaired, malformed);
+    assert.ok(repaired.includes("    public int Value"));
+    assert.equal(await format("format:check"), 0);
+    assert.deepEqual(observed, [
+      fixtureFormatCommand(false),
+      fixtureFormatCommand(true),
+      fixtureFormatCommand(false),
+    ]);
+    records.push({
+      fixture: "C# formatting",
+      refusal: true,
+      repaired: true,
+      accepted: true,
+    });
+  } finally {
+    if (lifetime.kind === "retired") {
+      try {
+        await removeOwned(scope);
+        cleanup.push({ scope: "case", kind: "removed" });
+      } catch (error) {
+        fixtureRetired = false;
+        cleanup.push({ scope: "case", kind: "failed" });
+        throw error;
+      }
+    } else {
+      fixtureRetired = false;
+      cleanup.push({ scope: "case", kind: "preserved" });
+    }
+  }
+}, 65_000);

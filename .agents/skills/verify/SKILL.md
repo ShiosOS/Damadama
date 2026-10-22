@@ -24,6 +24,8 @@ The primary application starts with `bun run start`, as documented in [dev/READM
 
 `bun run doctor browser` checks prerequisites and free ports before a session. It does not inspect a running app.
 
+For doctor subprocess changes, run the [real-client regression](../../../scripts/doctor-docker.test.ts) separately from the original prerequisite files. Windows CI runs those cold files before the regression compiles its finite plugin or invokes Docker. The regression uses an isolated loopback Engine with the actual Docker CLI, doctor and captureCommand. It proves server-OS selection and refusal without plugin discovery, not host engine capability or generic process-tree retirement. Preserve a failed fixture when its retirement or immediate directory removal is unverified.
+
 The canonical Playwright configuration performs the instance readiness check before driving. Require its API `/health/ready` and Vite preview checks to succeed. Then require the feature's first expected control or authenticated read to succeed before further actions. BrowserHost's real migrations complete before readiness. Its `fixture.json` provides synthetic sessions only.
 
 Bind the run to the checkout by recording `git rev-parse HEAD`, `git rev-parse HEAD^{tree}` and the working diff before preparation. Record the exact command and port overrides. Keep those inputs stable during the invocation. Local readiness does not expose a release SHA, so do not claim a runtime release-manifest attestation from it.

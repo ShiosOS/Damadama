@@ -2,7 +2,7 @@ import { spawn } from "bun";
 import { rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { prettierCommand } from "./developer";
+import { fixtureFormatCommand, prettierCommand } from "./developer";
 
 type Command = readonly [string, ...string[]];
 type CheckStep =
@@ -51,6 +51,7 @@ const beforeBackend: Command[] = [
   ],
   ["dotnet", "build", "--no-restore", "--artifacts-path", ".audit/check-build"],
   ["dotnet", "format", "--no-restore", "--verify-no-changes"],
+  fixtureFormatCommand(false),
   ["bun", "test", "scripts/acceptance-native.test.ts"],
   ["bun", "test", "tests/Browser/rest-client.test.ts"],
   prettierCommand(false),

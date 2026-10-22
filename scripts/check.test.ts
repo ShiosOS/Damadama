@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runCheck } from "./check";
+import { fixtureFormatCommand } from "./developer";
 
 const source = fileURLToPath(new URL("../", import.meta.url));
 const receiver = [
@@ -183,6 +184,7 @@ test("common check executes Provider and monitor before Docker and both real rec
     );
   expect(index(dockerProbe)).toBeGreaterThan(index(provider));
   expect(index(dockerProbe)).toBeGreaterThan(index(monitor));
+  expect(receipts).toContain(JSON.stringify(fixtureFormatCommand(false)));
   const backend = commands.filter(
     (command) => command[0] === "dotnet" && command[1] === "test",
   );

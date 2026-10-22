@@ -39,8 +39,9 @@ If Bun itself is missing, install the `packageManager` version before invoking d
 If `package.json` contains invalid JSON, Bun may print its own loader diagnostic before the script can control output. Restore that tracked manifest before retrying.
 
 Start Docker Desktop's Linux engine on Windows, or a Linux Docker daemon on Linux, before integration tests.
-Doctor uses `docker info --format '{{.OSType}}'` to require a reachable Linux daemon.
-That capability check does not prove image downloads or PostgreSQL startup. The focused suites prove those behaviors.
+Doctor uses `docker version --format '{{.Server.Os}}'` to require a successful response from the configured Linux daemon.
+It reads the server OS and avoids `info`'s client plugin metadata discovery. This check preserves your Docker context.
+It does not prove image downloads or PostgreSQL startup. The focused suites prove those behaviors.
 On Linux, install Playwright's [native browser dependencies](https://playwright.dev/docs/browsers#install-system-dependencies) through your system's approved package process.
 The browser command downloads its pinned Chromium, but does not install operating system packages.
 
@@ -109,6 +110,13 @@ No pre-commit hook runs Docker or the full suites. CI remains authoritative.
 The [DX workflow](../.github/workflows/developer-experience.yml) checks doctor behavior, types, and formatting on Windows and Linux at the PR head.
 Separate Linux jobs run each focused suite from a fresh checkout. Real Linux Docker readiness is checked separately from fixtures.
 The workflow does not establish Linux-container capability on a Windows host.
+
+The [Docker probe regression](../scripts/doctor-docker.test.ts) runs with `bun --no-env-file test scripts/doctor-docker.test.ts`.
+It builds a finite native .NET plugin and uses the installed Docker CLI against an isolated loopback Engine.
+It requires the CLI and selected .NET SDK, but no running daemon.
+Windows CI runs the original doctor and developer test files before this regression compiles or invokes the client.
+The controlled Windows-server response proves refusal policy, not a real Windows engine. `captureCommand` still owns only its direct child.
+The contributor formatter and full check also format this fixture's C# folder, which is outside the application solution.
 
 `test:backend` checks Bun, Node 24, the selected .NET SDK, and Linux Docker.
 It installs locked Bun dependencies and builds the production frontend because the API contract tests request the application shell.
