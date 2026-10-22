@@ -1,34 +1,19 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref } from "vue";
+import { computed } from "vue";
 import {
   entryResultSchema,
   type Entry,
   type EntryEdit,
 } from "./entries.schema";
-import { ApiError } from "./habits";
+import type { EntryActivity } from "./EntryControls.types";
 
 type Props = {
   habitName: string;
   entry: Entry | undefined;
-  save: (edit: EntryEdit) => Promise<Entry>;
-};
-type Emits = {
-  saved: [entry: Entry];
-  unauthorized: [];
+  activity: EntryActivity;
+  save: (edit: EntryEdit) => void;
 };
 const props = defineProps<Props>();
-const emit = defineEmits<Emits>();
-
-type Activity =
-  | { kind: "idle" }
-  | { kind: "saving"; edit: EntryEdit }
-  | { kind: "error"; message: string; edit: EntryEdit };
-const activity = ref<Activity>({ kind: "idle" });
-let disposed = false;
-
-onUnmounted(() => {
-  disposed = true;
-});
 
 const entryStatus = computed(() => {
   if (!props.entry) return "No entry recorded.";
@@ -36,30 +21,12 @@ const entryStatus = computed(() => {
   return `${props.entry.result} is saved.`;
 });
 
-async function saveEntry(edit: EntryEdit): Promise<void> {
-  if (activity.value.kind === "saving") return;
-  activity.value = { kind: "saving", edit };
-  try {
-    const saved = await props.save(edit);
-    if (disposed) return;
-    emit("saved", saved);
-    activity.value = { kind: "idle" };
-  } catch (error) {
-    if (disposed) return;
-    let message =
-      "Could not reach the service. Check your connection and try again.";
-    if (error instanceof ApiError) message = error.message;
-    activity.value = { kind: "error", message, edit };
-    if (error instanceof ApiError && error.status === 401) emit("unauthorized");
-  }
-}
-
 function choose(result: EntryEdit["result"]): void {
-  void saveEntry({ result, editedAt: new Date().toISOString() });
+  props.save({ result, editedAt: new Date().toISOString() });
 }
 
 function retry(): void {
-  if (activity.value.kind === "error") void saveEntry(activity.value.edit);
+  if (props.activity.kind === "error") props.save(props.activity.edit);
 }
 </script>
 

@@ -36,6 +36,105 @@ const input = {
 } satisfies Parameters<ReturnType<typeof habitsApi>["saveEntry"]>[2];
 const api = habitsApi(async () => "token");
 const path = `/api/habits/${habitId}/entries/${date}`;
+const editedHabit = {
+  id: habitId,
+  name: "Walking",
+  good: "10 minutes",
+  better: "20 minutes",
+  best: "40 minutes",
+  createdAt: "2026-01-05T00:00:00Z",
+  archived: false,
+  revision: 1,
+  schedule: {
+    weekdays: [1, 7],
+    repeatEveryWeeks: 2,
+    timeZone: "UTC",
+    creationDate: date,
+    firstWeekMonday: "2025-12-29",
+  },
+};
+const mutation = {
+  mutationId: "1e3858a6-414b-473d-b782-783dc8d5bb87",
+  deviceToday: "2026-01-05",
+  timeZone: "UTC",
+};
+
+void test("habit mutations use the exact resource and preserve their retry identity", async () => {
+  const observed: {
+    path: string;
+    method: string | undefined;
+    body: unknown;
+  }[] = [];
+  globalThis.fetch = Object.assign(
+    async (url: Parameters<typeof fetch>[0], options?: RequestInit) => {
+      observed.push({
+        path: url instanceof Request ? url.url : url.toString(),
+        method: options?.method,
+        body: options?.body,
+      });
+      return Response.json(editedHabit);
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const edit = {
+    ...mutation,
+    name: "Walking",
+    good: "10 minutes",
+    better: "20 minutes",
+    best: "40 minutes",
+  };
+  assert.deepEqual(await api.edit(habitId, edit), editedHabit);
+  await api.edit(habitId, edit);
+  await api.archive(habitId, mutation);
+  assert.deepEqual(observed, [
+    {
+      path: `/api/habits/${habitId}`,
+      method: "PATCH",
+      body: JSON.stringify(edit),
+    },
+    {
+      path: `/api/habits/${habitId}`,
+      method: "PATCH",
+      body: JSON.stringify(edit),
+    },
+    {
+      path: `/api/habits/${habitId}/archives`,
+      method: "POST",
+      body: JSON.stringify(mutation),
+    },
+  ]);
+});
+
+void test("the today-choice conflict is validated separately from an entry conflict", async () => {
+  respond(
+    { status: 409, title: "Choose today", code: "today_choice_required" },
+    409,
+  );
+  await assert.rejects(api.archive(habitId, mutation), (error) => {
+    assert.ok(error instanceof ApiError);
+    assert.equal(error.code, "today_choice_required");
+    assert.equal(error.status, 409);
+    return true;
+  });
+  assert.equal(
+    new ApiError("Safe message", 409, undefined, "unknown sensitive value")
+      .code,
+    undefined,
+  );
+});
+
+void test("habit mutation responses must identify the requested habit", async () => {
+  respond({ ...editedHabit, id: "60d32eca-7d8d-427c-a642-16c0935d7d80" });
+  const edit = {
+    ...mutation,
+    name: "Walking",
+    good: "10",
+    better: "20",
+    best: "40",
+  };
+  await assert.rejects(api.edit(habitId, edit), { status: 502 });
+  await assert.rejects(api.archive(habitId, mutation), { status: 502 });
+});
 
 void test("domain calls use direct collection URLs without discovery", async () => {
   const requests: string[] = [];

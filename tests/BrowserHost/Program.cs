@@ -79,7 +79,27 @@ var fixture = JsonSerializer.Serialize(new
     entriesMobile = app.Token("entries-mobile-account"),
     entriesTravel = app.Token("entries-travel-account"),
     entriesRetained = app.Token("entries-retained-account"),
-    entriesCreation = app.Token("entries-creation-account")
+    entriesCreation = app.Token("entries-creation-account"),
+    historyEdit = app.Token("history-edit-account"),
+    historySchedule = app.Token("history-schedule-account"),
+    historyArchive = app.Token("history-archive-account"),
+    historyArchiveRemove = app.Token("history-archive-remove-account"),
+    historyRetry = app.Token("history-retry-account"),
+    historyAccount = app.Token("history-account-change-account"),
+    historyMobile = app.Token("history-mobile-account"),
+    historyRetryDraft = app.Token("history-retry-draft-account"),
+    historyPending = app.Token("history-pending-account"),
+    historyPendingFailure = app.Token("history-pending-failure-account"),
+    historyPendingWinner = app.Token("history-pending-winner-account"),
+    heatmap = app.Token("heatmap-account"),
+    heatmapReload = app.Token("heatmap-reload-account"),
+    heatmapLoading = app.Token("heatmap-loading-account"),
+    heatmapError = app.Token("heatmap-error-account"),
+    heatmapAccount = app.Token("heatmap-account-change-account"),
+    heatmapDate = app.Token("heatmap-date-account"),
+    heatmapTravel = app.Token("heatmap-travel-account"),
+    heatmapMobile = app.Token("heatmap-mobile-account"),
+    heatmapHistory = app.Token("heatmap-history-account")
 });
 await File.WriteAllTextAsync("tests/Browser/fixture.json", fixture);
 if (Directory.Exists(".audit/browser-build"))

@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { entrySchema, type Entry, type EntryEdit } from "./entries.schema";
-import { habitSchema, type Habit, type NewHabit } from "./habits.schema";
+import {
+  habitSchema,
+  type Habit,
+  type NewHabit,
+  type HabitEdit,
+  type HabitArchive,
+} from "./habits.schema";
 
 export type WriteEntryInput = EntryEdit & {
   deviceToday: string;
@@ -16,11 +22,14 @@ export interface HabitsApi {
   list(): Promise<Habit[]>;
   scheduled(date: string): Promise<Habit[]>;
   create(input: NewHabit): Promise<Habit>;
+  edit(habitId: string, input: HabitEdit): Promise<Habit>;
+  archive(habitId: string, input: HabitArchive): Promise<Habit>;
 }
 const problemSchema = z.object({
   title: z.string(),
   detail: z.string().optional(),
   errors: z.record(z.string(), z.array(z.string())).optional(),
+  code: z.string().optional(),
 });
 const conflictSchema = problemSchema.extend({
   status: z.literal(409),
@@ -32,19 +41,27 @@ const traceIdSchema = z
   .max(128)
   .regex(/^[A-Za-z0-9:_-]+$/);
 const referenceSchema = z.object({ traceId: traceIdSchema });
+const mutationCodeSchema = z.enum([
+  "today_choice_required",
+  "mutation_mismatch",
+]);
 
 export class ApiError extends Error {
   readonly traceId: string | undefined;
+  declare readonly code?: z.infer<typeof mutationCodeSchema>;
 
   constructor(
     message: string,
     readonly status: number,
     traceId?: string,
+    code?: string,
   ) {
     const reference = traceIdSchema.safeParse(traceId);
     const validated = reference.success ? reference.data : undefined;
     super(validated ? `${message} Support reference: ${validated}.` : message);
     this.traceId = validated;
+    const mutation = mutationCodeSchema.safeParse(code);
+    if (mutation.success) this.code = mutation.data;
   }
 }
 
@@ -73,7 +90,12 @@ function refuse(data: unknown, status: number): never {
       problem.data.detail ||
       problem.data.title
     : "The request could not be completed.";
-  throw new ApiError(message, status, reference(data));
+  throw new ApiError(
+    message,
+    status,
+    reference(data),
+    problem.success ? problem.data.code : undefined,
+  );
 }
 
 export function habitsApi(getToken: () => Promise<string | null>): HabitsApi {
@@ -168,5 +190,28 @@ export function habitsApi(getToken: () => Promise<string | null>): HabitsApi {
         method: "POST",
         body: JSON.stringify(input),
       }),
+    async edit(habitId, input): Promise<Habit> {
+      const saved = await request(`/api/habits/${habitId}`, habitSchema, 200, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      });
+      if (saved.id !== habitId)
+        throw new ApiError("The service returned an unexpected response.", 502);
+      return saved;
+    },
+    async archive(habitId, input): Promise<Habit> {
+      const saved = await request(
+        `/api/habits/${habitId}/archives`,
+        habitSchema,
+        200,
+        {
+          method: "POST",
+          body: JSON.stringify(input),
+        },
+      );
+      if (saved.id !== habitId)
+        throw new ApiError("The service returned an unexpected response.", 502);
+      return saved;
+    },
   };
 }
