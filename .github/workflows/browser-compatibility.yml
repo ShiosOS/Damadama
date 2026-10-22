@@ -64,16 +64,9 @@ jobs:
           bun-version: 1.4.3
       - run: bun install --frozen-lockfile
       - run: node node_modules/@playwright/test/cli.js install --with-deps chromium
-      - name: Independent production API and PostgreSQL drive
-        timeout-minutes: 12
-        run: bun run test:backend
-      - name: Strict receiver consumers on fresh backend bytes
-        run: node --test ops/diagnostics/receiver.test.mjs ops/diagnostics/receiver-handshake.test.mjs
-      - name: Validate fresh production API contract
-        run: node scripts/api-contract.mjs
-      - name: Independent integrated browser drive
-        timeout-minutes: 12
-        run: bun run test:browser
+      - name: Independent canonical application drive
+        timeout-minutes: 15
+        run: bun run check
       - name: Independent complete native drive
         timeout-minutes: 7
         run: node .agents/skills/verify/native-session.mjs
