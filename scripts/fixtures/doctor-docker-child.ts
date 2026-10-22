@@ -3,6 +3,18 @@ import { captureCommand, doctor } from "../doctor";
 
 const executable = process.env["DAMADAMA_DOCKER_CLI"];
 assert.ok(executable);
+if (process.platform === "win32") {
+  const expectedProgramFiles =
+    process.env["DAMADAMA_DOCKER_EXPECTED_PROGRAM_FILES"];
+  assert.ok(
+    expectedProgramFiles,
+    "The Windows fixture requires its owned root.",
+  );
+  assert.ok(
+    process.env["ProgramFiles"] === expectedProgramFiles,
+    "The Windows child must use the owned plugin discovery root.",
+  );
+}
 const mode = process.argv[2];
 const timeoutMs = Number(process.env["DAMADAMA_DOCKER_TIMEOUT_MS"] ?? "10000");
 let observation: Awaited<ReturnType<typeof captureCommand>> | undefined;

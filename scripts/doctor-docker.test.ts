@@ -308,12 +308,27 @@ async function invoke(
     DAMADAMA_DOCKER_PLUGIN_LEDGER: ledger,
     DAMADAMA_DOCKER_TIMEOUT_MS: fixture.kind === "timeout" ? "500" : "10000",
   });
-  if (process.platform === "win32")
+  if (process.platform === "win32") {
+    for (const name of Object.keys(environment)) {
+      if (
+        [
+          "PROGRAMFILES",
+          "PROGRAMW6432",
+          "PROGRAMDATA",
+          "DOTNET_ROOT_X64",
+          "DAMADAMA_DOCKER_EXPECTED_PROGRAM_FILES",
+        ].includes(name.toUpperCase())
+      )
+        Reflect.deleteProperty(environment, name);
+    }
     Object.assign(environment, {
       ProgramFiles: scope,
+      ProgramW6432: scope,
       ProgramData: scope,
       DOTNET_ROOT_X64: dotnetRoot,
+      DAMADAMA_DOCKER_EXPECTED_PROGRAM_FILES: scope,
     });
+  }
   try {
     const child = Bun.spawn(
       [
