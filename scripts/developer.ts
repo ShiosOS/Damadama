@@ -24,6 +24,18 @@ export function prettierCommand(write: boolean): [string, ...string[]] {
   return ["bun", "x", "--no-install", "prettier", mode, ...prettierPaths];
 }
 
+export function fixtureFormatCommand(write: boolean): [string, ...string[]] {
+  const command: [string, ...string[]] = [
+    "dotnet",
+    "format",
+    "whitespace",
+    "scripts/fixtures/docker-doctorprobe",
+    "--folder",
+  ];
+  if (!write) command.push("--verify-no-changes");
+  return command;
+}
+
 function developerCommands(target: string): string[][] | undefined {
   if (target === "format" || target === "format:check") {
     const dotnet = ["dotnet", "format", "--no-restore"];
@@ -32,6 +44,7 @@ function developerCommands(target: string): string[][] | undefined {
       ["bun", "install", "--frozen-lockfile"],
       ["dotnet", "restore", "--locked-mode"],
       dotnet,
+      fixtureFormatCommand(target === "format"),
       prettierCommand(target === "format"),
     ];
   }

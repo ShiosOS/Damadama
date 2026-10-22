@@ -195,9 +195,26 @@ function developer(workflows) {
         ...setup(),
         { run: "bun install --frozen-lockfile" },
         { run: "bun test scripts/doctor.test.ts scripts/developer.test.ts" },
+        {
+          id: "docker-probe",
+          run: "bun --no-env-file test scripts/doctor-docker.test.ts",
+        },
         { run: "bun run check:types" },
         { run: "bun run format:check" },
         { if: "runner.os == 'Linux'", run: "bun run doctor backend" },
+        upload(
+          {
+            name:
+              "doctor-docker-${{ matrix.os }}-" +
+              prHead +
+              "-${{ github.run_attempt }}",
+            path: ".audit/doctor-docker/receipt.json\n.audit/doctor-docker/cleanup.json\n",
+            "include-hidden-files": true,
+            "if-no-files-found": "error",
+            "retention-days": 7,
+          },
+          "always() && steps.docker-probe.outcome != 'skipped'",
+        ),
       ],
     },
     `${filename}.jobs.prerequisites`,

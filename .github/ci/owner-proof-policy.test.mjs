@@ -230,6 +230,24 @@ for (const [label, mutate] of [
         "echo format checked"),
   ],
   [
+    "DX Docker probe omitted",
+    (w) =>
+      (developer(w).prerequisites.steps = developer(
+        w,
+      ).prerequisites.steps.filter((s) => s.id !== "docker-probe")),
+  ],
+  [
+    "DX Docker probe warms the original cold prerequisite tests",
+    (w) => {
+      const steps = developer(w).prerequisites.steps;
+      const cold = steps.findIndex(
+        (s) =>
+          s.run === "bun test scripts/doctor.test.ts scripts/developer.test.ts",
+      );
+      [steps[cold], steps[cold + 1]] = [steps[cold + 1], steps[cold]];
+    },
+  ],
+  [
     "recovery optional application",
     (w) =>
       (command(recovery(w), "--require-app").run =
