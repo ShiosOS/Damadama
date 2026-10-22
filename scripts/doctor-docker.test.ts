@@ -5,13 +5,15 @@ import { execFileSync } from "node:child_process";
 import {
   mkdir,
   mkdtemp,
+  lstat,
   readFile,
+  realpath,
   readdir,
   rm,
   writeFile,
 } from "node:fs/promises";
 import { createServer } from "node:http";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
 
@@ -45,6 +47,7 @@ const commandResult = z.object({
   selected: z.array(z.string()),
   captureKind: z.enum(["ok", "missing", "failed", "timeout", "output-limit"]),
   linuxOutput: z.boolean(),
+  partialLinux: z.boolean(),
 });
 const controlResult = z.object({
   observation: z.object({ kind: z.literal("ok"), output: z.string() }),
@@ -53,14 +56,52 @@ const records: unknown[] = [];
 let directory: string;
 let plugins: string;
 let dotnetRoot: string;
-let fixtureRetired = true;
+let fixtureRetired = false;
+const cleanup: {
+  scope: "build" | "case" | "fixture";
+  kind: "retired" | "removed" | "preserved" | "failed";
+  code?: string;
+}[] = [];
+let buildObservation:
+  | { kind: "unverified" }
+  | {
+      kind: "completed";
+      exitCode: number;
+      signalCode: string | number | null;
+    } = {
+  kind: "unverified",
+};
 const pluginIdentity = z.object({
   executable: z.literal("docker-doctorprobe"),
   pid: z.number().int().positive(),
 });
 
+async function removeOwned(path: string): Promise<void> {
+  const absolute = resolve(path);
+  const owner = await realpath(output);
+  assert.equal(
+    relative(resolve(output), owner),
+    "",
+    "The proof directory must not be redirected.",
+  );
+  assert.equal(
+    relative(absolute, await realpath(absolute)),
+    "",
+    "The fixture must not be redirected.",
+  );
+  assert.equal((await lstat(absolute)).isSymbolicLink(), false);
+  const inside = relative(owner, absolute);
+  assert.ok(
+    inside && !inside.startsWith("..") && !isAbsolute(inside),
+    "Remove only a resolved child of the owned proof directory.",
+  );
+  await rm(absolute, { recursive: true, force: true });
+}
+
 beforeAll(async () => {
   await mkdir(output, { recursive: true });
+  await rm(join(output, "receipt.json"), { force: true });
+  await rm(join(output, "cleanup.json"), { force: true });
   directory = await mkdtemp(join(output, "fixture-"));
   plugins = join(directory, "plugins");
   const build = Bun.spawn(
@@ -75,19 +116,46 @@ beforeAll(async () => {
       "--nologo",
       "--verbosity",
       "quiet",
+      "--disable-build-servers",
+      "-nodeReuse:false",
+      "-p:UseSharedCompilation=false",
+      "-p:RestoreLockedMode=true",
     ],
-    { cwd: root, stdout: "pipe", stderr: "pipe" },
+    {
+      cwd: root,
+      env: {
+        ...process.env,
+        MSBUILDDISABLENODEREUSE: "1",
+        DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER: "1",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 60_000,
+      killSignal: "SIGKILL",
+    },
   );
   const [stdout, stderr, exit] = await Promise.all([
     new Response(build.stdout).text(),
     new Response(build.stderr).text(),
     build.exited,
   ]);
+  buildObservation = {
+    kind: "completed",
+    exitCode: exit,
+    signalCode: build.signalCode,
+  };
   assert.equal(exit, 0, `Native plugin build failed.\n${stdout}\n${stderr}`);
+  assert.equal(
+    build.signalCode,
+    null,
+    "A bounded build failure preserves its fixture.",
+  );
+  fixtureRetired = true;
+  cleanup.push({ scope: "build", kind: "retired" });
   const dotnet = Bun.which("dotnet");
   assert.ok(dotnet);
   dotnetRoot = resolve(dotnet, "..");
-}, 60_000);
+}, 75_000);
 
 afterAll(async () => {
   await writeFile(
@@ -111,6 +179,7 @@ afterAll(async () => {
           .filter(Boolean),
         platform: process.platform,
         bun: Bun.version,
+        build: buildObservation,
         dockerSha256: createHash("sha256")
           .update(await readFile(executable))
           .digest("hex"),
@@ -120,8 +189,27 @@ afterAll(async () => {
       2,
     ) + "\n",
   );
-  if (directory && fixtureRetired)
-    await rm(directory, { recursive: true, force: true });
+  try {
+    if (directory && fixtureRetired) {
+      await removeOwned(directory);
+      cleanup.push({ scope: "fixture", kind: "removed" });
+    } else cleanup.push({ scope: "fixture", kind: "preserved" });
+  } catch (error) {
+    let code = "unknown";
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      ["EBUSY", "EACCES", "EPERM", "ENOENT"].includes(String(error.code))
+    )
+      code = String(error.code);
+    cleanup.push({ scope: "fixture", kind: "failed", code });
+    throw error;
+  } finally {
+    await writeFile(
+      join(output, "cleanup.json"),
+      JSON.stringify({ fixtureRetired, outcomes: cleanup }, null, 2) + "\n",
+    );
+  }
 });
 
 async function invoke(
@@ -229,14 +317,16 @@ async function invoke(
       [
         process.execPath,
         "--no-env-file",
-        "scripts/fixtures/doctor-docker-child.ts",
+        join(root, "scripts/fixtures/doctor-docker-child.ts"),
         mode,
       ],
       {
-        cwd: root,
+        cwd: scope,
         env: environment,
         stdout: "pipe",
         stderr: "pipe",
+        timeout: 15_000,
+        killSignal: "SIGKILL",
       },
     );
     const [stdout, stderr, exit] = await Promise.all([
@@ -274,10 +364,23 @@ async function invoke(
         return identity.executable;
       }),
     );
-    scopeRetired = true;
     assert.equal(exit, 0, "Controlled doctor child must finish normally.");
+    assert.equal(
+      child.signalCode,
+      null,
+      "A bounded worker failure preserves its fixture.",
+    );
+    scopeRetired = true;
     assert.equal(stderr, "");
     const value: unknown = JSON.parse(stdout);
+    for (const { method, path } of requests) {
+      assert.ok(
+        (path === "/_ping" && (method === "HEAD" || method === "GET")) ||
+          (method === "GET" &&
+            /^\/(?:v\d+\.\d+\/)?(?:info|version)$/.test(path)),
+        "Only the client's ping and exact read endpoints are allowed.",
+      );
+    }
     records.push({
       fixture,
       mode,
@@ -291,8 +394,19 @@ async function invoke(
     server.closeAllConnections();
     if (server.listening)
       await new Promise<void>((resolve) => server.close(() => resolve()));
-    if (scopeRetired) await rm(scope, { recursive: true, force: true });
-    else fixtureRetired = false;
+    if (scopeRetired) {
+      try {
+        await removeOwned(scope);
+        cleanup.push({ scope: "case", kind: "removed" });
+      } catch (error) {
+        fixtureRetired = false;
+        cleanup.push({ scope: "case", kind: "failed" });
+        throw error;
+      }
+    } else {
+      fixtureRetired = false;
+      cleanup.push({ scope: "case", kind: "preserved" });
+    }
   }
 }
 
@@ -337,7 +451,7 @@ test("doctor reads the server OS without executing accepted client plugins", asy
     current.requests.some(({ path }) => /\/info$/.test(path)),
     false,
   );
-}, 30_000);
+}, 50_000);
 
 for (const fixture of [
   { kind: "os", os: "windows" },
@@ -362,6 +476,25 @@ for (const fixture of [
     );
     assert.equal(JSON.stringify(result.result).includes(privateMarker), false);
     assert.deepEqual(current.invocations, []);
+    if (fixture.kind !== "unreachable")
+      assert.ok(
+        current.requests.some(({ path }) =>
+          /\/(?:v\d+\.\d+\/)?version$/.test(path),
+        ),
+        "A refusal must observe the controlled server response.",
+      );
+    if (
+      fixture.kind === "os" ||
+      fixture.kind === "missing" ||
+      fixture.kind === "no-server"
+    )
+      assert.equal(result.captureKind, "ok");
+    if (
+      fixture.kind === "malformed" ||
+      fixture.kind === "http-error" ||
+      fixture.kind === "unreachable"
+    )
+      assert.equal(result.captureKind, "failed");
     if (fixture.kind === "timeout") assert.equal(result.captureKind, "timeout");
     if (fixture.kind === "overflow")
       assert.equal(result.captureKind, "output-limit");
@@ -372,6 +505,7 @@ test("doctor refuses an actual Docker template failure even after it prints linu
   const current = await invoke({ kind: "os", os: "linux" }, "nonzero");
   const result = commandResult.parse(current.value);
   assert.equal(result.captureKind, "failed");
+  assert.equal(result.partialLinux, true);
   assert.equal(result.result.exitCode, 1);
   assert.equal(
     result.result.checks.find(({ id }) => id === "docker.linux")?.kind,

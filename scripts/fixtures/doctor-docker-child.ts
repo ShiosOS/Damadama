@@ -7,6 +7,7 @@ const mode = process.argv[2];
 const timeoutMs = Number(process.env["DAMADAMA_DOCKER_TIMEOUT_MS"] ?? "10000");
 let observation: Awaited<ReturnType<typeof captureCommand>> | undefined;
 let selected: string[] = [];
+let partialLinux = false;
 
 if (mode === "control") {
   assert.equal(
@@ -61,6 +62,19 @@ if (mode === "control") {
           "--format",
           '{{print "linux"}}{{.Server.DoesNotExist}}',
         ];
+        const witness = Bun.spawn([executable, ...docker.slice(1)], {
+          stdout: "pipe",
+          stderr: "pipe",
+          timeout: timeoutMs,
+          killSignal: "SIGKILL",
+        });
+        const [stdout, , exit] = await Promise.all([
+          new Response(witness.stdout).text(),
+          new Response(witness.stderr).text(),
+          witness.exited,
+        ]);
+        assert.equal(witness.signalCode, null);
+        partialLinux = stdout.trim() === "linux" && exit !== 0;
       }
       observation = await captureCommand([executable, ...docker.slice(1)], {
         timeoutMs,
@@ -75,6 +89,7 @@ if (mode === "control") {
       selected,
       captureKind: observation.kind,
       linuxOutput: observation.kind === "ok" && observation.output === "linux",
+      partialLinux,
     }),
   );
 }
