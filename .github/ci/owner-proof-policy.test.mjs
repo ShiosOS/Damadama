@@ -188,11 +188,33 @@ for (const filename of Object.values(lanes).filter(
 
 for (const [label, mutate] of [
   ["browser capture only", (w) => browser(w).strategy.matrix.mode.pop()],
+  ["browser verify only", (w) => browser(w).strategy.matrix.mode.shift()],
   [
-    "browser skipped engine",
+    "browser verify skipped engines",
     (w) =>
-      (command(browser(w), "install --with-deps").run =
+      (command(browser(w), "install --with-deps chromium firefox webkit").run =
         "node node_modules/@playwright/test/cli.js install --with-deps chromium"),
+  ],
+  [
+    "browser capture omits Chromium",
+    (w) =>
+      (command(browser(w), "install --with-deps chromium").run =
+        "node node_modules/@playwright/test/cli.js install --with-deps firefox"),
+  ],
+  [
+    "browser capture installs unused engines",
+    (w) =>
+      (command(browser(w), "install --with-deps chromium").run +=
+        " firefox webkit"),
+  ],
+  [
+    "browser shared install replaces mode-specific prerequisites",
+    (w) => {
+      browser(w).steps = browser(w).steps.filter(
+        (step) => step.if !== "matrix.mode == 'capture'",
+      );
+      delete command(browser(w), "install --with-deps").if;
+    },
   ],
   [
     "browser snapshots replaced",
@@ -327,6 +349,35 @@ for (const [label, mutate] of [
   ],
 ])
   reject(label, mutate);
+
+for (const engine of ["chromium", "firefox", "webkit"])
+  reject(`browser verify omits ${engine}`, (w) => {
+    const install = command(
+      browser(w),
+      "install --with-deps chromium firefox webkit",
+    );
+    install.run = install.run.replace(` ${engine}`, "");
+  });
+
+for (const [mode, other] of [
+  ["capture", "verify"],
+  ["verify", "capture"],
+]) {
+  const condition = `matrix.mode == '${mode}'`;
+  reject(`browser ${mode} install omitted`, (w) => {
+    browser(w).steps = browser(w).steps.filter((step) => step.if !== condition);
+  });
+  for (const [label, replacement] of [
+    ["unconditional", undefined],
+    ["wrong mode", `matrix.mode == '${other}'`],
+    ["both modes", "matrix.mode == 'capture' || matrix.mode == 'verify'"],
+  ])
+    reject(`browser ${mode} install ${label}`, (w) => {
+      const install = browser(w).steps.find((step) => step.if === condition);
+      if (replacement === undefined) delete install.if;
+      else install.if = replacement;
+    });
+}
 
 for (const name of safeSupply) {
   for (const filename of ["supply-chain-proof.yml", "supply-pr-proof.yml"]) {

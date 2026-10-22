@@ -41,7 +41,10 @@ jobs:
       - run: dotnet restore --locked-mode --artifacts-path .audit/check-build
       - run: dotnet build --no-restore --artifacts-path .audit/check-build
       - run: bun x --no-install vite build --config tests/Browser/compatibility.vite.config.ts
-      - run: node node_modules/@playwright/test/cli.js install --with-deps chromium firefox webkit
+      - if: matrix.mode == 'capture'
+        run: node node_modules/@playwright/test/cli.js install --with-deps chromium
+      - if: matrix.mode == 'verify'
+        run: node node_modules/@playwright/test/cli.js install --with-deps chromium firefox webkit
       - run: bun run browser:compatibility:${{ matrix.mode }}
       - if: always() && matrix.mode == 'capture'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

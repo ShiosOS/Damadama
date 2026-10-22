@@ -133,6 +133,11 @@ function browser(workflows) {
           run: "bun x --no-install vite build --config tests/Browser/compatibility.vite.config.ts",
         },
         {
+          if: "matrix.mode == 'capture'",
+          run: "node node_modules/@playwright/test/cli.js install --with-deps chromium",
+        },
+        {
+          if: "matrix.mode == 'verify'",
           run: "node node_modules/@playwright/test/cli.js install --with-deps chromium firefox webkit",
         },
         { run: "bun run browser:compatibility:${{ matrix.mode }}" },
