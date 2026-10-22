@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runCheck } from "./check";
+import { fixtureFormatCommand } from "./developer";
 
 const source = fileURLToPath(new URL("../", import.meta.url));
 const receiver = [
@@ -15,6 +16,12 @@ const receiver = [
 ];
 const provider = ["node", "--test", "tests/Provider/*.test.mjs"];
 const monitor = ["node", "--test", "ops/monitoring/monitor.test.mjs"];
+const dockerProbe = [
+  "bun",
+  "--no-env-file",
+  "test",
+  "scripts/doctor-docker.test.ts",
+];
 const clients = [
   "bun",
   "test",
@@ -167,7 +174,7 @@ async function exercise(
 test("common check executes Provider and monitor before Docker and both real receiver consumers immediately after one backend producer", async () => {
   const { commands, receipts, error } = await exercise("valid");
   expect(error).toBeUndefined();
-  for (const required of [provider, monitor]) {
+  for (const required of [provider, monitor, dockerProbe]) {
     expect(
       receipts.filter((command) => command === JSON.stringify(required)),
     ).toHaveLength(1);
@@ -177,6 +184,13 @@ test("common check executes Provider and monitor before Docker and both real rec
       ),
     ).toBeLessThan(commands.findIndex((command) => command[0] === "docker"));
   }
+  const index = (required: string[]): number =>
+    commands.findIndex(
+      (command) => JSON.stringify(command) === JSON.stringify(required),
+    );
+  expect(index(dockerProbe)).toBeGreaterThan(index(provider));
+  expect(index(dockerProbe)).toBeGreaterThan(index(monitor));
+  expect(receipts).toContain(JSON.stringify(fixtureFormatCommand(false)));
   const backend = commands.filter(
     (command) => command[0] === "dotnet" && command[1] === "test",
   );
@@ -256,7 +270,7 @@ for (const producer of [
   }, 30_000);
 }
 
-for (const required of [provider, monitor]) {
+for (const required of [provider, monitor, dockerProbe]) {
   test(`common check stops on real failed ${required[2]} child`, async () => {
     const { commands, error } = await exercise("valid", required);
     expect(error).toBeInstanceOf(Error);

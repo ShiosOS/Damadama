@@ -325,14 +325,15 @@ export async function doctor({
         "Install a compatible .NET SDK and run dotnet --version from the repository root.",
       ),
     ),
-    capture(["docker", "info", "--format", "{{.OSType}}"]).then((result) =>
-      runtimeCheck(
-        "docker.linux",
-        result,
-        (value) => value === "linux",
-        "Reachable Linux Docker engine required",
-        "Install Docker if missing, start it, and select its Linux container engine, then retry. Doctor never starts it.",
-      ),
+    capture(["docker", "version", "--format", "{{.Server.Os}}"]).then(
+      (result) =>
+        runtimeCheck(
+          "docker.linux",
+          result,
+          (value) => value === "linux",
+          "Reachable Linux Docker engine required",
+          "Install Docker if missing, start it, and select its Linux container engine, then retry. Doctor never starts it.",
+        ),
     ),
   ]);
   checks.push(

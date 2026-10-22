@@ -133,6 +133,11 @@ function browser(workflows) {
           run: "bun x --no-install vite build --config tests/Browser/compatibility.vite.config.ts",
         },
         {
+          if: "matrix.mode == 'capture'",
+          run: "node node_modules/@playwright/test/cli.js install --with-deps chromium",
+        },
+        {
+          if: "matrix.mode == 'verify'",
           run: "node node_modules/@playwright/test/cli.js install --with-deps chromium firefox webkit",
         },
         { run: "bun run browser:compatibility:${{ matrix.mode }}" },
@@ -195,9 +200,26 @@ function developer(workflows) {
         ...setup(),
         { run: "bun install --frozen-lockfile" },
         { run: "bun test scripts/doctor.test.ts scripts/developer.test.ts" },
+        {
+          id: "docker-probe",
+          run: "bun --no-env-file test scripts/doctor-docker.test.ts",
+        },
         { run: "bun run check:types" },
         { run: "bun run format:check" },
         { if: "runner.os == 'Linux'", run: "bun run doctor backend" },
+        upload(
+          {
+            name:
+              "doctor-docker-${{ matrix.os }}-" +
+              prHead +
+              "-${{ github.run_attempt }}",
+            path: ".audit/doctor-docker/receipt.json\n.audit/doctor-docker/cleanup.json\n",
+            "include-hidden-files": true,
+            "if-no-files-found": "error",
+            "retention-days": 7,
+          },
+          "always() && steps.docker-probe.outcome != 'skipped'",
+        ),
       ],
     },
     `${filename}.jobs.prerequisites`,
@@ -222,7 +244,13 @@ function developer(workflows) {
           if: "matrix.suite == 'browser'",
           run: "node node_modules/@playwright/test/cli.js install --with-deps chromium",
         },
-        { run: "bun run test:${{ matrix.suite }}" },
+        {
+          run: "bun run test:${{ matrix.suite }}",
+          env: {
+            DAMADAMA_BROWSER_PORT: "5184",
+            DAMADAMA_API_PORT: "5065",
+          },
+        },
       ],
     },
     `${filename}.jobs.focused`,

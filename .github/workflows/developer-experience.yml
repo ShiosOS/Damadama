@@ -35,10 +35,22 @@ jobs:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
       - run: bun test scripts/doctor.test.ts scripts/developer.test.ts
+      - id: docker-probe
+        run: bun --no-env-file test scripts/doctor-docker.test.ts
       - run: bun run check:types
       - run: bun run format:check
       - if: runner.os == 'Linux'
         run: bun run doctor backend
+      - if: always() && steps.docker-probe.outcome != 'skipped'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: doctor-docker-${{ matrix.os }}-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
+          path: |
+            .audit/doctor-docker/receipt.json
+            .audit/doctor-docker/cleanup.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
   focused:
     name: Clean checkout (${{ matrix.suite }})
     strategy:
@@ -66,3 +78,6 @@ jobs:
       - if: matrix.suite == 'browser'
         run: node node_modules/@playwright/test/cli.js install --with-deps chromium
       - run: bun run test:${{ matrix.suite }}
+        env:
+          DAMADAMA_BROWSER_PORT: "5184"
+          DAMADAMA_API_PORT: "5065"
