@@ -1,12 +1,16 @@
-name: Bounded Windows probe diagnostic
+name: Independent shipping driver
 
 on:
   workflow_dispatch:
     inputs:
       source_sha:
-        description: Frozen PR 129 source, diagnostic overlay is recorded separately
+        description: Exact application commit to verify
         required: true
-        default: 27b4893c85480658af83749f784de80b4e843ba9
+        type: string
+      fixture_sha:
+        description: Optional immutable fixture commit for the Windows parent overlay
+        required: false
+        default: ""
         type: string
 
 permissions:
@@ -18,115 +22,228 @@ env:
   GIT_CONFIG_VALUE_0: "false"
 
 concurrency:
-  group: windows-probe-diagnostic-${{ github.run_id }}
+  group: independent-shipping-driver-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
-  observe:
-    runs-on: windows-latest
-    timeout-minutes: 12
-    strategy:
-      fail-fast: false
-      matrix:
-        mode: [control, formatter]
-    defaults:
-      run:
-        shell: pwsh
+  driver:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
     steps:
-      - name: Require the reviewed frozen source
-        run: |
-          if ($env:SOURCE_SHA -cne '27b4893c85480658af83749f784de80b4e843ba9') { throw 'Unreviewed source revision' }
+      - name: Validate source revision
+        run: '[[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]'
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ inputs.source_sha }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-        with:
-          ref: ${{ github.workflow_sha }}
-          persist-credentials: false
-          path: .audit/probe-controls
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: 24
-      - name: Record clean source and actual runner image
-        run: node .audit/probe-controls/audit-controls/windows-probe-overlay.mjs record .
+      - name: Record exact source and controls
+        run: |
+          node --input-type=module <<'NODE'
+          import { execFileSync } from 'node:child_process';
+          import { mkdirSync, writeFileSync } from 'node:fs';
+          import assert from 'node:assert/strict';
+          const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
+          assert.equal(git('rev-parse', 'HEAD'), process.env.SOURCE_SHA);
+          assert.equal(git('status', '--porcelain', '--untracked-files=no'), '');
+          mkdirSync('.audit/independent-shipping-driver', { recursive: true });
+          writeFileSync('.audit/independent-shipping-driver/source.json', JSON.stringify({
+            source: git('rev-parse', 'HEAD'),
+            tree: git('rev-parse', 'HEAD^{tree}'),
+            controls: process.env.CONTROLS_SHA,
+            run: process.env.GITHUB_RUN_ID,
+            attempt: process.env.GITHUB_RUN_ATTEMPT,
+            platform: process.platform,
+            node: process.version,
+            trackedInputsClean: true
+          }, null, 2) + '\n');
+          NODE
         env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
           CONTROLS_SHA: ${{ github.workflow_sha }}
-      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           global-json-file: global.json
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
-          bun-version-file: package.json
+          bun-version: 1.4.3
       - run: bun install --frozen-lockfile
-      - name: Original cold 50 before fixture build or additional Docker calls
-        id: cold
-        continue-on-error: true
-        timeout-minutes: 5
-        run: |
-          bun test scripts/doctor.test.ts scripts/developer.test.ts 2>&1 | Tee-Object -FilePath .audit/windows-probe-diagnostic/cold.log
-          exit $LASTEXITCODE
-      - name: Record the separate diagnostic overlay
-        id: overlay
-        if: always() && (steps.cold.outcome == 'success' || steps.cold.outcome == 'failure')
-        run: node .audit/probe-controls/audit-controls/windows-probe-overlay.mjs prepare . $env:PROBE_MODE
+      - run: node node_modules/@playwright/test/cli.js install --with-deps chromium
+      - name: Independent canonical application drive
+        timeout-minutes: 15
+        run: bun run check
+      - name: Independent complete native drive
+        timeout-minutes: 7
+        run: node .agents/skills/verify/native-session.mjs
         env:
-          CONTROLS_SHA: ${{ github.workflow_sha }}
-          PROBE_MODE: ${{ matrix.mode }}
-      - name: Calibrate native observer and capture exactly one bounded diagnostic
-        id: diagnostic
-        if: always() && steps.overlay.outcome == 'success'
-        continue-on-error: true
-        timeout-minutes: 4
-        run: |
-          & ./.audit/probe-controls/audit-controls/windows-probe-observer.ps1 -Mode $env:PROBE_MODE
-          exit $LASTEXITCODE
-        env:
-          PROBE_MODE: ${{ matrix.mode }}
-      - name: Retain distinct command outcomes
-        if: always()
-        run: |
-          New-Item -ItemType Directory -Path .audit/windows-probe-diagnostic -Force | Out-Null
-          @{ source = $env:SOURCE_SHA; controls = $env:CONTROLS_SHA; mode = $env:PROBE_MODE; cold = $env:COLD_OUTCOME; overlay = $env:OVERLAY_OUTCOME; diagnostic = $env:DIAGNOSTIC_OUTCOME; interpretation = 'diagnostic-overlay-not-unchanged-source-acceptance' } | ConvertTo-Json | Set-Content -LiteralPath .audit/windows-probe-diagnostic/outcomes.json -Encoding utf8
-        env:
-          SOURCE_SHA: ${{ inputs.source_sha }}
-          CONTROLS_SHA: ${{ github.workflow_sha }}
-          PROBE_MODE: ${{ matrix.mode }}
-          COLD_OUTCOME: ${{ steps.cold.outcome }}
-          OVERLAY_OUTCOME: ${{ steps.overlay.outcome }}
-          DIAGNOSTIC_OUTCOME: ${{ steps.diagnostic.outcome }}
-      - name: Upload the fixed sanitized evidence allowlist
+          VERIFICATION_PR_HEAD: ${{ inputs.source_sha }}
+      - name: Retain sanitized source and application proof
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: windows-probe-diagnostic-${{ matrix.mode }}-${{ inputs.source_sha }}-${{ github.run_id }}
+          name: independent-shipping-driver-${{ inputs.source_sha }}-${{ github.run_id }}
           path: |
-            .audit/windows-probe-diagnostic/source.json
-            .audit/windows-probe-diagnostic/overlay.json
-            .audit/windows-probe-diagnostic/instrumentation.patch
-            .audit/windows-probe-diagnostic/outcomes.json
-            .audit/windows-probe-diagnostic/cold.log
-            .audit/windows-probe-diagnostic/diagnostic.log
-            .audit/windows-probe-diagnostic/events-test.jsonl
-            .audit/windows-probe-diagnostic/events-worker.jsonl
-            .audit/windows-probe-diagnostic/native-events.json
-            .audit/windows-probe-diagnostic/observer.json
-            .audit/windows-probe-diagnostic/handle-tool.json
-            .audit/windows-probe-diagnostic/handle-query.json
-            .audit/windows-probe-diagnostic/handle-unavailable.json
+            .audit/independent-shipping-driver/source.json
+            .audit/TestResults/backend.trx
+            .audit/api-contract/responses.json
             .audit/doctor-docker/receipt.json
             .audit/doctor-docker/cleanup.json
+            .audit/verification-skill/retained/
+            .audit/history-edit-immediate.png
+            .audit/history-edit-reloaded.png
+            .audit/history-edit.webm
+            .audit/history-schedule-retained.png
+            .audit/history-archive-keep.png
+            .audit/history-archive-remove.png
+            .audit/history-archive.webm
+            .audit/history-editor-mobile.png
+            .audit/history-pending-entry.png
+            .audit/history-pending-retry.png
+            .audit/heatmap-immediate.png
+            .audit/heatmap-reloaded.png
+            .audit/heatmap-flow.webm
+            .audit/heatmap-schedule-remove.png
+            .audit/heatmap-archive-choices-reloaded.png
+            .audit/heatmap-history-flow.webm
+            .audit/heatmap-keyboard.png
+            .audit/heatmap-mobile.png
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
-      - name: Preserve failures as failures
+  windows-docker-probe:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Validate source and fixture revisions
+        run: |
+          if ($env:SOURCE_SHA -cnotmatch '^[a-f0-9]{40}$') { throw 'Invalid source revision' }
+          if ($env:FIXTURE_SHA -ne '' -and $env:FIXTURE_SHA -cnotmatch '^[a-f0-9]{40}$') { throw 'Invalid fixture revision' }
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          FIXTURE_SHA: ${{ inputs.fixture_sha }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          path: controls
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          path: application
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+      - name: Record untouched application source
+        run: node controls/audit-controls/docker-probe-source.mjs record application
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          FIXTURE_SHA: ${{ inputs.fixture_sha }}
+          CONTROLS_SHA: ${{ github.workflow_sha }}
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: application/global.json
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.3
+      - run: bun install --frozen-lockfile
+        working-directory: application
+      - name: Original cold prerequisite suite before Docker fixture warmup
+        id: cold
+        continue-on-error: true
+        timeout-minutes: 5
+        working-directory: application
+        run: |
+          bun test scripts/doctor.test.ts scripts/developer.test.ts 2>&1 | Tee-Object -FilePath .audit/independent-docker-probe/cold.log
+          exit $LASTEXITCODE
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        if: always() && inputs.fixture_sha != '' && (steps.cold.outcome == 'success' || steps.cold.outcome == 'failure')
+        with:
+          ref: ${{ inputs.fixture_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          path: fixture
+      - name: Bind committed fixture or record the separate parent overlay
+        id: fixture
+        if: always() && (steps.cold.outcome == 'success' || steps.cold.outcome == 'failure')
+        run: |
+          if ($env:FIXTURE_SHA -eq '') {
+            node controls/audit-controls/docker-probe-source.mjs prepare application
+          } else {
+            node controls/audit-controls/docker-probe-source.mjs prepare application fixture
+          }
+          exit $LASTEXITCODE
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          FIXTURE_SHA: ${{ inputs.fixture_sha }}
+          CONTROLS_SHA: ${{ github.workflow_sha }}
+      - name: Controlled real Docker client proof
+        id: probe
+        if: always() && steps.fixture.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 4
+        working-directory: application
+        run: |
+          if ($env:FIXTURE_SHA -eq '') {
+            bun --no-env-file test scripts/doctor-docker.test.ts 2>&1 | Tee-Object -FilePath .audit/independent-docker-probe/probe.log
+          } else {
+            bun --no-env-file test scripts/doctor-docker.test.ts -t 'doctor reads the server OS without executing accepted client plugins' 2>&1 | Tee-Object -FilePath .audit/independent-docker-probe/probe.log
+          }
+          exit $LASTEXITCODE
+        env:
+          FIXTURE_SHA: ${{ inputs.fixture_sha }}
+      - name: Retain Windows outcomes
         if: always()
         run: |
-          if ($env:COLD_OUTCOME -ne 'success' -or $env:OVERLAY_OUTCOME -ne 'success' -or $env:DIAGNOSTIC_OUTCOME -ne 'success') { throw 'The diagnostic failed or was incomplete. Read each retained outcome.' }
+          New-Item -ItemType Directory -Path application/.audit/independent-docker-probe -Force | Out-Null
+          @{
+            source = $env:SOURCE_SHA
+            controls = $env:CONTROLS_SHA
+            fixture = $env:FIXTURE_SHA
+            cold = $env:COLD_OUTCOME
+            fixturePreparation = $env:FIXTURE_OUTCOME
+            probe = $env:PROBE_OUTCOME
+            platform = $env:RUNNER_OS
+          } | ConvertTo-Json | Set-Content -LiteralPath application/.audit/independent-docker-probe/outcomes.json -Encoding utf8
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          CONTROLS_SHA: ${{ github.workflow_sha }}
+          FIXTURE_SHA: ${{ inputs.fixture_sha }}
+          COLD_OUTCOME: ${{ steps.cold.outcome }}
+          FIXTURE_OUTCOME: ${{ steps.fixture.outcome }}
+          PROBE_OUTCOME: ${{ steps.probe.outcome }}
+      - name: Retain sanitized Windows Docker proof
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: independent-docker-probe-windows-${{ inputs.source_sha }}-${{ github.run_id }}
+          path: |
+            application/.audit/independent-docker-probe/source.json
+            application/.audit/independent-docker-probe/overlay.json
+            application/.audit/independent-docker-probe/outcomes.json
+            application/.audit/independent-docker-probe/cold.log
+            application/.audit/independent-docker-probe/probe.log
+            application/.audit/doctor-docker/receipt.json
+            application/.audit/doctor-docker/cleanup.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+      - name: Require both Windows proof commands to pass
+        if: always()
+        run: |
+          if ($env:COLD_OUTCOME -ne 'success' -or $env:FIXTURE_OUTCOME -ne 'success' -or $env:PROBE_OUTCOME -ne 'success') {
+            throw 'Windows proof did not pass. Read the separate command outcomes and retained evidence.'
+          }
         env:
           COLD_OUTCOME: ${{ steps.cold.outcome }}
-          OVERLAY_OUTCOME: ${{ steps.overlay.outcome }}
-          DIAGNOSTIC_OUTCOME: ${{ steps.diagnostic.outcome }}
+          FIXTURE_OUTCOME: ${{ steps.fixture.outcome }}
+          PROBE_OUTCOME: ${{ steps.probe.outcome }}
