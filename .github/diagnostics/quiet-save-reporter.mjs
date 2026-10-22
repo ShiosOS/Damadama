@@ -22,6 +22,7 @@ import {
   admitPassiveOperation,
   loadPassiveSources,
   passiveRuntimeProof,
+  publicPassiveSite,
 } from "./quiet-save-source.mjs";
 
 const phase = ownerSchema.shape.phase;
@@ -426,10 +427,7 @@ export default class QuietSaveReporter {
               site.column === error.location.column,
           );
           let site;
-          if (found) {
-            const { api: _api, ...safe } = found;
-            site = safe;
-          }
+          if (found) site = publicPassiveSite(found);
           const key = errorKey(error);
           const matches = state?.refusal
             ? []

@@ -25,6 +25,7 @@ import {
   fontBuildProof,
   readFontAssets,
   loadPassiveSources,
+  publicPassiveSite,
 } from "./quiet-save-source.mjs";
 
 const hex = z.string().regex(/^[a-f0-9]{64}$/);
@@ -121,7 +122,7 @@ function admitPassiveSites(detail, sources) {
       .find((source) => source.source === site.source)
       ?.sites.find((candidate) => candidate.id === site.id);
     if (!known) throw new Error("Retained passive site differs.");
-    const { api: _api, ...safe } = known;
+    const safe = publicPassiveSite(known);
     if (JSON.stringify(safe) !== JSON.stringify(site))
       throw new Error("Retained passive site differs.");
   }

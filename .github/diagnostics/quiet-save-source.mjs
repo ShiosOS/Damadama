@@ -355,6 +355,8 @@ export function passivePreparationProof(files) {
       JSON.stringify(
         [
           ".github/diagnostics/quiet-save-passive.test.mjs",
+          ".github/diagnostics/quiet-save-integration.test.mjs",
+          ".github/diagnostics/fixtures/passive-native-boundary.mjs",
           ".github/diagnostics/fixtures/passive-save.pw.mjs",
           ".github/diagnostics/fixtures/passive-save-page.html",
         ].map((path) => digest(readFileSync(path))),
@@ -468,6 +470,33 @@ const passiveMatchers = new Set([
   "toMatchSnapshot",
 ]);
 
+function assertionTitlePolicy(expression) {
+  while (ts.isPropertyAccessExpression(expression))
+    expression = expression.expression;
+  if (
+    !ts.isCallExpression(expression) ||
+    !ts.isIdentifier(expression.expression) ||
+    expression.expression.text !== "expect"
+  )
+    return { kind: "unsupported" };
+  const message = expression.arguments[1];
+  if (!message) return { kind: "default" };
+  if (!ts.isStringLiteral(message)) return { kind: "unsupported" };
+  if (message.text === "") return { kind: "default" };
+  return { kind: "literal", text: message.text };
+}
+
+export function publicPassiveSite({
+  id,
+  source,
+  line,
+  column,
+  operation,
+  role,
+}) {
+  return { id, source, line, column, operation, role };
+}
+
 export function passiveSites(source) {
   const ast = ts.createSourceFile(
     source.path,
@@ -529,6 +558,9 @@ export function passiveSites(source) {
           operation,
           role,
           api,
+          ...(operation === "assertion"
+            ? { titlePolicy: assertionTitlePolicy(node.expression.expression) }
+            : {}),
         });
       }
     }
@@ -557,18 +589,22 @@ export function admitPassiveOperation(step, sources) {
   if (!site) return { kind: "unverified", reason: "site-unadmitted" };
   let matches = false;
   if (site.operation === "assertion") {
-    const matcher = /^Expect "(?:not )?(to[A-Za-z]+)(?:"|\()/.exec(
-      step.title ?? "",
-    )?.[1];
-    matches = step.category === "expect" && matcher === site.api;
+    if (site.titlePolicy.kind === "literal")
+      matches =
+        step.category === "expect" && step.title === site.titlePolicy.text;
+    else if (site.titlePolicy.kind === "default") {
+      const matcher = /^Expect "(?:not )?(to[A-Za-z]+)(?:"|\()/.exec(
+        step.title ?? "",
+      )?.[1];
+      matches = step.category === "expect" && matcher === site.api;
+    }
   } else {
     matches =
       step.category === "pw:api" &&
       passiveApis.get(site.api)[1].test(step.title ?? "");
   }
   if (!matches) return { kind: "unverified", reason: "operation-mismatch" };
-  const { api: _api, ...safe } = site;
-  return { kind: "complete", value: safe };
+  return { kind: "complete", value: publicPassiveSite(site) };
 }
 
 export function loadPassiveSources(selfTest = false) {

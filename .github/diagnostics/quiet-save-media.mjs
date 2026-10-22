@@ -165,6 +165,54 @@ function ownedCheckpoints(project) {
   if (project === "chromium-mobile") return checkpoints.slice(2);
   return [];
 }
+
+function auxiliaryNativeFiles(owner, selfTest) {
+  const calibration =
+    selfTest &&
+    owner.control === "presave-assertion" &&
+    owner.iteration === 0 &&
+    owner.phase === "calibration" &&
+    owner.project === "chromium-desktop" &&
+    owner.case === 1;
+  const fresh = phaseNames.slice(2, 5).includes(owner.phase);
+  const mutation = owner.phase === phaseNames[5];
+  const normal = owner.control === "normal" && owner.iteration >= 1;
+  let checkpoints = [];
+  if (
+    owner.project === "chromium-desktop" &&
+    owner.case === 1 &&
+    ((normal && (fresh || mutation || owner.phase === phaseNames[6])) ||
+      calibration)
+  )
+    checkpoints = ["desktop-creation", "desktop-saved"];
+  if (
+    normal &&
+    owner.project === "chromium-mobile" &&
+    owner.case === 2 &&
+    fresh
+  )
+    checkpoints = ["mobile-layout"];
+  const inventory = new Map();
+  for (const checkpoint of checkpoints) {
+    inventory.set(`${checkpoint}-previous.png`, {
+      checkpoint,
+      kind: "previous",
+    });
+    const occurrences = [1];
+    if (checkpoint === "desktop-saved" && (mutation || calibration))
+      occurrences.push(2, 3);
+    for (const occurrence of occurrences) {
+      const kinds = ["actual", "expected", "diff"];
+      if (occurrence !== 1) kinds.push("previous");
+      for (const kind of kinds)
+        inventory.set(`${checkpoint}-${occurrence}-${kind}.png`, {
+          checkpoint,
+          kind,
+        });
+    }
+  }
+  return inventory;
+}
 export function mediaName(entry) {
   if (entry.kind === "comparison-json")
     return `${entry.checkpoint}-comparison.json`;
@@ -252,22 +300,40 @@ export async function retainFailureMedia({
       if (error.code === "ENOENT") return [];
       throw error;
     });
-    const names = new Set(entries.map(mediaName));
+    const auxiliary = auxiliaryNativeFiles(owner, selfTest);
+    const names = new Set([...entries.map(mediaName), ...auxiliary.keys()]);
     if (
       listing.some(
         (name) =>
-          /(?:comparison\.(?:json|png)|-(?:actual|expected|diff)\.png)$/.test(
+          /(?:comparison\.(?:json|png)|-(?:actual|expected|diff|previous)\.png)$/.test(
             name,
           ) && !names.has(name),
       )
     )
       throw new Error("Unexpected media name.");
-    for (const entry of entries) {
-      const name = mediaName(entry);
+    let inputBytes = 0;
+    const candidates = [
+      ...entries.map((entry) => ({
+        name: mediaName(entry),
+        entry,
+        retained: true,
+      })),
+      ...[...auxiliary].map(([name, entry]) => ({
+        name,
+        entry,
+        retained: false,
+      })),
+    ];
+    for (const { name, entry, retained } of candidates) {
       if (!listing.includes(name)) continue;
       const bytes = await readOwnedFile(resolve(outputDir, name), started);
+      inputBytes += bytes.length;
+      if (inputBytes > 20 * 1024 * 1024) {
+        refusal = "byte-bound";
+        throw new Error("Candidate media aggregate bound exceeded.");
+      }
       if (entry.kind !== "comparison-json") validatePNG(bytes);
-      buffers.set(name, bytes);
+      if (retained) buffers.set(name, bytes);
       Object.assign(entry, {
         state: "present",
         bytes: bytes.length,
@@ -277,8 +343,8 @@ export async function retainFailureMedia({
     refusal = "metadata";
     let baseline;
     if (
-      entries.some(
-        (entry) =>
+      candidates.some(
+        ({ entry }) =>
           entry.state === "present" &&
           ["expected", "comparison-json"].includes(entry.kind),
       )
@@ -295,7 +361,9 @@ export async function retainFailureMedia({
       if (new Set(baseline.images.map((image) => image.id)).size !== 3)
         throw new Error("Duplicate baseline.");
     }
-    for (const entry of entries.filter((item) => item.state === "present")) {
+    for (const { entry } of candidates.filter(
+      ({ entry }) => entry.state === "present",
+    )) {
       const image = baseline?.images.find(
         (item) => item.id === entry.checkpoint,
       );
