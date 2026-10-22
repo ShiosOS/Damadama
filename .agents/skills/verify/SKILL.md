@@ -56,6 +56,8 @@ For a global timeout reported at a response waiter's creation, preserve the last
 
 Exporting only after failure does not make the observer passive. Record the extra work it performs during normal actions before interpreting repeated passes.
 
+Calibrate a wrapper against each original control path it observes, including caught assertion failures and repeated named screenshot checks. Bind accepted assertion titles and output names to the verified source and runtime. A passing smoke path does not prove full-path capture. Distinguish files that were never produced, refused, or validated and deliberately excluded from the retained artifact.
+
 Keep a comparison failure before the save waiter separate from a save timeout. A fulfilled [font readiness promise](https://www.w3.org/TR/css-font-loading-3/#font-face-set-ready) does not prove the required font loaded. Preserve matching FontFace states and browser-observed request, response and transfer-completion boundaries before changing the font guard. Label a sample taken after failure as such; server-written headers alone do not establish browser receipt.
 
 Existing specs write named synthetic screenshots under `.audit/`, browser output under `test-results/`, and the HTML report under `tests/Browser/playwright-report/`. Copy only the run's named non-secret evidence before another invocation can replace it. Record the full source revision separately from any deployed source or controls revision.
