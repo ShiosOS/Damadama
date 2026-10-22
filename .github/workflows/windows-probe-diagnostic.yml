@@ -1,0 +1,132 @@
+name: Bounded Windows probe diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Frozen PR 129 source, diagnostic overlay is recorded separately
+        required: true
+        default: 27b4893c85480658af83749f784de80b4e843ba9
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: core.autocrlf
+  GIT_CONFIG_VALUE_0: "false"
+
+concurrency:
+  group: windows-probe-diagnostic-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  observe:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [control, formatter]
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Require the reviewed frozen source
+        run: |
+          if ($env:SOURCE_SHA -cne '27b4893c85480658af83749f784de80b4e843ba9') { throw 'Unreviewed source revision' }
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          path: .audit/probe-controls
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+      - name: Record clean source and actual runner image
+        run: node .audit/probe-controls/audit-controls/windows-probe-overlay.mjs record .
+        env:
+          CONTROLS_SHA: ${{ github.workflow_sha }}
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          global-json-file: global.json
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - name: Original cold 50 before fixture build or additional Docker calls
+        id: cold
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          bun test scripts/doctor.test.ts scripts/developer.test.ts 2>&1 | Tee-Object -FilePath .audit/windows-probe-diagnostic/cold.log
+          exit $LASTEXITCODE
+      - name: Record the separate diagnostic overlay
+        id: overlay
+        if: always() && (steps.cold.outcome == 'success' || steps.cold.outcome == 'failure')
+        run: node .audit/probe-controls/audit-controls/windows-probe-overlay.mjs prepare . $env:PROBE_MODE
+        env:
+          CONTROLS_SHA: ${{ github.workflow_sha }}
+          PROBE_MODE: ${{ matrix.mode }}
+      - name: Calibrate native observer and capture exactly one bounded diagnostic
+        id: diagnostic
+        if: always() && steps.overlay.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 4
+        run: |
+          & ./.audit/probe-controls/audit-controls/windows-probe-observer.ps1 -Mode $env:PROBE_MODE
+          exit $LASTEXITCODE
+        env:
+          PROBE_MODE: ${{ matrix.mode }}
+      - name: Retain distinct command outcomes
+        if: always()
+        run: |
+          New-Item -ItemType Directory -Path .audit/windows-probe-diagnostic -Force | Out-Null
+          @{ source = $env:SOURCE_SHA; controls = $env:CONTROLS_SHA; mode = $env:PROBE_MODE; cold = $env:COLD_OUTCOME; overlay = $env:OVERLAY_OUTCOME; diagnostic = $env:DIAGNOSTIC_OUTCOME; interpretation = 'diagnostic-overlay-not-unchanged-source-acceptance' } | ConvertTo-Json | Set-Content -LiteralPath .audit/windows-probe-diagnostic/outcomes.json -Encoding utf8
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          CONTROLS_SHA: ${{ github.workflow_sha }}
+          PROBE_MODE: ${{ matrix.mode }}
+          COLD_OUTCOME: ${{ steps.cold.outcome }}
+          OVERLAY_OUTCOME: ${{ steps.overlay.outcome }}
+          DIAGNOSTIC_OUTCOME: ${{ steps.diagnostic.outcome }}
+      - name: Upload the fixed sanitized evidence allowlist
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: windows-probe-diagnostic-${{ matrix.mode }}-${{ inputs.source_sha }}-${{ github.run_id }}
+          path: |
+            .audit/windows-probe-diagnostic/source.json
+            .audit/windows-probe-diagnostic/overlay.json
+            .audit/windows-probe-diagnostic/instrumentation.patch
+            .audit/windows-probe-diagnostic/outcomes.json
+            .audit/windows-probe-diagnostic/cold.log
+            .audit/windows-probe-diagnostic/diagnostic.log
+            .audit/windows-probe-diagnostic/events-test.jsonl
+            .audit/windows-probe-diagnostic/events-worker.jsonl
+            .audit/windows-probe-diagnostic/native-events.json
+            .audit/windows-probe-diagnostic/observer.json
+            .audit/windows-probe-diagnostic/handle-tool.json
+            .audit/windows-probe-diagnostic/handle-query.json
+            .audit/windows-probe-diagnostic/handle-unavailable.json
+            .audit/doctor-docker/receipt.json
+            .audit/doctor-docker/cleanup.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+      - name: Preserve failures as failures
+        if: always()
+        run: |
+          if ($env:COLD_OUTCOME -ne 'success' -or $env:OVERLAY_OUTCOME -ne 'success' -or $env:DIAGNOSTIC_OUTCOME -ne 'success') { throw 'The diagnostic failed or was incomplete. Read each retained outcome.' }
+        env:
+          COLD_OUTCOME: ${{ steps.cold.outcome }}
+          OVERLAY_OUTCOME: ${{ steps.overlay.outcome }}
+          DIAGNOSTIC_OUTCOME: ${{ steps.diagnostic.outcome }}
