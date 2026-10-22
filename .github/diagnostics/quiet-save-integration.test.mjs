@@ -16,6 +16,7 @@ import {
 import { caseNames, ownerSchema } from "./quiet-save-media.mjs";
 import { runOwned } from "./quiet-save-run.mjs";
 import QuietSaveReporter from "./quiet-save-reporter.mjs";
+import { runNativeBoundary } from "./fixtures/passive-native-boundary.mjs";
 import {
   passiveCalibrationCases,
   validatePassiveCalibrationCapture,
@@ -31,6 +32,87 @@ const started = {
 };
 const serialize = (rows) =>
   rows.map((row) => JSON.stringify(row)).join("\n") + "\n";
+
+test(
+  "unchanged canonical mutation and missing bodies cross actual local native boundaries",
+  { timeout: 240000 },
+  async () => {
+    const proof = await runNativeBoundary();
+    for (const mode of [
+      "normal",
+      "mutation",
+      "missing",
+      "restoration-failure",
+    ]) {
+      const runs = proof.results.filter((result) => result.mode === mode);
+      const sequences = [];
+      for (const run of runs) {
+        assert.equal(run.runtime.status, "failed");
+        assert.equal(
+          run.runtime.body.bodyCompleted,
+          mode !== "restoration-failure",
+        );
+        const rows = parseReceipt(run.receipt, "presave-assertion", 0);
+        const result = rows.find((row) => row.kind === "test-result");
+        assert.equal(
+          result.passive.operations.kind,
+          "complete",
+          `${mode} ${run.passive}`,
+        );
+        assert.equal(
+          result.media.refusal,
+          "none",
+          `${mode} media ${run.passive}`,
+        );
+        assert.equal(
+          result.passive.network.kind,
+          run.passive ? "complete" : "unverified",
+        );
+        assert(result.media.entries.every((entry) => entry.state === "absent"));
+        const operations = result.passive.operations.value;
+        const failures = operations.filter((row) => row.end.kind === "error");
+        const expected = {
+          normal: 0,
+          mutation: 1,
+          missing: 1,
+          "restoration-failure": 2,
+        };
+        assert.equal(
+          failures.length,
+          expected[mode],
+          `${mode} includes caught native failures`,
+        );
+        assert(!run.receipt.includes("Native screenshot"));
+        assert(!run.receipt.includes("titlePolicy"));
+        sequences.push(
+          operations.map((row) => ({ site: row.site, end: row.end.kind })),
+        );
+      }
+      assert.deepEqual(
+        sequences[0],
+        sequences[1],
+        `${mode} direct/passive transport sequence`,
+      );
+      let expectedFiles = [];
+      if (["mutation", "restoration-failure"].includes(mode))
+        expectedFiles = ["actual", "diff", "expected"].map(
+          (kind) => `desktop-saved-2-${kind}.png`,
+        );
+      if (mode === "restoration-failure")
+        expectedFiles.push(
+          ...["actual", "diff", "expected"].map(
+            (kind) => `desktop-saved-3-${kind}.png`,
+          ),
+        );
+      for (const run of runs)
+        assert.deepEqual(
+          run.nativeFiles,
+          expectedFiles.sort(),
+          `${mode} native file origins`,
+        );
+    }
+  },
+);
 
 function successfulSession(iteration = 1) {
   return phases.flatMap((phase, index) => {

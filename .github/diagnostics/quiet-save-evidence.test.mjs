@@ -8,9 +8,14 @@ import {
   rm,
   writeFile,
   symlink,
+  link,
+  utimes,
+  rename,
 } from "node:fs/promises";
+import fsPromises from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import { resolve } from "node:path";
-import { test } from "node:test";
+import { test, mock } from "node:test";
 import { generate } from "./quiet-save-generate.mjs";
 import {
   digest,
@@ -332,6 +337,261 @@ test("media refuses stale files, links, unknown candidates and metadata fields",
     }).success,
     false,
   );
+});
+
+test("auxiliary native PNGs are validated and discarded under their exact owner", async () => {
+  const outputRoot = resolve(root, "auxiliary-output");
+  const outputDir = resolve(outputRoot, "owned");
+  const active = {
+    ...owner,
+    control: "normal",
+    iteration: 19,
+    phase: "changed-row pixel rejection and same-page restoration",
+  };
+  await mkdir(outputDir, { recursive: true });
+  await clearOwned(mediaDirectory(active, true));
+  for (const occurrence of [1, 2, 3])
+    for (const kind of ["actual", "expected", "diff"])
+      await writeFile(
+        resolve(outputDir, `desktop-saved-${occurrence}-${kind}.png`),
+        await readFile("tests/Browser/baselines/desktop-saved.png"),
+      );
+  const result = await retainFailureMedia({
+    outputDir,
+    outputRoot,
+    owner: active,
+    head,
+    selfTest: true,
+    started: 0,
+  });
+  assert.equal(result.refusal, "none");
+  assert(result.entries.every((entry) => entry.state === "absent"));
+  assert.deepEqual(await readdir(mediaDirectory(active, true)), [
+    "manifest.json",
+  ]);
+  await clearOwned(mediaDirectory(active, true));
+  await clearOwned(outputRoot);
+});
+
+test("auxiliary PNG inventory refuses foreign ownership, unsafe bytes and replaced files", async () => {
+  const outputRoot = resolve(root, "auxiliary-policy");
+  const outputDir = resolve(outputRoot, "owned");
+  const mutation = {
+    ...owner,
+    control: "normal",
+    iteration: 19,
+    phase: "changed-row pixel rejection and same-page restoration",
+  };
+  const calibration = { ...owner, control: "presave-assertion", iteration: 0 };
+  const baseline = await readFile("tests/Browser/baselines/desktop-saved.png");
+  const creation = await readFile(
+    "tests/Browser/baselines/desktop-creation.png",
+  );
+  const mobile = await readFile("tests/Browser/baselines/mobile-layout.png");
+  async function capture(
+    files,
+    active = mutation,
+    { started = 0, selfTest = true, prepare = async () => {} } = {},
+  ) {
+    await clearOwned(outputRoot);
+    await mkdir(outputDir, { recursive: true });
+    const destination = mediaDirectory(active, selfTest);
+    if (selfTest) await clearOwned(destination);
+    else {
+      assert(
+        destination.startsWith(resolve(".audit/quiet-save/evidence") + "/") ||
+          destination.startsWith(resolve(".audit/quiet-save/evidence") + "\\"),
+      );
+      await rm(destination, { recursive: true, force: true });
+    }
+    for (const [name, bytes] of files)
+      await writeFile(resolve(outputDir, name), bytes);
+    await prepare();
+    try {
+      const manifest = await retainFailureMedia({
+        outputDir,
+        outputRoot,
+        owner: active,
+        head,
+        selfTest,
+        started,
+      });
+      assert.equal(JSON.stringify(manifest).includes("previous"), false);
+      return manifest;
+    } finally {
+      mock.restoreAll();
+      syncBuiltinESMExports();
+      await rm(destination, { recursive: true, force: true });
+    }
+  }
+  const candidate = (name, bytes = baseline) => [[name, bytes]];
+  for (const [active, checkpoint, bytes] of [
+    [mutation, "desktop-creation", creation],
+    [mutation, "desktop-saved", baseline],
+    [
+      {
+        ...mutation,
+        phase: "fresh visual comparison 1",
+        project: "chromium-mobile",
+        case: 2,
+      },
+      "mobile-layout",
+      mobile,
+    ],
+    [calibration, "desktop-saved", baseline],
+  ]) {
+    for (const suffix of ["1-actual", "1-expected", "1-diff", "previous"])
+      assert.equal(
+        (await capture(candidate(`${checkpoint}-${suffix}.png`, bytes), active))
+          .refusal,
+        "none",
+      );
+  }
+  for (const suffix of ["2-previous", "3-previous", "2-expected", "3-expected"])
+    assert.equal(
+      (await capture(candidate(`desktop-saved-${suffix}.png`))).refusal,
+      "none",
+    );
+  for (const name of [
+    "desktop-saved-0-actual.png",
+    "desktop-saved-4-diff.png",
+    "desktop-saved-99-actual.png",
+    "desktop-creation-2-actual.png",
+    "mobile-layout-1-actual.png",
+    "foreign-previous.png",
+    "desktop-saved-1-previous.png",
+    "desktop-saved-4-previous.png",
+    "intentionally-absent-compatibility-control-actual.png",
+  ])
+    assert.equal((await capture(candidate(name))).refusal, "file-policy", name);
+  for (const active of [
+    { ...mutation, case: 0 },
+    { ...mutation, project: "chromium-mobile" },
+    { ...mutation, control: "pixel-mismatch" },
+    { ...mutation, iteration: 0 },
+    { ...mutation, phase: "Firefox and WebKit smoke" },
+    { ...mutation, phase: "fresh visual comparison 1" },
+    { ...mutation, phase: "missing-baseline rejection" },
+    { ...calibration, iteration: 1 },
+    { ...calibration, control: "pixel-mismatch" },
+    { ...calibration, project: "firefox-smoke" },
+    { ...calibration, case: 2 },
+  ])
+    assert.equal(
+      (await capture(candidate("desktop-saved-2-actual.png"), active)).refusal,
+      "file-policy",
+    );
+  assert.equal(
+    (
+      await capture(candidate("desktop-saved-2-actual.png"), calibration, {
+        selfTest: false,
+      })
+    ).refusal,
+    "file-policy",
+  );
+  assert.equal(
+    (await capture(candidate("desktop-saved-1-expected.png", creation)))
+      .refusal,
+    "metadata",
+  );
+  assert.equal(
+    (await capture(candidate("desktop-saved-2-expected.png", creation)))
+      .refusal,
+    "metadata",
+  );
+  for (const bytes of [
+    Buffer.from("invalid PNG"),
+    Buffer.alloc(4 * 1024 * 1024 + 1),
+  ])
+    assert.equal(
+      (await capture(candidate("desktop-saved-2-actual.png", bytes))).refusal,
+      "file-policy",
+    );
+  assert.equal(
+    (
+      await capture(
+        candidate("desktop-saved-previous.png", Buffer.from("invalid PNG")),
+      )
+    ).refusal,
+    "file-policy",
+  );
+  const file = resolve(outputDir, "desktop-saved-2-actual.png");
+  assert.equal(
+    (
+      await capture(candidate("desktop-saved-2-actual.png"), mutation, {
+        started: Date.now() - 1000,
+        prepare: () => utimes(file, new Date(0), new Date(0)),
+      })
+    ).refusal,
+    "file-policy",
+  );
+  assert.equal(
+    (
+      await capture(candidate("desktop-saved-2-actual.png"), mutation, {
+        prepare: () => link(file, resolve(outputDir, "hard-link.bin")),
+      })
+    ).refusal,
+    "file-policy",
+  );
+  const external = resolve(root, "auxiliary-linked");
+  await mkdir(external, { recursive: true });
+  await writeFile(resolve(external, "desktop-saved-2-actual.png"), baseline);
+  assert.equal(
+    (
+      await capture([], mutation, {
+        prepare: async () => {
+          await rm(outputDir, { recursive: true });
+          await symlink(external, outputDir, "junction");
+        },
+      })
+    ).refusal,
+    "file-policy",
+  );
+  await rm(outputDir);
+  await clearOwned(external);
+  let replaced = false;
+  const originalOpen = fsPromises.open;
+  assert.equal(
+    (
+      await capture(candidate("desktop-saved-2-actual.png"), mutation, {
+        prepare: async () => {
+          mock.method(fsPromises, "open", async (path, ...args) => {
+            if (path === file && !replaced) {
+              replaced = true;
+              await rename(file, resolve(outputDir, "replaced.bin"));
+              await writeFile(file, baseline);
+            }
+            return originalOpen(path, ...args);
+          });
+          syncBuiltinESMExports();
+        },
+      })
+    ).refusal,
+    "file-policy",
+  );
+  assert(replaced, "The replacement control must reach the owned-file open.");
+  const padding = Buffer.alloc(3 * 1024 * 1024);
+  padding.writeUInt32BE(padding.length - 12, 0);
+  padding.write("IDAT", 4, "ascii");
+  const large = Buffer.concat([
+    baseline.subarray(0, -12),
+    padding,
+    baseline.subarray(-12),
+  ]);
+  const inputs = [
+    "desktop-saved-actual.png",
+    "desktop-saved-diff.png",
+    "desktop-saved-1-actual.png",
+    "desktop-saved-1-diff.png",
+    "desktop-saved-2-actual.png",
+    "desktop-saved-2-diff.png",
+    "desktop-saved-3-actual.png",
+  ];
+  assert.equal(
+    (await capture(inputs.map((name) => [name, large]))).refusal,
+    "byte-bound",
+  );
+  await clearOwned(outputRoot);
 });
 
 test("caught failed steps cannot claim a later uncaught error", async () => {

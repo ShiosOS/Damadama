@@ -9,6 +9,7 @@ import {
   loadPassiveSources,
   admitPassiveOperation,
   passiveRuntimeProof,
+  passiveSites,
 } from "./quiet-save-source.mjs";
 import { parseReceipt } from "./quiet-save-receipt.mjs";
 import { passiveFailure } from "./quiet-save-schema.mjs";
@@ -149,6 +150,155 @@ test("passive source admission requires an exact static site and its operation",
         "unverified",
       );
     }
+  }
+});
+
+test("literal assertion titles bind to their exact source sites without entering receipts", async () => {
+  const sources = loadPassiveSources(true);
+  const source = sources.find((item) => item.source === "canonical-test");
+  const titles = [
+    [
+      195,
+      "Native screenshot assertion must reject changed saved-row geometry with a pixel mismatch.",
+    ],
+    [200, "Native screenshot assertion must emit a nonempty diff PNG."],
+    [
+      227,
+      "Native screenshot assertion must report the missing reviewed baseline.",
+    ],
+  ];
+  for (const [line, title] of titles) {
+    const site = source.sites.find((item) => item.line === line);
+    const step = {
+      category: "expect",
+      title,
+      location: { file: source.path, line, column: site.column },
+    };
+    const admitted = admitPassiveOperation(step, sources);
+    assert.equal(admitted.kind, "complete");
+    assert.deepEqual(Object.keys(admitted.value), [
+      "id",
+      "source",
+      "line",
+      "column",
+      "operation",
+      "role",
+    ]);
+    assert(!JSON.stringify(admitted).includes(title));
+    for (const changed of [
+      { ...step, title: title + "!" },
+      { ...step, title: titles.find(([other]) => other !== line)[1] },
+      { ...step, title: `Expect "${site.api}"` },
+      { ...step, category: "pw:api" },
+      { ...step, location: { ...step.location, column: site.column + 1 } },
+      { ...step, location: { ...step.location, file: resolve("foreign.ts") } },
+      { ...step, location: undefined },
+      { ...step, location: { ...step.location, line: 208, column: 5 } },
+    ])
+      assert.equal(admitPassiveOperation(changed, sources).kind, "unverified");
+  }
+  const bytes =
+    'expect(true).toBe(true);\nexpect(true, "").not.toBe(false);\nexpect(true, message).toBe(true);\nexpect(true, `literal`).toBe(true);\nexpect(true, "private\\nmessage").toBe(true);';
+  const synthetic = {
+    source: "canonical-test",
+    path: resolve("title-policy.ts"),
+    bytes,
+  };
+  synthetic.sites = passiveSites(synthetic);
+  for (const [index, title, expected] of [
+    [0, 'Expect "toBe"', "complete"],
+    [1, 'Expect "not toBe"', "complete"],
+    [2, 'Expect "toBe"', "unverified"],
+    [2, "message", "unverified"],
+    [3, "literal", "unverified"],
+    [4, "private\nmessage", "complete"],
+    [0, 'Expect "toEqual"', "unverified"],
+  ]) {
+    const site = synthetic.sites[index];
+    assert.equal(
+      admitPassiveOperation(
+        {
+          category: "expect",
+          title,
+          location: {
+            file: synthetic.path,
+            line: site.line,
+            column: site.column,
+          },
+        },
+        [synthetic],
+      ).kind,
+      expected,
+    );
+  }
+  const previous = { ...process.env };
+  Object.assign(process.env, {
+    QUIET_SELF_TEST: "1",
+    QUIET_PROFILE: "passive",
+    QUIET_CONTROL: "presave-assertion",
+    QUIET_ITERATION: "0",
+    QUIET_PHASE: "calibration",
+  });
+  try {
+    const reporter = new QuietSaveReporter();
+    const testCase = {
+      id: "literal-error",
+      title: "desktop creation and saved details remain stable",
+      timeout: 30000,
+      parent: { project: () => ({ name: "chromium-desktop" }) },
+    };
+    reporter.onTestBegin(testCase);
+    const result = {
+      status: "failed",
+      retry: 0,
+      startTime: new Date(1000),
+      duration: 1000,
+      workerIndex: 0,
+      attachments: [],
+      errors: [
+        {
+          message: "private-error",
+          location: { file: source.path, line: 195, column: 5 },
+        },
+      ],
+    };
+    const detail = reporter.passiveDetail(testCase, result);
+    assert.equal(detail.errors.value[0].correlation.kind, "result-site");
+    const retained = detail.errors.value[0].correlation.site;
+    assert.deepEqual(Object.keys(retained), [
+      "id",
+      "source",
+      "line",
+      "column",
+      "operation",
+      "role",
+    ]);
+    passiveFailure.parse(detail);
+    assert(!JSON.stringify(detail).includes("Native screenshot"));
+    await mkdir(root, { recursive: true });
+    const directory = await mkdtemp(resolve(root, "literal-admission-"));
+    const records = [];
+    reporter.record = (row) =>
+      records.push({
+        control: "presave-assertion",
+        iteration: 0,
+        phase: "calibration",
+        ...row,
+      });
+    reporter.onBegin({}, { allTests: () => [testCase] });
+    reporter.onTestEnd(testCase, result);
+    await writeFile(
+      resolve(directory, "fresh.jsonl"),
+      records.map((row) => JSON.stringify(row)).join("\n") + "\n",
+    );
+    assert.deepEqual(
+      await validatePassiveCalibrationCapture(directory, "chromium", ""),
+      { matched: false, mediaFiles: 0, mediaBytes: 0 },
+    );
+  } finally {
+    for (const key of Object.keys(process.env))
+      if (!(key in previous)) delete process.env[key];
+    Object.assign(process.env, previous);
   }
 });
 
