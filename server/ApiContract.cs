@@ -71,13 +71,17 @@ public static class ApiContract
             {
                 var type = context.JsonTypeInfo.Type;
                 if (type == typeof(CreateHabit) || type == typeof(WriteEntry) || type == typeof(HabitResponse) ||
-                    type == typeof(EntryResponse) || type == typeof(InitialSchedule) || type == typeof(ApplicationConfig))
+                    type == typeof(EntryResponse) || type == typeof(InitialSchedule) || type == typeof(ApplicationConfig) ||
+                    type == typeof(EditHabit) || type == typeof(ArchiveHabit) || type == typeof(Recurrence))
                 {
                     schema.Required = schema.Properties?.Keys.ToHashSet() ?? [];
+                    if (type == typeof(EditHabit)) schema.Required.ExceptWith(["schedule", "todayChoice"]);
+                    if (type == typeof(ArchiveHabit)) schema.Required.Remove("todayChoice");
                     foreach (var (name, property) in schema.Properties?.AsEnumerable() ?? [])
                     {
                         if (property is not OpenApiSchema value) continue;
-                        if (type != typeof(ApplicationConfig)) value.Type &= ~JsonSchemaType.Null;
+                        if (type != typeof(ApplicationConfig) && name is not ("schedule" or "todayChoice")) value.Type &= ~JsonSchemaType.Null;
+                        if (name == "todayChoice") value.Pattern = "^(Keep|Remove)$";
                         if (name is "name" or "good" or "better" or "best" or "timeZone")
                         {
                             value.MinLength = 1;
@@ -97,10 +101,11 @@ public static class ApiContract
                         }
                     }
                 }
-                if (type == typeof(Microsoft.AspNetCore.Mvc.ProblemDetails) || type == typeof(EntryConflictProblem))
+                if (type == typeof(Microsoft.AspNetCore.Mvc.ProblemDetails) || type == typeof(EntryConflictProblem) || type == typeof(HabitMutationProblem))
                 {
                     schema.Required = new HashSet<string> { "status", "title", "type" };
                     if (type == typeof(EntryConflictProblem)) schema.Required.Add("current");
+                    if (type == typeof(HabitMutationProblem)) schema.Required.Add("code");
                 }
                 return Task.CompletedTask;
             });

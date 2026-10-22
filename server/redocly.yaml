@@ -39,9 +39,21 @@ rules:
   rule/member-methods:
     subject:
       type: PathItem
-      matchParentKeys: '\}$'
+      matchParentKeys: '^/api/habits/\{id\}/entries/\{date\}$'
     assertions:
       disallowed: [post, patch, delete, head, options, trace]
+  rule/habit-member-methods:
+    subject:
+      type: PathItem
+      filterInParentKeys: ["/api/habits/{id}"]
+    assertions:
+      disallowed: [post, delete, head, options, trace]
+  rule/archive-collection-methods:
+    subject:
+      type: PathItem
+      matchParentKeys: '^/api/habits/\{id\}/archives$'
+    assertions:
+      disallowed: [get, put, patch, delete, head, options, trace]
   rule/config-singleton:
     subject:
       type: PathItem
@@ -52,7 +64,7 @@ rules:
     subject:
       type: Paths
     assertions:
-      pattern: '^/api/(config|habits(/\{id\}(/entries/\{date\})?)?|entries)$'
+      pattern: '^/api/(config|habits(/\{id\}(/entries/\{date\}|/archives)?)?|entries)$'
   rule/created-location:
     subject:
       type: Response

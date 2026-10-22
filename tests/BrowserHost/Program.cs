@@ -15,8 +15,8 @@ await using (var seed = new HabitsDb(new DbContextOptionsBuilder<HabitsDb>()
         [7], 1, "America/New_York"), "entries-retained-account", TestApp.CreationInstant);
     seed.Habits.Add(retained);
     await seed.SaveChangesAsync();
-    await EntryStore.Save(seed, retained,
-        new EntryEdit(new DateOnly(2026, 1, 4), EntryResult.Good, TestApp.CreationInstant), CancellationToken.None);
+    await new HabitHistory(seed, new FixtureClock()).SaveEntry(retained.Id, retained.OwnerId, "2026-01-04",
+        new WriteEntry("Good", TestApp.CreationInstant, "2026-01-05", "UTC"), CancellationToken.None);
     await seed.Database.ExecuteSqlInterpolatedAsync($"""
         UPDATE "InitialSchedules" SET "Weekdays" = ARRAY[3] WHERE "HabitId" = {retained.Id};
         UPDATE "Habits" SET "Good" = 'new good', "Better" = 'new better', "Best" = 'new best' WHERE "Id" = {retained.Id};
@@ -90,3 +90,8 @@ var stopped = new TaskCompletionSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; stopped.TrySetResult(); };
 System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += _ => stopped.TrySetResult();
 await stopped.Task;
+
+sealed class FixtureClock : TimeProvider
+{
+    public override DateTimeOffset GetUtcNow() => TestApp.CreationInstant;
+}

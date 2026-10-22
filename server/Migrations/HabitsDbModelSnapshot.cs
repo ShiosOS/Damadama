@@ -18,7 +18,7 @@ namespace Damadama.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -110,6 +110,76 @@ namespace Damadama.Migrations
                     b.ToTable("Habits", (string)null);
                 });
 
+            modelBuilder.Entity("Damadama.Habits.HabitChange", b =>
+                {
+                    b.Property<Guid>("HabitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateOnly?>("AdmissionThrough")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Best")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Better")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("Choice")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CommittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("EffectiveDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("FirstWeekMonday")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Good")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("MutationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("RepeatEveryWeeks")
+                        .HasColumnType("integer");
+
+                    b.PrimitiveCollection<int[]>("Weekdays")
+                        .HasColumnType("integer[]");
+
+                    b.HasKey("HabitId", "Sequence");
+
+                    b.HasIndex("HabitId", "MutationId")
+                        .IsUnique();
+
+                    b.ToTable("HabitChanges", null, t =>
+                        {
+                            t.HasCheckConstraint("ChangeAdmission", "(\"AdmissionThrough\" IS NULL AND (\"Kind\" = 0 OR (\"Kind\" = 1 AND \"Weekdays\" IS NULL))) OR (\"AdmissionThrough\" IS NOT NULL AND (\"Kind\" = 2 OR (\"Kind\" = 1 AND \"Weekdays\" IS NOT NULL)))");
+
+                            t.HasCheckConstraint("ChangeChoice", "\"Choice\" IS NULL OR (\"Choice\" IN (0,1) AND (\"Kind\" = 2 OR (\"Kind\" = 1 AND \"Weekdays\" IS NOT NULL)))");
+
+                            t.HasCheckConstraint("ChangeDefinitions", "(\"Kind\" IN (0,1) AND num_nonnulls(\"Name\",\"Good\",\"Better\",\"Best\") = 4 AND length(trim(\"Name\")) > 0 AND length(trim(\"Good\")) > 0 AND length(trim(\"Better\")) > 0 AND length(trim(\"Best\")) > 0) OR (\"Kind\" = 2 AND \"Name\" IS NULL AND \"Good\" IS NULL AND \"Better\" IS NULL AND \"Best\" IS NULL)");
+
+                            t.HasCheckConstraint("ChangeRecurrence", "(\"Weekdays\" IS NULL AND \"RepeatEveryWeeks\" IS NULL AND \"FirstWeekMonday\" IS NULL AND \"Kind\" <> 0) OR (\"Weekdays\" IS NOT NULL AND cardinality(\"Weekdays\") > 0 AND \"Weekdays\" <@ ARRAY[1,2,3,4,5,6,7] AND \"RepeatEveryWeeks\" IS NOT NULL AND \"RepeatEveryWeeks\" > 0 AND \"FirstWeekMonday\" IS NOT NULL AND \"Kind\" <> 2)");
+
+                            t.HasCheckConstraint("ChangeSequence", "\"Sequence\" >= 0 AND ((\"Kind\" = 0 AND \"Sequence\" = 0) OR (\"Kind\" IN (1,2) AND \"Sequence\" > 0))");
+                        });
+                });
+
             modelBuilder.Entity("Damadama.Habits.InitialSchedule", b =>
                 {
                     b.Property<Guid>("HabitId")
@@ -143,6 +213,15 @@ namespace Damadama.Migrations
                 });
 
             modelBuilder.Entity("Damadama.Entries.Entry", b =>
+                {
+                    b.HasOne("Damadama.Habits.Habit", null)
+                        .WithMany()
+                        .HasForeignKey("HabitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Damadama.Habits.HabitChange", b =>
                 {
                     b.HasOne("Damadama.Habits.Habit", null)
                         .WithMany()

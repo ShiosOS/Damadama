@@ -153,7 +153,25 @@ const mutations = [
   [
     "rule/member-methods",
     (doc) => {
+      doc.paths[entry].post = doc.paths[habits].post;
+    },
+  ],
+  [
+    "rule/member-methods",
+    (doc) => {
+      doc.paths[entry].patch = doc.paths[member].patch;
+    },
+  ],
+  [
+    "rule/habit-member-methods",
+    (doc) => {
       doc.paths[member].post = doc.paths[habits].post;
+    },
+  ],
+  [
+    "rule/archive-collection-methods",
+    (doc) => {
+      doc.paths["/api/habits/{id}/archives"].get = doc.paths[member].get;
     },
   ],
   [

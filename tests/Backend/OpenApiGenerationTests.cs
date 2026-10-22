@@ -64,6 +64,7 @@ public class OpenApiGenerationTests
         builder.Services.AddAuthentication();
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddDbContext<HabitsDb>(options => options.UseNpgsql("Host=unused.invalid;Database=unused;Username=unused"));
+        builder.Services.AddScoped<HabitHistory>();
         await using var app = builder.Build();
         app.MapHabits();
         app.MapEntries();

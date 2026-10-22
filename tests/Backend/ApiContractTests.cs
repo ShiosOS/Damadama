@@ -21,7 +21,9 @@ public class ApiContractTests
         new("GET", "/api/habits/{id}", "read-habit", ResourceKind.Member, run => run.ReadHabit()),
         new("PUT", "/api/habits/{id}/entries/{date}", "replace-entry", ResourceKind.Member, run => run.SaveEntry()),
         new("GET", "/api/habits/{id}/entries/{date}", "read-entry", ResourceKind.Member, run => run.ReadEntry()),
-        new("GET", "/api/entries", "entries-by-date", ResourceKind.Collection, run => run.ListEntries())
+        new("GET", "/api/entries", "entries-by-date", ResourceKind.Collection, run => run.ListEntries()),
+        new("PATCH", "/api/habits/{id}", "edit-habit", ResourceKind.Member, run => run.EditHabit()),
+        new("POST", "/api/habits/{id}/archives", "archive-habit", ResourceKind.Archive, run => run.ArchiveHabit())
     ];
 
     [Test]
@@ -258,6 +260,42 @@ internal sealed class ContractRun(TestApp app, HttpClient client)
         using var response = await anonymous.SendAsync(request);
         await Observe(response, 401);
     }
+    internal async Task EditHabit()
+    {
+        var input = new Habits.EditHabit(Guid.NewGuid(), "2026-01-05", "UTC", "Walking now", "10", "20", "30", null, null);
+        using var response = await client.PatchAsJsonAsync(HabitPath, input);
+        await Observe(response, 200);
+        var before = await Snapshot();
+        using var replay = await client.PatchAsJsonAsync(HabitPath, input);
+        await Observe(replay, 200);
+        ApiContractAssertions.Unchanged(before, await Snapshot());
+        using var mismatch = await client.PatchAsJsonAsync(HabitPath, input with { Name = "Different" });
+        await Observe(mismatch, 409);
+        using var invalid = await client.PatchAsJsonAsync(HabitPath, input with { MutationId = Guid.Empty });
+        await Observe(invalid, 400);
+        using var foreign = app.SignedIn("contract-foreign");
+        using var refused = await foreign.PatchAsJsonAsync(HabitPath, input);
+        await Observe(refused, 404);
+        using var media = await client.PatchAsync(HabitPath, new StringContent("{}"));
+        await Observe(media, 415);
+    }
+    internal async Task ArchiveHabit()
+    {
+        using var entry = await client.PutAsJsonAsync($"{HabitPath}/entries/2026-01-05", EntrySteps.Change());
+        entry.EnsureSuccessStatusCode();
+        var input = new Habits.ArchiveHabit(Guid.NewGuid(), "2026-01-05", "UTC", null);
+        using var choice = await client.PostAsJsonAsync($"{HabitPath}/archives", input);
+        await Observe(choice, 409);
+        using var archived = await client.PostAsJsonAsync($"{HabitPath}/archives", input with { TodayChoice = "Remove" });
+        await Observe(archived, 200);
+        using var foreign = app.SignedIn("contract-foreign");
+        using var refused = await foreign.PostAsJsonAsync($"{HabitPath}/archives", input);
+        await Observe(refused, 404);
+        using var invalid = await client.PostAsJsonAsync($"{HabitPath}/archives", input with { MutationId = Guid.Empty });
+        await Observe(invalid, 400);
+        using var media = await client.PostAsync($"{HabitPath}/archives", new StringContent("{}"));
+        await Observe(media, 415);
+    }
     private async Task<ApiObservation> SafeRead(string path, int status = 200, HttpClient? requester = null)
     {
         requester ??= client;
@@ -288,7 +326,7 @@ internal sealed class ContractRun(TestApp app, HttpClient client)
         await using var connection = new NpgsqlConnection(DatabaseFixture.Database.GetConnectionString());
         await connection.OpenAsync();
         var rows = new List<string>();
-        foreach (var table in new[] { "Habits", "InitialSchedules", "DailyEntries" })
+        foreach (var table in new[] { "Habits", "InitialSchedules", "DailyEntries", "HabitChanges" })
         {
             await using var command = new NpgsqlCommand($"""
                 SELECT coalesce(jsonb_agg(row_data ORDER BY row_data::text), '[]')::text
