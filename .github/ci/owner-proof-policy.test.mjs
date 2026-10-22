@@ -209,6 +209,21 @@ for (const [label, mutate] of [
     (w) => developer(w).focused.strategy.matrix.suite.pop(),
   ],
   [
+    "DX missing alternate fixture ports",
+    (w) => delete command(developer(w).focused, "test:").env,
+  ],
+  [
+    "DX default browser port",
+    (w) =>
+      (command(developer(w).focused, "test:").env.DAMADAMA_BROWSER_PORT =
+        "5174"),
+  ],
+  [
+    "DX default API port",
+    (w) =>
+      (command(developer(w).focused, "test:").env.DAMADAMA_API_PORT = "5055"),
+  ],
+  [
     "DX shallow format command",
     (w) =>
       (command(developer(w).prerequisites, "format:check").run =
