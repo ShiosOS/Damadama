@@ -67,6 +67,10 @@ jobs:
       - name: Independent production API and PostgreSQL drive
         timeout-minutes: 12
         run: bun run test:backend
+      - name: Strict receiver consumers on fresh backend bytes
+        run: node --test ops/diagnostics/receiver.test.mjs ops/diagnostics/receiver-handshake.test.mjs
+      - name: Validate fresh production API contract
+        run: node scripts/api-contract.mjs
       - name: Independent integrated browser drive
         timeout-minutes: 12
         run: bun run test:browser
