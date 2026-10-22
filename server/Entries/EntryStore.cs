@@ -23,7 +23,6 @@ internal static class EntryStore
             SET "Result" = EXCLUDED."Result", "EditedAtTicks" = EXCLUDED."EditedAtTicks"
             WHERE (EXCLUDED."EditedAtTicks", EXCLUDED."Result") > ("DailyEntries"."EditedAtTicks", "DailyEntries"."Result")
             """, cancellationToken);
-        // A separate Read Committed statement sees a conflicting insert after its transaction commits.
         var winner = await db.Entries.AsNoTracking()
             .SingleAsync(entry => entry.HabitId == habit.Id && entry.CalendarDate == edit.CalendarDate, cancellationToken);
         if (inserted == 1) return new EntrySaveOutcome.Created(winner);
