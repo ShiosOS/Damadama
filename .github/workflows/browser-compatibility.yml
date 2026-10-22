@@ -1,35 +1,61 @@
-name: Browser compatibility
+name: Independent shipping driver
 
 on:
-  workflow_call:
-  schedule:
-    - cron: "17 4 * * 1"
   workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact application commit to verify
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: browser-compatibility-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: independent-shipping-driver-${{ github.run_id }}
+  cancel-in-progress: false
 
 jobs:
-  browser-compatibility:
-    name: Browser compatibility (${{ matrix.mode }})
+  driver:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        mode: [capture, verify]
+    timeout-minutes: 40
     steps:
+      - name: Validate source revision
+        run: '[[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]'
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 1
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: 24
+      - name: Record exact source and controls
+        run: |
+          node --input-type=module <<'NODE'
+          import { execFileSync } from 'node:child_process';
+          import { mkdirSync, writeFileSync } from 'node:fs';
+          import assert from 'node:assert/strict';
+          const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
+          assert.equal(git('rev-parse', 'HEAD'), process.env.SOURCE_SHA);
+          assert.equal(git('status', '--porcelain', '--untracked-files=no'), '');
+          mkdirSync('.audit/independent-shipping-driver', { recursive: true });
+          writeFileSync('.audit/independent-shipping-driver/source.json', JSON.stringify({
+            source: git('rev-parse', 'HEAD'),
+            tree: git('rev-parse', 'HEAD^{tree}'),
+            controls: process.env.CONTROLS_SHA,
+            run: process.env.GITHUB_RUN_ID,
+            attempt: process.env.GITHUB_RUN_ATTEMPT,
+            platform: process.platform,
+            node: process.version,
+            trackedInputsClean: true
+          }, null, 2) + '\n');
+          NODE
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          CONTROLS_SHA: ${{ github.workflow_sha }}
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           global-json-file: global.json
@@ -37,36 +63,28 @@ jobs:
         with:
           bun-version: 1.4.3
       - run: bun install --frozen-lockfile
-      - run: bun test tests/Browser/visual-support.test.ts
-      - run: dotnet restore --locked-mode --artifacts-path .audit/check-build
-      - run: dotnet build --no-restore --artifacts-path .audit/check-build
-      - run: bun x --no-install vite build --config tests/Browser/compatibility.vite.config.ts
-      - run: node node_modules/@playwright/test/cli.js install --with-deps chromium firefox webkit
-      - run: bun run browser:compatibility:${{ matrix.mode }}
-      - if: always() && matrix.mode == 'capture'
+      - run: node node_modules/@playwright/test/cli.js install --with-deps chromium
+      - name: Independent production API and PostgreSQL drive
+        timeout-minutes: 12
+        run: bun run test:backend
+      - name: Independent integrated browser drive
+        timeout-minutes: 12
+        run: bun run test:browser
+      - name: Independent complete native drive
+        timeout-minutes: 7
+        run: node .agents/skills/verify/native-session.mjs
+        env:
+          VERIFICATION_PR_HEAD: ${{ inputs.source_sha }}
+      - name: Retain sanitized source and application proof
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: browser-candidates-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          name: independent-shipping-driver-${{ inputs.source_sha }}-${{ github.run_id }}
           path: |
-            .audit/browser-quality/candidates/desktop-creation.png
-            .audit/browser-quality/candidates/desktop-saved.png
-            .audit/browser-quality/candidates/mobile-layout.png
-            .audit/browser-quality/candidates/manifest.json
-            .audit/browser-quality/receipts/capture.json
+            .audit/independent-shipping-driver/source.json
+            .audit/TestResults/backend.trx
+            .audit/api-contract/responses.json
+            .audit/verification-skill/retained/
           include-hidden-files: true
           if-no-files-found: error
-          retention-days: 7
-      - if: always() && matrix.mode == 'verify'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: browser-comparison-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: |
-            .audit/browser-quality/receipts/verify.json
-            .audit/browser-quality/test-results/**/*-comparison.json
-            .audit/browser-quality/test-results/**/*-comparison.png
-            .audit/browser-quality/test-results/**/*-actual.png
-            .audit/browser-quality/test-results/**/*-expected.png
-            .audit/browser-quality/test-results/**/*-diff.png
-          include-hidden-files: true
-          if-no-files-found: ignore
           retention-days: 7
