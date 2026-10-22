@@ -1,72 +1,53 @@
-name: Browser compatibility
-
+name: Windows cleanup diagnostic
 on:
-  workflow_call:
-  schedule:
-    - cron: "17 4 * * 1"
   workflow_dispatch:
-
 permissions:
   contents: read
-
-concurrency:
-  group: browser-compatibility-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
+env:
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: core.autocrlf
+  GIT_CONFIG_VALUE_0: "false"
 jobs:
-  browser-compatibility:
-    name: Browser compatibility (${{ matrix.mode }})
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        mode: [capture, verify]
+  diagnose:
+    runs-on: windows-latest
+    timeout-minutes: 12
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: 2de3bd3864b5bbbf17fdd4798fdc06c927e68c59
+          path: source
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
-          node-version: 24
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+          node-version: "24"
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
         with:
-          global-json-file: global.json
+          global-json-file: source/global.json
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
           bun-version: 1.4.3
       - run: bun install --frozen-lockfile
-      - run: bun test tests/Browser/visual-support.test.ts
-      - run: dotnet restore --locked-mode --artifacts-path .audit/check-build
-      - run: dotnet build --no-restore --artifacts-path .audit/check-build
-      - run: bun x --no-install vite build --config tests/Browser/compatibility.vite.config.ts
-      - run: node node_modules/@playwright/test/cli.js install --with-deps chromium firefox webkit
-      - run: bun run browser:compatibility:${{ matrix.mode }}
-      - if: always() && matrix.mode == 'capture'
+        working-directory: source
+      - run: bun audit-controls/windows-capture-diagnostic.mjs
+      - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: browser-candidates-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          name: windows-cleanup-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            .audit/browser-quality/candidates/desktop-creation.png
-            .audit/browser-quality/candidates/desktop-saved.png
-            .audit/browser-quality/candidates/mobile-layout.png
-            .audit/browser-quality/candidates/manifest.json
-            .audit/browser-quality/receipts/capture.json
-          include-hidden-files: true
+            proof/source.json
+            proof/runtime-after.json
+            proof/original-result.json
+            proof/original-processes.jsonl
+            proof/original-monitor.json
+            proof/original-monitor-summary.json
+            proof/instrumented-result.json
+            proof/instrumented-processes.jsonl
+            proof/instrumented-monitor.json
+            proof/instrumented-monitor-summary.json
+            proof/captures.jsonl
+            proof/instrumentation.diff
           if-no-files-found: error
-          retention-days: 7
-      - if: always() && matrix.mode == 'verify'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: browser-comparison-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: |
-            .audit/browser-quality/receipts/verify.json
-            .audit/browser-quality/test-results/**/*-comparison.json
-            .audit/browser-quality/test-results/**/*-comparison.png
-            .audit/browser-quality/test-results/**/*-actual.png
-            .audit/browser-quality/test-results/**/*-expected.png
-            .audit/browser-quality/test-results/**/*-diff.png
-          include-hidden-files: true
-          if-no-files-found: ignore
           retention-days: 7
