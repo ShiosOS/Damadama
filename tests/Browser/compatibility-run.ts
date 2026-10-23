@@ -52,6 +52,7 @@ const receiptDir = ".audit/browser-quality/receipts";
 const runResults: { phase: string; outputDir: string; exitCode: number }[] = [];
 let generationSHA: string | null = null;
 const admission = await prepareAdmission();
+console.info(`compatibility-evidence-admission ${JSON.stringify(admission)}`);
 const runId = randomBytes(32).toString("hex");
 
 async function run(

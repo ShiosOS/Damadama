@@ -23,6 +23,9 @@ predicate. Node receive order and browser performance time are separate clocks.
 `font-evidence.ts` owns only its font request, response, completion, failure,
 navigation, and close listeners. It detaches those exact listeners on close or
 after each case. The existing native form and POST observers remain separate.
+An owner is registered before admission starts. Teardown seals even a pending
+owner with `admission-incomplete`; late admission cannot attach listeners or
+change that receipt. A closed page cannot start observation.
 Waiter, response-await, JSON, and saved-assertion markers identify save boundaries.
 Neither these markers nor a later font refusal reconstructs issue #117's original
 first incorrect state.
@@ -36,27 +39,43 @@ stay absent. Invalid, conflicting, foreign, or unsupported frames are refused.
 
 `compatibility-diagnostic-admission.json` is reviewed source input. Admission
 compares working bytes with its digests and committed Git blobs. It also binds
-the built HTML, CSS, sorted build inventory, and all five emitted fonts to the
-locked installed Nunito bytes. BrowserHost's runtime `fixture.json` is explicitly
-excluded without reading it. A changed source requires explicit manifest review,
-a commit, and recalibration. There is no command that automatically blesses the
-current source. The consumer rechecks admission after the child finishes.
+the entire current `web/src` tree and rejects a changed Git source path set.
+Its `reviewedBuild` digest must match the complete stable emitted HTML, CSS,
+JavaScript, and font inventory. The existing HTML-to-CSS-to-font checks and exact
+installed Nunito byte comparisons remain additional checks. BrowserHost's runtime
+`fixture.json` is explicitly excluded without reading it.
+
+A change anywhere in the small production source tree or emitted inventory,
+including a cross-platform build difference, requires explicit review and
+recalibration. Before changing the manifest, independently rebuild and inspect
+the active HTML, stylesheet, script, and font chain. Review any input imported
+outside the supported roots when reviewing its changed importer. Pin the reviewed
+source and build digests, then commit before calibration. Admission and calibration
+never bless observed bytes automatically. The consumer rechecks admission after
+the child finishes.
 
 Only exact admitted GET font URLs from the owned main frame enter the journal.
 Foreign font URLs refuse evidence without retaining the URL. New frames exclude
 user values, arbitrary errors, headers, HTML, local paths, and executable identity.
 They reference the existing form stream without claiming ownership of it.
+Current-page events must name the current main document. Only responses and
+request terminal events may retain their recorded request's older document.
+A guard spanning navigation requires an unavailable `document-changed` sample.
 
 The list reporter and the runner's existing failed-child stdout carry frames
 prefixed with `compatibility-evidence-v1`. The consumer enforces 16 KiB per frame
 and 64 KiB per invocation. Original child status and failure output survive.
 Existing raw Playwright errors are not newly sanitized. Job logs retain these
 frames; image ZIPs do not. Workflow upload lists are unchanged.
+Before starting children, the runner logs one bounded
+`compatibility-evidence-admission` record from the parsed Admission value.
+Passing canonical jobs can therefore prove diagnostic admission without case
+failure frames. A diagnostic refusal does not change application acceptance.
 
 Run the portable contract checks with:
 
 ```sh
-bun test tests/Browser/font-evidence.test.ts tests/Browser/font-evidence-files.test.ts
+bun test tests/Browser/font-evidence.test.ts tests/Browser/font-evidence-files.test.ts tests/Browser/font-evidence-lifecycle.test.ts
 ```
 
 They also run in `bun run check` before Docker. To calibrate supported committed
@@ -74,6 +93,9 @@ Each Playwright case retains its
 the real guard and screenshot path, installed fonts, list reporter, and strict
 consumer. Deliberate child failures retain exit 1. Outer timeout is incomplete
 proof. Raw logs and receipts stay under `.audit/browser-font-implementation`.
+The UTF-8 mixed case checks literal Cyrillic text, admitted Cyrillic and Latin
+requests, loaded faces, and the real screenshot. Its lifecycle receipt retains
+the observed text and loaded Unicode ranges.
 The `.calibration.ts` suffix excludes the matrix from canonical discovery.
 Only the exclusive calibration worker changes directory, and it restores its
 previous directory. Fixed candidate paths therefore stay inside private fixtures.

@@ -33,6 +33,7 @@ const beforeBackend: Command[] = [
     "test",
     "tests/Browser/font-evidence.test.ts",
     "tests/Browser/font-evidence-files.test.ts",
+    "tests/Browser/font-evidence-lifecycle.test.ts",
   ],
   ["bun", "--no-env-file", "test", "scripts/doctor-docker.test.ts"],
   ["bun", "run", "doctor", "backend"],

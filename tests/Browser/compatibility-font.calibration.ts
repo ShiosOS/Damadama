@@ -32,6 +32,7 @@ let counts: number[] = [];
 let baselineListeners: unknown[] = [];
 let ownedListeners: unknown[] = [];
 let validated = false;
+let mixed: { text: string; loaded: string[] } | null = null;
 const nativeEvent = z.object({ event: z.enum(["invalid", "submit"]) }).strict();
 let nativeEvents: z.infer<typeof nativeEvent>["event"][] = [];
 function unrelatedListener(): void {}
@@ -58,6 +59,7 @@ function references(page: Page): unknown[] {
 
 test.beforeEach(async ({ page }, info) => {
   validated = false;
+  mixed = null;
   nativeEvents = [];
   const mode = calibrationMode.parse(info.title);
   previousCwd = process.cwd();
@@ -153,6 +155,7 @@ test.afterEach(async ({ page }, info) => {
         posts: owned?.posts() ?? 0,
         released: owned?.released() ?? false,
         validated,
+        mixed,
         nativeEvents,
         platform: process.platform,
         nodeVersion: process.version,
@@ -171,6 +174,8 @@ for (const mode of calibrationMode.options) {
     if (mode === "abort")
       await page.route("**/assets/*.woff2", (route) => route.abort("aborted"));
     await page.goto(owned.origin, { waitUntil: "domcontentloaded" });
+    if (mode === "mixed")
+      assert.equal(await page.locator("p").textContent(), "Walking Прогулка");
     const checkpoint = checkpointFor("chromium-desktop", "desktop-creation");
     if (mode === "reload") await page.reload({ waitUntil: "domcontentloaded" });
     if (mode === "invalid-form" || mode === "held-response")
@@ -235,6 +240,22 @@ for (const mode of calibrationMode.options) {
       });
     } else {
       await capture;
+      if (mode === "mixed") {
+        mixed = await page.evaluate(() => ({
+          text: document.querySelector("p")?.textContent ?? "",
+          loaded: [...document.fonts]
+            .filter(
+              (face) =>
+                face.family.replaceAll('"', "") === "Nunito Variable" &&
+                face.status === "loaded",
+            )
+            .map((face) => face.unicodeRange),
+        }));
+        assert.equal(mixed.text, "Walking Прогулка");
+        assert.equal(mixed.loaded.length, 2);
+        assert.ok(mixed.loaded.some((range) => range.includes("U+400-45F")));
+        assert.ok(mixed.loaded.some((range) => range.includes("U+0-FF")));
+      }
       const image = await readFile(join(candidateDir, "desktop-creation.png"));
       assert.ok(image.length > 8);
       assert.deepEqual(

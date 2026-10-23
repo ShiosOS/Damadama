@@ -68,6 +68,11 @@ function validReceipt(receipt: Receipt): boolean {
       continue;
     }
     if (event.document > document) return false;
+    if (
+      !["response", "finished", "failed"].includes(data.kind) &&
+      event.document !== document
+    )
+      return false;
     if (data.kind === "page-closed") {
       closed = true;
       continue;
@@ -139,7 +144,7 @@ function validReceipt(receipt: Receipt): boolean {
         )
           return false;
         if (
-          guard.document !== event.document &&
+          guard.document !== document &&
           (data.decision.sample.kind !== "unavailable" ||
             data.decision.sample.reason !== "document-changed")
         )

@@ -24,6 +24,7 @@ export const sourcePaths = [
   "tests/Browser/font-evidence-consumer.ts",
   "tests/Browser/font-evidence.test.ts",
   "tests/Browser/font-evidence-files.test.ts",
+  "tests/Browser/font-evidence-lifecycle.test.ts",
   "tests/Browser/compatibility-font.calibration.ts",
   "tests/Browser/font-calibration-server.ts",
   "tests/Browser/font-calibration-run.ts",
@@ -36,7 +37,28 @@ export const sourcePaths = [
   "tests/Browser/compatibility.html",
   "tests/Browser/main.ts",
   "tests/Browser/FixtureApp.vue",
+  "web/src/App.vue",
+  "web/src/CheckeredD.vue",
+  "web/src/EntryControls.types.ts",
+  "web/src/EntryControls.vue",
+  "web/src/HabitDetails.vue",
+  "web/src/HabitEditor.vue",
+  "web/src/HabitLevels.vue",
+  "web/src/HabitsPage.vue",
+  "web/src/SignedInApp.vue",
+  "web/src/TodayView.types.ts",
+  "web/src/TodayView.vue",
+  "web/src/YearHeatmap.vue",
+  "web/src/entries.schema.ts",
+  "web/src/habit-day.schema.ts",
+  "web/src/habits.schema.ts",
+  "web/src/habits.ts",
+  "web/src/heatmap.schema.ts",
+  "web/src/main.ts",
   "web/src/style.css",
+  "web/src/ui-icons.ts",
+  "web/src/ui.d.ts",
+  "web/src/vue.d.ts",
   "package.json",
   "web/package.json",
   "bun.lock",
@@ -48,6 +70,7 @@ const entrySchema = z
 export const manifestSchema = z
   .object({
     version: z.literal(1),
+    reviewedBuild: digest,
     sources: z.array(entrySchema).length(sourcePaths.length),
     installed: z.array(z.object({ subset, sha256: digest }).strict()).length(5),
     installedCss: digest,
@@ -157,7 +180,7 @@ export async function prepareAdmission(root = sourceRoot): Promise<Admission> {
     const manifest = manifestSchema.parse(input);
     const tree = spawnSync(
       "git",
-      ["ls-tree", "-r", "HEAD", "--", ...sourcePaths, manifestPath],
+      ["ls-tree", "-r", "HEAD", "--", ...sourcePaths, "web/src", manifestPath],
       {
         cwd: root,
         encoding: "utf8",
@@ -171,6 +194,14 @@ export async function prepareAdmission(root = sourceRoot): Promise<Admission> {
       if (!match?.[1] || !match[2]) throw new Error("source");
       blobs.set(match[2], match[1]);
     }
+    const reviewedWeb = sourcePaths
+      .filter((path) => path.startsWith("web/src/"))
+      .sort();
+    const committedWeb = [...blobs.keys()]
+      .filter((path) => path.startsWith("web/src/"))
+      .sort();
+    if (JSON.stringify(committedWeb) !== JSON.stringify(reviewedWeb))
+      throw new Error("source");
     for (const path of [...sourcePaths, manifestPath]) {
       const bytes = await readOwned(root, path, 1024 * 1024);
       const blob = createHash("sha1")
@@ -188,6 +219,8 @@ export async function prepareAdmission(root = sourceRoot): Promise<Admission> {
     stage = "unsupported-build";
     const buildRoot = join(root, ".audit/browser-build");
     const entries = await inventory(buildRoot);
+    if (hash(JSON.stringify(entries)) !== manifest.reviewedBuild)
+      throw new Error("unreviewed-build");
     const html = await readOwned(buildRoot, "compatibility.html", 32768);
     const htmlText = html.toString("utf8");
     const cssNames = [

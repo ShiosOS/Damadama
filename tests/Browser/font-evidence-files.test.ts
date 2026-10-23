@@ -7,6 +7,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   rm,
   symlink,
   writeFile,
@@ -94,9 +95,26 @@ async function fixture(root: string): Promise<void> {
   );
   await writeFile(join(root, ".audit/browser-build/assets/fixture.css"), css);
   await writeFile(
+    join(root, ".audit/browser-build/assets/fixture.js"),
+    "globalThis.reviewed = true;",
+  );
+  const entries = [];
+  for (const path of [
+    "compatibility.html",
+    ...(await readdir(join(root, ".audit/browser-build/assets"))).map(
+      (name) => `assets/${name}`,
+    ),
+  ])
+    entries.push({
+      path,
+      sha256: hash(await readFile(join(root, ".audit/browser-build", path))),
+    });
+  entries.sort((a, b) => a.path.localeCompare(b.path, "en"));
+  await writeFile(
     join(root, manifestPath),
     JSON.stringify({
       version: 1,
+      reviewedBuild: hash(JSON.stringify(entries)),
       sources,
       installed,
       installedCss: hash(installedCss),
@@ -107,6 +125,55 @@ async function fixture(root: string): Promise<void> {
   git(root, ["add", "--", ...sourcePaths, manifestPath]);
   git(root, ["commit", "--quiet", "-m", "Fixture"]);
 }
+
+test.each([
+  "web/src/HabitsPage.vue",
+  "web/src/habits.ts",
+  "web/src/new-source.ts",
+])("unreviewed application source %s refuses admission", async (changed) => {
+  const root = await mkdtemp(join(tmpdir(), "font-app-source-"));
+  try {
+    await fixture(root);
+    expect((await prepareAdmission(root)).kind).toBe("admitted");
+    await writeFile(join(root, changed), "unreviewed\n");
+    if (changed !== "web/src/new-source.ts")
+      expect(await prepareAdmission(root)).toEqual({
+        kind: "refused",
+        reason: "unsupported-source",
+      });
+    git(root, ["add", changed]);
+    git(root, ["commit", "--quiet", "-m", "Unreviewed application"]);
+    expect(await prepareAdmission(root)).toEqual({
+      kind: "refused",
+      reason: "unsupported-source",
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test.each(["compatibility.html", "assets/fixture.css", "assets/fixture.js"])(
+  "unreviewed emitted bytes %s require build review",
+  async (changed) => {
+    const root = await mkdtemp(join(tmpdir(), "font-reviewed-build-"));
+    try {
+      await fixture(root);
+      expect((await prepareAdmission(root)).kind).toBe("admitted");
+      const target = join(root, ".audit/browser-build", changed);
+      const original = await readFile(target, "utf8");
+      let changedBytes = "globalThis.unreviewed = true;";
+      if (changed.endsWith(".html")) changedBytes = `<!--${original}-->`;
+      if (changed.endsWith(".css")) changedBytes = `/*${original}*/`;
+      await writeFile(target, changedBytes);
+      expect(await prepareAdmission(root)).toEqual({
+        kind: "refused",
+        reason: "unsupported-build",
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
 
 test("reviewed source and committed bytes, not current hashes alone, decide evidence admission", async () => {
   const root = await mkdtemp(join(tmpdir(), "font-source-"));

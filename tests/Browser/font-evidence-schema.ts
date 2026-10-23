@@ -211,6 +211,7 @@ export const admissionSchema = z.discriminatedUnion("kind", [
         "binding-mismatch",
         "invalid-context",
         "foreign-font-url",
+        "admission-incomplete",
       ]),
     })
     .strict(),

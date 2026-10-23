@@ -123,8 +123,8 @@ export async function startToy(mode: Mode): Promise<Toy> {
     }
     const text = mode === "mixed" ? "Walking Прогулка" : "Walking";
     const value = mode === "invalid-form" ? "" : "privacy-canary-input";
-    response.writeHead(200, { "content-type": "text/html" });
-    response.end(`<!doctype html><html><head>${css}<style>body{font-family:${family}!important;font-weight:400}</style></head><body>
+    response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    response.end(`<!doctype html><html><head><meta charset="utf-8">${css}<style>body{font-family:${family}!important;font-weight:400}</style></head><body>
       <p>${text}</p><form class="habit-form"><input aria-label="Name" required value="${value}"><button type="submit">Save habit</button></form>
       <div id="saved"></div><script>
         console.info('privacy-canary-console');

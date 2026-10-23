@@ -25,8 +25,7 @@ import {
 type State = {
   context: Context;
   receipt: Receipt;
-  active: boolean;
-  flushed: boolean;
+  phase: "pending" | "observing" | "stopped" | "sealed";
   failureEmitted: boolean;
   document: number;
   requests: number;
@@ -58,7 +57,7 @@ function append(
   data: EventData,
   document = state.document,
 ): void {
-  if (!state.active || state.receipt.loss !== "none") return;
+  if (state.phase !== "observing" || state.receipt.loss !== "none") return;
   if (state.receipt.events.length >= 96) {
     state.receipt.loss = "event-bound";
     return;
@@ -100,16 +99,6 @@ export async function beginFontEvidence(
     phase: { mode: "verify", invocation: 1, control: "none" },
     admission: { kind: "refused", reason: "invalid-context" },
   };
-  let admission: Admission = context.admission;
-  if (supplied?.admission.kind === "admitted") {
-    const actual = await prepareAdmission();
-    admission = actual;
-    if (
-      actual.kind === "admitted" &&
-      JSON.stringify(actual) !== JSON.stringify(supplied.admission)
-    )
-      admission = { kind: "refused", reason: "binding-mismatch" };
-  }
   const mode = calibrationMode.safeParse(info.title);
   const identity = identitySchema.safeParse({
     scenario: titles.get(info.title) ?? "calibration",
@@ -122,7 +111,7 @@ export async function beginFontEvidence(
   const now = performance.now();
   const receipt = frameSchema.shape.receipt.parse({
     identity: identity.data,
-    admission,
+    admission: { kind: "refused", reason: "admission-incomplete" },
     timeout: 30000,
     startMs: now,
     stopMs: now,
@@ -135,8 +124,7 @@ export async function beginFontEvidence(
   const state: State = {
     context,
     receipt,
-    active: true,
-    flushed: false,
+    phase: "pending",
     failureEmitted: false,
     document: 0,
     requests: 0,
@@ -146,6 +134,25 @@ export async function beginFontEvidence(
   };
   pages.set(page, state);
   cases.set(info, state);
+  let admission: Admission = context.admission;
+  if (supplied?.admission.kind === "admitted") {
+    const actual = await prepareAdmission();
+    admission = actual;
+    if (
+      actual.kind === "admitted" &&
+      JSON.stringify(actual) !== JSON.stringify(supplied.admission)
+    )
+      admission = { kind: "refused", reason: "binding-mismatch" };
+  }
+  if (
+    state.phase !== "pending" ||
+    pages.get(page) !== state ||
+    cases.get(info) !== state
+  )
+    return;
+  state.phase = "stopped";
+  if (page.isClosed()) return;
+  receipt.admission = admission;
   if (admission.kind !== "admitted") return;
   let select: ReturnType<typeof fontSelection>;
   try {
@@ -160,7 +167,7 @@ export async function beginFontEvidence(
   const requests = new WeakMap<Request, { id: number; document: number }>();
   function transport(data: EventData, request: Request): void {
     const owned = requests.get(request);
-    if (!owned || !state.active) return;
+    if (!owned || state.phase !== "observing") return;
     if (++state.transports > 32) {
       receipt.loss = "event-bound";
       return;
@@ -168,7 +175,8 @@ export async function beginFontEvidence(
     append(state, data, owned.document);
   }
   function onRequest(request: Request): void {
-    if (!state.active || request.resourceType() !== "font") return;
+    if (state.phase !== "observing" || request.resourceType() !== "font")
+      return;
     try {
       if (request.frame() !== page.mainFrame() || request.method() !== "GET")
         return;
@@ -216,7 +224,7 @@ export async function beginFontEvidence(
     if (data.success) transport(data.data, request);
   }
   function onNavigation(frame: BrowserFrame): void {
-    if (!state.active || frame !== page.mainFrame()) return;
+    if (state.phase !== "observing" || frame !== page.mainFrame()) return;
     if (state.document >= 4) {
       receipt.loss = "document-bound";
       return;
@@ -226,7 +234,7 @@ export async function beginFontEvidence(
   }
   function onClose(): void {
     append(state, { kind: "page-closed" });
-    state.active = false;
+    state.phase = "stopped";
     state.detach();
   }
   state.detach = (): void => {
@@ -237,6 +245,7 @@ export async function beginFontEvidence(
     page.off("framenavigated", onNavigation);
     page.off("close", onClose);
   };
+  state.phase = "observing";
   page.on("request", onRequest);
   page.on("response", onResponse);
   page.on("requestfinished", onFinished);
@@ -263,7 +272,7 @@ export function enterFontGuard(
   checkpoint: Extract<EventData, { kind: "entered" }>["checkpoint"],
 ): GuardObservation | null {
   const state = cases.get(info);
-  if (!state?.active) return null;
+  if (state?.phase !== "observing") return null;
   if (++state.guards > 8) {
     state.receipt.loss = "guard-bound";
     return null;
@@ -280,7 +289,7 @@ export function fontReady(
   observation: GuardObservation | null,
 ): void {
   const state = cases.get(info);
-  if (!state?.active || !observation) return;
+  if (state?.phase !== "observing" || !observation) return;
   append(state, { kind: "ready-fulfilled", guard: observation.guard });
   observation.dispatchMs = performance.now();
 }
@@ -290,7 +299,7 @@ export function recordFontDecision(
   value: unknown,
 ): void {
   const state = cases.get(info);
-  if (!state?.active || !observation) return;
+  if (state?.phase !== "observing" || !observation) return;
   const parsed = decisionSchema.safeParse(value);
   const raw = rawDecisionSchema.safeParse(value);
   if (!raw.success) {
@@ -319,7 +328,7 @@ export function recordFontRefusal(
   observation: GuardObservation | null,
 ): void {
   const state = cases.get(info);
-  if (!state?.active || !observation) return;
+  if (state?.phase !== "observing" || !observation) return;
   state.receipt.failureCategory = "bundled-nunito-not-loaded";
   append(state, {
     kind: "guard-refusal",
@@ -335,10 +344,9 @@ export function recordFontRefusal(
 
 export function finishFontEvidence(page: Page, info: TestInfo): void {
   const state = cases.get(info);
-  if (!state || state.flushed) return;
-  state.active = false;
+  if (!state || state.phase === "sealed") return;
+  state.phase = "sealed";
   state.detach();
-  state.flushed = true;
   state.receipt.stopMs = eventSchema.shape.nodeMs.parse(performance.now());
   state.receipt.lifecycle = {
     kind: "disposed",
@@ -347,5 +355,5 @@ export function finishFontEvidence(page: Page, info: TestInfo): void {
   };
   if (info.status !== "passed" && info.status !== "skipped")
     emit(state, "case-final");
-  pages.delete(page);
+  if (pages.get(page) === state) pages.delete(page);
 }

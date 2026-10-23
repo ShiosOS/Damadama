@@ -32,6 +32,13 @@ const lifecycleSchema = z
     posts: z.number().int(),
     released: z.boolean(),
     validated: z.boolean(),
+    mixed: z
+      .object({
+        text: z.literal("Walking Прогулка"),
+        loaded: z.array(z.string().max(1024)).length(2),
+      })
+      .strict()
+      .nullable(),
     nativeEvents: z.array(z.enum(["invalid", "submit"])).max(8),
     platform: z.string(),
     nodeVersion: z.literal("v24.21.0"),
@@ -199,6 +206,25 @@ async function matrix(): Promise<void> {
           );
         if (mode === "corrupt")
           assert.ok(events.some((event) => event.data.kind === "finished"));
+        if (mode === "mixed") {
+          const requests = events.flatMap((event) =>
+            event.data.kind === "request" ? [event.data] : [],
+          );
+          assert.deepEqual(requests.map((request) => request.subset).sort(), [
+            "cyrillic",
+            "latin",
+          ]);
+          for (const request of requests)
+            assert.ok(
+              events.some(
+                (event) =>
+                  event.data.kind === "finished" &&
+                  event.data.request === request.request,
+              ),
+            );
+          assert.ok(decision.decision.sample.kind === "available");
+          assert.equal(decision.decision.sample.counts.loaded, 2);
+        }
         if (mode === "missing" || mode === "unused") {
           assert.ok(decision.decision.sample.kind === "available");
           assert.equal(
@@ -244,6 +270,15 @@ async function matrix(): Promise<void> {
     if (!raw) continue;
     const input: unknown = JSON.parse(raw);
     const lifecycle = lifecycleSchema.parse(input);
+    if (lifecycle.mode === "mixed") {
+      assert.ok(lifecycle.mixed);
+      assert.ok(
+        lifecycle.mixed.loaded.some((range) => range.includes("U+400-45F")),
+      );
+      assert.ok(
+        lifecycle.mixed.loaded.some((range) => range.includes("U+0-FF")),
+      );
+    } else assert.equal(lifecycle.mixed, null);
     assert.equal(
       lifecycle.ownedInstalled,
       lifecycle.mode === "refused" ? 0 : 6,

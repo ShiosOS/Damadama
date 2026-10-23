@@ -12,6 +12,7 @@ import {
   prefix,
   subset,
   type Frame,
+  eventSchema,
 } from "./font-evidence-schema";
 
 const context = contextSchema.parse({
@@ -104,6 +105,95 @@ function consume(stdout: string): ReturnType<typeof consumeFontEvidence> {
     outputComplete: true,
   });
 }
+
+test("current-page events reject stale document labels while request-owned traffic survives navigation", () => {
+  for (const kind of [
+    "entered",
+    "ready-fulfilled",
+    "decision",
+    "guard-refusal",
+    "save",
+    "page-closed",
+  ]) {
+    const value = frame();
+    if (kind === "save" || kind === "page-closed")
+      value.receipt.events.push(
+        eventSchema.parse({
+          sequence: 9,
+          nodeMs: 9,
+          clock: "node-performance",
+          document: 1,
+          data:
+            kind === "save"
+              ? { kind, marker: "create-waiter-armed" }
+              : { kind },
+        }),
+      );
+    for (const event of value.receipt.events)
+      if (event.data.kind === kind) event.document = 0;
+    expect(consume(line(value)).kind).toBe("refused");
+  }
+  const crossed = frame();
+  crossed.receipt.events.splice(
+    6,
+    0,
+    eventSchema.parse({
+      sequence: 7,
+      nodeMs: 6,
+      clock: "node-performance",
+      document: 2,
+      data: { kind: "navigation" },
+    }),
+  );
+  crossed.receipt.events.forEach((event, index) => {
+    event.sequence = index + 1;
+  });
+  expect(consume(line(crossed)).kind).toBe("refused");
+  for (const event of crossed.receipt.events) {
+    if (event.data.kind === "decision" || event.data.kind === "guard-refusal")
+      event.document = 2;
+  }
+  expect(consume(line(crossed)).kind).toBe("refused");
+  for (const event of crossed.receipt.events) {
+    if (event.data.kind === "decision")
+      event.data.decision.sample = {
+        kind: "unavailable",
+        reason: "document-changed",
+      };
+  }
+  expect(consume(line(crossed))).toMatchObject({
+    kind: "partial",
+    reason: "observation-incomplete",
+  });
+  const traffic = frame();
+  traffic.receipt.events.splice(
+    2,
+    0,
+    eventSchema.parse({
+      sequence: 3,
+      nodeMs: 2,
+      clock: "node-performance",
+      document: 2,
+      data: { kind: "navigation" },
+    }),
+  );
+  traffic.receipt.events.forEach((event, index) => {
+    event.sequence = index + 1;
+    if (index >= 5) event.document = 2;
+  });
+  expect(consume(line(traffic)).kind).toBe("complete");
+  for (const event of traffic.receipt.events)
+    if (event.data.kind === "finished")
+      event.data = {
+        kind: "failed",
+        request: event.data.request,
+        category: "aborted",
+      };
+  expect(consume(line(traffic)).kind).toBe("complete");
+  for (const event of traffic.receipt.events)
+    if (event.data.kind === "response") event.document = 2;
+  expect(consume(line(traffic)).kind).toBe("refused");
+});
 
 test("strict failed-child consumer preserves stdout and status while refusing an unbound child", async () => {
   const original = "original child failure";

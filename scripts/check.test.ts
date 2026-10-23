@@ -21,6 +21,7 @@ const fonts = [
   "test",
   "tests/Browser/font-evidence.test.ts",
   "tests/Browser/font-evidence-files.test.ts",
+  "tests/Browser/font-evidence-lifecycle.test.ts",
 ];
 const dockerProbe = [
   "bun",
