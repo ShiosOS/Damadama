@@ -64,6 +64,8 @@ Retain the source identities and diff, actual command, stdout/stderr, exit code,
 
 Classify a preparation timeout before browser startup separately from a failed application drive. Read the actual child logs and CI timeout annotations. Missing media alone does not establish an application failure.
 
+Use attempt-specific run and job metadata when revalidating retained CI evidence after a rerun. Latest-run metadata belongs to the newest attempt. Resolve attachments supplied as bytes through the source-bound test report. Their files may use content hashes in the HTML report's data directory.
+
 When comparing a failure with a passing run, record the actual Node patch version, Bun version, Playwright and browser versions, runner image build and kernel for both runs. Compare these alongside the source revision before selecting a reproduction environment. A runner label or matching executable hash does not establish the same image. Identical source does not establish an identical environment, and a passing replay does not establish a repair.
 
 For Windows lifecycle diagnostics, mark native coverage incomplete when the actual test root is unobserved, even if calibration passed. Empty lineage and closed output streams do not prove descendant retirement. For a failed owned-directory removal, a bounded read-only Handle query of the exact path identifies holders only at query time. Preserve the tool identity, query interval and complete output; earlier ownership, ancestry and cause remain unproven without separate evidence.
