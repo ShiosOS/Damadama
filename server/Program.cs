@@ -1,6 +1,7 @@
 using Damadama.Telemetry;
 using Damadama.Habits;
 using Damadama.Entries;
+using Damadama.Heatmap;
 using Damadama;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -82,6 +83,7 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapHabits();
 app.MapEntries();
+app.MapHeatmap();
 app.MapFallbackToFile("index.html").WithName("application-shell");
 app.Run();
 public partial class Program;

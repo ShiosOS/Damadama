@@ -23,7 +23,9 @@ public class ApiContractTests
         new("GET", "/api/habits/{id}/entries/{date}", "read-entry", ResourceKind.Member, run => run.ReadEntry()),
         new("GET", "/api/entries", "entries-by-date", ResourceKind.Collection, run => run.ListEntries()),
         new("PATCH", "/api/habits/{id}", "edit-habit", ResourceKind.Member, run => run.EditHabit()),
-        new("POST", "/api/habits/{id}/archives", "archive-habit", ResourceKind.Archive, run => run.ArchiveHabit())
+        new("POST", "/api/habits/{id}/archives", "archive-habit", ResourceKind.Archive, run => run.ArchiveHabit()),
+        new("GET", "/api/heatmaps", "yearly-heatmap", ResourceKind.Collection, run => run.Heatmap()),
+        new("GET", "/api/habit-days/{date}", "habit-day", ResourceKind.Member, run => run.HabitDay())
     ];
 
     [Test]
@@ -259,6 +261,36 @@ internal sealed class ContractRun(TestApp app, HttpClient client)
         };
         using var response = await anonymous.SendAsync(request);
         await Observe(response, 401);
+    }
+    internal async Task Heatmap()
+    {
+        var response = await SafeRead("/api/heatmaps?deviceToday=2026-01-05&timeZone=UTC");
+        Assert.That(response.Body.GetProperty("days").GetArrayLength(), Is.EqualTo(365));
+        Assert.That(response.Body.GetProperty("days")[364].GetProperty("completion").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        await SafeRead("/api/heatmaps", 400);
+        await SafeRead("/api/heatmaps?deviceToday=invalid&timeZone=UTC", 400);
+        using var foreign = app.SignedIn("contract-foreign");
+        var empty = await SafeRead("/api/heatmaps?deviceToday=2026-01-05&timeZone=UTC", requester: foreign);
+        Assert.That(empty.Body.GetProperty("days").EnumerateArray().All(day => day.GetProperty("scheduledCount").GetInt32() == 0), Is.True);
+    }
+    internal async Task HabitDay()
+    {
+        var response = await SafeRead("/api/habit-days/2026-01-04");
+        Assert.That(response.Body.GetProperty("date").GetString(), Is.EqualTo("2026-01-04"));
+        Assert.That(response.Body.GetProperty("entries")[0].GetProperty("result").GetString(), Is.EqualTo("Clear"));
+        await SafeRead("/api/habit-days/2026-01-03");
+        await SafeRead("/api/habit-days/invalid", 400);
+        using var foreign = app.SignedIn("contract-foreign");
+        var empty = await SafeRead("/api/habit-days/2026-01-04", requester: foreign);
+        Assert.That(empty.Body.GetProperty("habits").GetArrayLength(), Is.Zero);
+        Assert.That(empty.Body.GetProperty("entries").GetArrayLength(), Is.Zero);
+        await DatabaseFixture.Execute("ALTER TABLE \"DailyEntries\" RENAME TO \"MissingDayEntries\"");
+        try
+        {
+            using var unavailable = await client.GetAsync("/api/habit-days/2026-01-04");
+            await Observe(unavailable, 503);
+        }
+        finally { await DatabaseFixture.Execute("ALTER TABLE \"MissingDayEntries\" RENAME TO \"DailyEntries\""); }
     }
     internal async Task EditHabit()
     {

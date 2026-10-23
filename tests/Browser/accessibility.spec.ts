@@ -172,7 +172,7 @@ test("signed-out and expired-session messages pass WCAG scans", async ({
   expect((await expired).status()).toBe(401);
   await expect(
     page.getByRole("alert").filter({ hasText: "Sign in to continue." }),
-  ).toHaveCount(2);
+  ).toHaveCount(3);
   await expect(
     page.getByRole("region", { name: "Saved habits" }).locator("article"),
   ).toHaveCount(0);

@@ -42,6 +42,7 @@ Browser tests use optimized assets and exclude authentication tokens from report
 Acceptance examples use ephemeral RSA-signed tokens through the ordinary JWT middleware configured by the test host.
 Playwright mounts the actual habit page through a separate entry in `tests/Browser`, backed by the actual API and PostgreSQL.
 These tests prove habit behavior and authentication refusal. They do not prove Clerk sign-in or email delivery.
+BrowserHost fixes server time at `2026-01-05T00:30:00Z`. Heatmap and performance cases align their device clock with that instant. Some Today and saved-reveal cases intentionally move only the browser clock to exercise calendar rendering. A heatmap anchor refusal in those cases is a fixture limit, not proof of that date being accepted. Today error observation allows only an exact heatmap 400 for an explicitly declared clock mismatch; other browser errors remain failures.
 To verify Clerk, sign in through the running app using an email code, save a habit, inspect the complete saved row before reloading, then reload and check that every value remains visible.
 
 ## Configuration and database changes

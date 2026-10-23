@@ -53,7 +53,12 @@ const beforeBackend: Command[] = [
   ["dotnet", "format", "--no-restore", "--verify-no-changes"],
   fixtureFormatCommand(false),
   ["bun", "test", "scripts/acceptance-native.test.ts"],
-  ["bun", "test", "tests/Browser/rest-client.test.ts"],
+  [
+    "bun",
+    "test",
+    "tests/Browser/rest-client.test.ts",
+    "tests/Browser/heatmap-client.test.ts",
+  ],
   prettierCommand(false),
   ["bun", "run", "--cwd", "web", "build"],
   ["bun", "run", "check:performance"],

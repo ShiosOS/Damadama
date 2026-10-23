@@ -99,7 +99,8 @@ var fixture = JsonSerializer.Serialize(new
     heatmapDate = app.Token("heatmap-date-account"),
     heatmapTravel = app.Token("heatmap-travel-account"),
     heatmapMobile = app.Token("heatmap-mobile-account"),
-    heatmapHistory = app.Token("heatmap-history-account")
+    heatmapHistory = app.Token("heatmap-history-account"),
+    heatmapChanges = app.Token("heatmap-changes-account")
 });
 await File.WriteAllTextAsync("tests/Browser/fixture.json", fixture);
 if (Directory.Exists(".audit/browser-build"))

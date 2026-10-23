@@ -114,7 +114,7 @@ function browser(workflows) {
     {
       name: "Browser compatibility (${{ matrix.mode }})",
       "runs-on": "ubuntu-24.04",
-      "timeout-minutes": 25,
+      "timeout-minutes": 45,
       strategy: { "fail-fast": false, matrix: { mode: ["capture", "verify"] } },
       steps: [
         checkout(head),

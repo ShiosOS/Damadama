@@ -331,7 +331,12 @@ test.describe("saved habit reveal", () => {
     await expect(today(page).getByRole("alert")).toContainText(
       "Today is temporarily unavailable.",
     );
-    await expect(page.getByRole("alert")).toHaveCount(1);
+    await expect(
+      page
+        .getByRole("alert")
+        .filter({ hasText: "Today is temporarily unavailable." }),
+    ).toHaveCount(1);
+    await expect(page.locator("#habit-creation-error")).toHaveCount(0);
     await expectRevealed(page);
     await page.unroute(scheduledPath);
     await today(page)
@@ -547,7 +552,9 @@ test("a failed saved-list read shows its error without empty prose", async ({
     });
   });
   await page.goto("/?account=listRecovery");
-  await expect(page.getByRole("alert")).toContainText("Habits unavailable.");
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Habits unavailable." }),
+  ).toContainText("Habits unavailable.");
   const saved = page.getByRole("region", { name: "Saved habits", exact: true });
   await expect(saved.locator("article")).toHaveCount(0);
   await expect(saved.getByRole("status")).toHaveCount(0);
@@ -573,7 +580,7 @@ test("expired authentication explains how to continue", async ({ page }) => {
   await page.goto("/?account=expired");
   await expect(
     page.getByRole("alert").filter({ hasText: "Sign in to continue." }),
-  ).toHaveCount(2);
+  ).toHaveCount(3);
   await expect(
     page.getByRole("region", { name: "Saved habits" }).locator("article"),
   ).toHaveCount(0);
@@ -622,7 +629,7 @@ test("a rejected schedule keeps the form and offers a successful retry", async (
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.locator("#habit-creation-error")).toHaveCount(0);
   await page.getByRole("button", { name: "Add habit", exact: true }).click();
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Walking");
   await page.getByLabel("Monday", { exact: true }).check();
@@ -630,7 +637,7 @@ test("a rejected schedule keeps the form and offers a successful retry", async (
   await page.getByLabel("Repeat every", { exact: false }).fill("2");
   await page.getByRole("button", { name: "Save habit", exact: true }).click();
   await expectWalking(page);
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.locator("#habit-creation-error")).toHaveCount(0);
 });
 
 test("account change and sign out clear visible account data", async ({

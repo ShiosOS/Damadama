@@ -292,10 +292,9 @@ async function refresh(mode: "all" | "schedule" = "all"): Promise<Load | null> {
   armMidnight();
   if (!load.accountId) return null;
   try {
-    const [habits, loadedEntries] = await Promise.all([
-      api.scheduled(load.date),
-      keepEntries ? Promise.resolve([]) : api.entries(load.date),
-    ]);
+    const day = keepEntries
+      ? { habits: await api.scheduled(load.date), entries: [] }
+      : await api.day(load.date);
     if (!isCurrentLoad(load)) return null;
     if (load.date !== requestedDate()) {
       void refresh();
@@ -304,8 +303,13 @@ async function refresh(mode: "all" | "schedule" = "all"): Promise<Load | null> {
     const entries =
       keepEntries && state.value.kind === "ready"
         ? state.value.entries
-        : loadedEntries;
-    state.value = { kind: "ready", date: load.date, habits, entries };
+        : day.entries;
+    state.value = {
+      kind: "ready",
+      date: load.date,
+      habits: day.habits,
+      entries,
+    };
   } catch (error) {
     if (!isCurrentLoad(load)) return null;
     if (load.date !== requestedDate()) {

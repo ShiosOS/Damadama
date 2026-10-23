@@ -4,12 +4,34 @@ import { habitSchema, type Habit } from "../../web/src/habits.schema";
 
 const instant = new Date("2026-01-05T00:30:00Z");
 const travelInstant = new Date("2026-01-12T00:30:00Z");
-const scheduledPath = "**/api/habits?scheduledOn=*";
+const dayPath = "**/api/habit-days/*";
 const today = (page: Page): Locator =>
   page.getByRole("region", { name: "Today", exact: true });
 const walking = (page: Page): Locator =>
   today(page).getByRole("heading", { name: "Walking", exact: true });
 const browserErrors = new Map<Page, string[]>();
+const artificialClockMismatch = new WeakSet<Page>();
+
+function expectedHeatmapClockRefusal(page: Page, location: string): boolean {
+  if (!artificialClockMismatch.has(page) || !URL.canParse(location))
+    return false;
+  const url = new URL(location);
+  if (
+    url.origin !== new URL(page.url()).origin ||
+    url.pathname !== "/api/heatmaps"
+  )
+    return false;
+  const date = url.searchParams.get("deviceToday");
+  const timeZone = url.searchParams.get("timeZone");
+  if (!date || !timeZone) return false;
+  const serverDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(instant);
+  return date !== serverDate;
+}
 
 function observeErrors(page: Page): string[] {
   const errors: string[] = [];
@@ -19,6 +41,12 @@ function observeErrors(page: Page): string[] {
     if (
       message.text().startsWith("Failed to load resource:") &&
       message.text().includes("503")
+    )
+      return;
+    if (
+      message.text().startsWith("Failed to load resource:") &&
+      message.text().includes("400") &&
+      expectedHeatmapClockRefusal(page, message.location().url)
     )
       return;
     errors.push(message.text());
@@ -32,6 +60,7 @@ test.beforeEach(({ page }) => {
 test.afterEach(({ page }) => {
   expect(browserErrors.get(page)).toEqual([]);
   browserErrors.delete(page);
+  artificialClockMismatch.delete(page);
 });
 
 async function tokenFor(page: Page, account: string): Promise<string> {
@@ -139,7 +168,7 @@ test("Today loading waits for a real scheduled read without showing an empty res
   const received = Promise.withResolvers<void>();
   const release = Promise.withResolvers<void>();
   let reads = 0;
-  await page.route(scheduledPath, async (route) => {
+  await page.route(dayPath, async (route) => {
     reads++;
     const response = await route.fetch();
     expect(response.status()).toBe(200);
@@ -171,7 +200,7 @@ test("a Today service error stays distinct from empty and Retry reads the server
   await seed(page, "todayError");
   await page.clock.install({ time: instant });
   let reads = 0;
-  await page.route(scheduledPath, async (route) => {
+  await page.route(dayPath, async (route) => {
     reads++;
     if (reads > 1) return route.continue();
     await route.fulfill({
@@ -269,7 +298,7 @@ for (const outcome of ["Success", "Error"]) {
     const received = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     let reads = 0;
-    await page.route(scheduledPath, async (route) => {
+    await page.route(dayPath, async (route) => {
       if (++reads > 1) return route.continue();
       const response = await route.fetch();
       received.resolve();
@@ -290,7 +319,7 @@ for (const outcome of ["Success", "Error"]) {
         .click();
       await expect(today(page)).toContainText("Nothing scheduled for today.");
       const acknowledgement = page.waitForResponse((response) =>
-        response.url().includes("/api/habits?scheduledOn=2026-01-04"),
+        response.url().includes("/api/habit-days/2026-01-04"),
       );
       release.resolve();
       await (await acknowledgement).finished();
@@ -313,7 +342,7 @@ for (const outcome of ["Success", "Error"]) {
     const received = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     let reads = 0;
-    await page.route(scheduledPath, async (route) => {
+    await page.route(dayPath, async (route) => {
       if (++reads > 1) return route.continue();
       const response = await route.fetch();
       received.resolve();
@@ -328,9 +357,10 @@ for (const outcome of ["Success", "Error"]) {
     });
     await page.goto(`/?account=${account}`);
     await received.promise;
+    artificialClockMismatch.add(page);
     await page.clock.setSystemTime(new Date("2026-01-05T12:00:00Z"));
     const acknowledgement = page.waitForResponse((response) =>
-      response.url().includes("/api/habits?scheduledOn=2026-01-04"),
+      response.url().includes("/api/habit-days/2026-01-04"),
     );
     release.resolve();
     await (await acknowledgement).finished();
@@ -375,6 +405,7 @@ test("travel updates Today both directions in the same page while stored schedul
     const habit = await seed(page, "todayTravel", [1], 2);
     expect(habit.schedule.creationDate).toBe("2026-01-04");
     expect(habit.schedule.firstWeekMonday).toBe("2025-12-29");
+    artificialClockMismatch.add(page);
     await page.clock.install({ time: travelInstant });
     await page.goto("/?account=todayTravel");
     await expect(today(page).locator("time")).toHaveAttribute(
@@ -439,6 +470,7 @@ test("local midnight refreshes Today automatically without focus or reload", asy
     "2026-01-04",
   );
   await expect(today(page)).toContainText("Nothing scheduled for today.");
+  artificialClockMismatch.add(page);
   await page.clock.fastForward("00:02");
   await expect(today(page).locator("time")).toHaveAttribute(
     "datetime",
@@ -451,6 +483,7 @@ test("a device local date can remain in the prior year without showing a pre-cre
   page,
 }) => {
   await seed(page, "todayYear", [3, 4]);
+  artificialClockMismatch.add(page);
   await page.clock.install({ time: new Date("2026-01-01T00:30:00Z") });
   await page.goto("/?account=todayYear");
   await expect(today(page).locator("time")).toHaveAttribute(
@@ -472,6 +505,7 @@ test("a visible-return event checks the current device date", async ({
   await page.clock.install({ time: instant });
   await page.goto("/?account=todayVisible");
   await expect(today(page)).toContainText("Nothing scheduled for today.");
+  artificialClockMismatch.add(page);
   await page.clock.setSystemTime(new Date("2026-01-05T12:00:00Z"));
   await page.evaluate(() =>
     document.dispatchEvent(new Event("visibilitychange")),
@@ -491,7 +525,7 @@ test("a read finishing after sign-out cannot restore Today or start midnight rea
   const received = Promise.withResolvers<void>();
   const release = Promise.withResolvers<void>();
   let reads = 0;
-  await page.route(scheduledPath, async (route) => {
+  await page.route(dayPath, async (route) => {
     reads++;
     const response = await route.fetch();
     received.resolve();
@@ -504,7 +538,7 @@ test("a read finishing after sign-out cannot restore Today or start midnight rea
     .getByRole("button", { name: "Fixture sign out", exact: true })
     .click();
   const acknowledgement = page.waitForResponse((response) =>
-    response.url().includes("/api/habits?scheduledOn="),
+    response.url().includes("/api/habit-days/"),
   );
   release.resolve();
   await (await acknowledgement).finished();

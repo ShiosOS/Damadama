@@ -5,8 +5,11 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { test } from "node:test";
+import { brotliCompressSync, gzipSync } from "node:zlib";
+import { candidateVersion } from "./policy.mjs";
 import {
   inventoryFromImage,
+  reconcileEmittedAssets,
   reconcileInstalledNpm,
   reconcileInstalledSpdx,
   reconcileFrontendReport,
@@ -28,7 +31,12 @@ function image(manifests) {
     for (let index = 1; index < parts.length; index++)
       entries.set(parts.slice(0, index).join("/"), { type: "5" });
     entries.set(path, { type: "0" });
-    bytes.set(path, Buffer.from(JSON.stringify(manifest)));
+    bytes.set(
+      path,
+      Buffer.isBuffer(manifest)
+        ? manifest
+        : Buffer.from(JSON.stringify(manifest)),
+    );
   }
   return {
     entries,
@@ -36,6 +44,61 @@ function image(manifests) {
     read: async (path) => bytes.get(path),
   };
 }
+
+test("reconciles published license encodings and refuses missing, altered, or extra assets", async () => {
+  const source = {
+    repository: "ShiosOS/Damadama",
+    commit: "a".repeat(40),
+    tree: "b".repeat(40),
+  };
+  const release = Buffer.from(
+    JSON.stringify({ source, version: candidateVersion(source) }),
+  );
+  const emitted = {
+    "index.html": Buffer.from("<main>Damadama</main>"),
+    "assets/ui-icons.LICENSE.txt": Buffer.from("ISC and MIT license notices"),
+  };
+  const web = image(
+    Object.fromEntries(
+      Object.entries(emitted).map(([path, bytes]) => [
+        `src/server/wwwroot/${path}`,
+        bytes,
+      ]),
+    ),
+  );
+  const published = { "app/wwwroot/release.json": release };
+  for (const [path, bytes] of Object.entries(emitted)) {
+    const destination = `app/wwwroot/${path}`;
+    published[destination] = bytes;
+    published[`${destination}.br`] = brotliCompressSync(bytes);
+    published[`${destination}.gz`] = gzipSync(bytes);
+  }
+  const reconcile = (files) =>
+    reconcileEmittedAssets(web, image(files), source, sha256(release));
+  assert.deepEqual(
+    (await reconcile(published)).map(({ path }) => path),
+    ["assets/ui-icons.LICENSE.txt", "index.html"],
+  );
+  for (const extension of ["br", "gz"]) {
+    const path = `app/wwwroot/assets/ui-icons.LICENSE.txt.${extension}`;
+    const altered = { ...published };
+    altered[path] =
+      extension === "br"
+        ? brotliCompressSync(Buffer.from("changed notice"))
+        : gzipSync(Buffer.from("changed notice"));
+    await assert.rejects(reconcile(altered), /published compression differs/);
+    const missing = { ...published };
+    delete missing[path];
+    await assert.rejects(reconcile(missing));
+  }
+  await assert.rejects(
+    reconcile({
+      ...published,
+      "app/wwwroot/assets/unexpected.txt": Buffer.from("unexpected"),
+    }),
+    /unexpected final wwwroot files/,
+  );
+});
 
 test("retains helper and workspace manifests while cataloging each versioned installed location", async () => {
   const inventory = await inventoryFromImage(

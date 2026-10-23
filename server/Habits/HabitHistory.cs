@@ -100,6 +100,31 @@ public sealed class HabitHistory(HabitsDb db, TimeProvider clock) : IHistoryRead
     public async Task<HabitResponse[]> ReadHabits(string owner, DateOnly? scheduledOn, Guid? id, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
+        var facts = await ReadOwnedHabitFacts(owner, id, ct);
+        var result = ScheduledHabits(facts, scheduledOn);
+        await transaction.CommitAsync(ct);
+        return result;
+    }
+
+    public async Task<HabitDayResponse> ReadDay(string owner, DateOnly date, CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
+        var facts = await ReadOwnedHabitFacts(owner, null, ct);
+        var names = facts.ToDictionary(fact => fact.Habit.Id, fact => fact.Habit.Name);
+        var ids = names.Keys.ToArray();
+        var entries = await db.Entries.AsNoTracking()
+            .Where(entry => ids.Contains(entry.HabitId) && entry.CalendarDate == date)
+            .OrderBy(entry => entry.HabitId).ToListAsync(ct);
+        var result = new HabitDayResponse(date, ScheduledHabits(facts, date),
+            entries.Select(entry => EntryResponse.From(entry, names[entry.HabitId])).ToArray());
+        await transaction.CommitAsync(ct);
+        return result;
+    }
+
+    private sealed record OwnedHabitFacts(Habit Habit, HabitChange[] Changes);
+
+    private async Task<OwnedHabitFacts[]> ReadOwnedHabitFacts(string owner, Guid? id, CancellationToken ct)
+    {
         var habits = await db.Habits.AsNoTracking().Include(habit => habit.Schedule)
             .Where(habit => habit.OwnerId == owner && (id == null || habit.Id == id))
             .OrderBy(habit => habit.CreatedAt).ThenBy(habit => habit.Id).ToListAsync(ct);
@@ -107,11 +132,12 @@ public sealed class HabitHistory(HabitsDb db, TimeProvider clock) : IHistoryRead
         var changes = await db.HabitChanges.AsNoTracking().Where(change => ids.Contains(change.HabitId))
             .OrderBy(change => change.Sequence).ToListAsync(ct);
         var groups = changes.ToLookup(change => change.HabitId);
-        var result = habits.Where(habit => scheduledOn is null || new HabitTimeline(habit, groups[habit.Id].ToArray()).IsScheduled(scheduledOn.Value))
-            .Select(habit => Response(habit, groups[habit.Id].ToArray())).ToArray();
-        await transaction.CommitAsync(ct);
-        return result;
+        return habits.Select(habit => new OwnedHabitFacts(habit, groups[habit.Id].ToArray())).ToArray();
     }
+
+    private static HabitResponse[] ScheduledHabits(OwnedHabitFacts[] facts, DateOnly? date) =>
+        facts.Where(fact => date is null || new HabitTimeline(fact.Habit, fact.Changes).IsScheduled(date.Value))
+            .Select(fact => Response(fact.Habit, fact.Changes)).ToArray();
 
     public async Task<OwnedHistoryRange> ReadOwnedRange(string ownerId, InclusiveDateRange range, CancellationToken ct)
     {

@@ -19,7 +19,11 @@ test.use({ viewport: { width: 1280, height: 800 } });
 test("optimized habit page stays within layout and request budgets", async ({
   page,
 }, testInfo) => {
+  await page.clock.setFixedTime(new Date("2026-01-05T00:30:00Z"));
   let requests = 0;
+  let stage = "load";
+  const requestCounts: Record<string, number> = {};
+  const requestedIcons = new Set<string>();
   let runtimeErrors = 0;
   let failedRequests = 0;
   let nonSuccessResponses = 0;
@@ -28,7 +32,15 @@ test("optimized habit page stays within layout and request budgets", async ({
   page.on("console", (message) => {
     if (message.type() === "error") runtimeErrors++;
   });
-  page.on("request", () => requests++);
+  page.on("request", (request) => {
+    requests++;
+    const key = `${stage} ${request.method()} ${new URL(request.url()).pathname}`;
+    requestCounts[key] = (requestCounts[key] ?? 0) + 1;
+    const url = new URL(request.url());
+    if (url.pathname === "/lucide.json")
+      for (const icon of url.searchParams.get("icons")?.split(",") ?? [])
+        if (/^[a-z0-9-]+$/.test(icon)) requestedIcons.add(icon);
+  });
   page.on("requestfailed", () => failedRequests++);
   page.on("response", (response) => {
     const path = new URL(response.url()).pathname;
@@ -72,9 +84,18 @@ test("optimized habit page stays within layout and request budgets", async ({
       response.url().endsWith("/api/habits") &&
       response.request().method() === "GET",
   );
+  const firstYear = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/api/heatmaps",
+  );
   const start = performance.now();
   await page.goto("/?account=performance");
   expect((await firstGet).status()).toBe(200);
+  expect((await firstYear).status()).toBe(200);
+  const year = page.getByRole("region", {
+    name: "Yearly activity",
+    exact: true,
+  });
+  await expect(year.locator("[data-heatmap-date]")).toHaveCount(365);
   const list = page.getByRole("region", { name: "Saved habits" });
   await expect(list).toContainText("No habits saved yet.");
   await page.evaluate(() => document.fonts.ready);
@@ -85,6 +106,7 @@ test("optimized habit page stays within layout and request budgets", async ({
       ),
   );
   const readyMs = performance.now() - start;
+  stage = "save";
   await page.getByRole("button", { name: "Add habit", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("Performance check");
   await page.getByLabel("Good", { exact: true }).fill("5 minutes");
@@ -96,9 +118,14 @@ test("optimized habit page stays within layout and request budgets", async ({
       response.url().endsWith("/api/habits") &&
       response.request().method() === "POST",
   );
+  const updatedYear = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/api/heatmaps",
+  );
   const saveStart = performance.now();
   await page.getByRole("button", { name: "Save habit", exact: true }).click();
   expect((await created).status()).toBe(201);
+  expect((await updatedYear).status()).toBe(200);
+  await expect(year.locator("[data-heatmap-date]")).toHaveCount(365);
   const saved = list.getByRole("heading", {
     name: "Performance check",
     exact: true,
@@ -110,6 +137,9 @@ test("optimized habit page stays within layout and request budgets", async ({
       response.url().endsWith("/api/habits") &&
       response.request().method() === "GET",
   );
+  const reloadedYear = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/api/heatmaps",
+  );
   await page.evaluate(() => document.fonts.ready);
   await page.evaluate(
     () =>
@@ -119,8 +149,11 @@ test("optimized habit page stays within layout and request budgets", async ({
   );
   const firstDocumentLayout = await page.evaluate(() => window.qualityLayout);
   const reloadStart = performance.now();
+  stage = "reload";
   await page.reload();
   expect((await reloaded).status()).toBe(200);
+  expect((await reloadedYear).status()).toBe(200);
+  await expect(year.locator("[data-heatmap-date]")).toHaveCount(365);
   await expect(saved).toBeVisible();
   await expect(list).toContainText("Good: 5 minutes");
   await expect(list).toContainText("Better: 15 minutes");
@@ -146,10 +179,13 @@ test("optimized habit page stays within layout and request budgets", async ({
     budgets: { cls: 0.1, requests: 20 },
     cls: Math.max(firstDocumentLayout.cls, reloadLayout.cls),
     requests,
+    requestCounts,
+    requestedIcons: [...requestedIcons].sort(),
     runtimeErrors,
     failedRequests,
     nonSuccessResponses,
     optimizedScripts: scripts.size,
+    heatmapDates: await year.locator("[data-heatmap-date]").count(),
     diagnosticTimesMs: { ready: readyMs, save: saveMs, reload: reloadMs },
   };
   const json = `${JSON.stringify(measurement, null, 2)}\n`;
