@@ -160,6 +160,9 @@ for (const entry of ["module load", "browser doctor"]) {
         "scripts/check.ts",
         "scripts/developer.ts",
         "scripts/doctor.ts",
+        "scripts/command-capture.ts",
+        "scripts/capture-helper.ts",
+        "scripts/capture-windows.ts",
         "scripts/acceptance-results.ts",
       ]) {
         await cp(join(source, file), join(root, file));
