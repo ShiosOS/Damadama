@@ -144,7 +144,6 @@ export async function captureCommand(
       clearTimeout(timer);
       try {
         if (job) {
-          // A helper cancelled before membership must never receive GO.
           if (beforeGo && !exited) helper.kill("SIGKILL");
           job.terminate();
         } else if (helper.connected) {
