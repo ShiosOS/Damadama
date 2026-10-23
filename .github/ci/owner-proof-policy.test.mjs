@@ -264,7 +264,8 @@ for (const [label, mutate] of [
       const steps = developer(w).prerequisites.steps;
       const cold = steps.findIndex(
         (s) =>
-          s.run === "bun test scripts/doctor.test.ts scripts/developer.test.ts",
+          s.run ===
+          "bun test scripts/doctor.test.ts scripts/doctor-process-tree.test.ts scripts/developer.test.ts",
       );
       [steps[cold], steps[cold + 1]] = [steps[cold + 1], steps[cold]];
     },

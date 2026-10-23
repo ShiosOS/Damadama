@@ -19,6 +19,7 @@ const beforeBackend: Command[] = [
     "bun",
     "test",
     "scripts/doctor.test.ts",
+    "scripts/doctor-process-tree.test.ts",
     "scripts/developer.test.ts",
     "scripts/check.test.ts",
     "scripts/acceptance-results.test.ts",

@@ -34,7 +34,7 @@ jobs:
         with:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
-      - run: bun test scripts/doctor.test.ts scripts/developer.test.ts
+      - run: bun test scripts/doctor.test.ts scripts/doctor-process-tree.test.ts scripts/developer.test.ts
       - id: docker-probe
         run: bun --no-env-file test scripts/doctor-docker.test.ts
       - run: bun run check:types
