@@ -384,15 +384,15 @@ test("production publication and capsule use canonical bounded transport and nat
     const workflow={id:123,run_attempt:2,head_sha:source.commit,event:'push',path:'.github/workflows/stage.yml',head_branch:'main',repository:{id:1412858535,owner:{id:31512984}}};
     const jobs=['publish','sign'].map((name,i)=>({id:10+i,name,head_sha:source.commit,run_id:123,run_attempt:2,status:'completed',conclusion:'success',html_url:'https://github.com/ShiosOS/Damadama/actions/runs/123/job/'+(10+i),started_at:'2026-10-18T00:00:00Z',completed_at:'2026-10-18T00:02:00Z'}));
     const artifacts=['published-image-2','supply-release-2'].map((name,i)=>({id:i+1,name,digest:'sha256:'+hash(bytes[i]),size_in_bytes:bytes[i].length,expired:false,workflow_run:{id:123,head_sha:source.commit},created_at:'2026-10-18T00:01:00Z'}));
-    let mode='good';
+    let mode='good', jobsReads=0, artifactReads=0, zipReads=0;
     const diagnostics=[];
     mock.method(console,'error',line=>{if(typeof line==='string' && line.startsWith('release-phase '))diagnostics.push(JSON.parse(line.slice('release-phase '.length)));});
     mock.module('./release/github.mjs',{namedExports:{...github,
       github:async()=>mode==='run'?{...workflow,run_attempt:3}:workflow,
-      attemptJobs:async()=>jobs.map(j=>mode==='job'?{...j,conclusion:'failure'}:j),
-      runArtifacts:async()=>artifacts.map(a=>({...a,...(mode==='name'?{name:a.name+'x'}:{}),...(mode==='digest'?{digest:'sha256:'+'f'.repeat(64)}:{}),...(mode==='size'?{size_in_bytes:a.size_in_bytes-1}:{}),...(mode==='interval'?{created_at:'2026-10-17T00:00:00Z'}:{})})),
+      attemptJobs:async()=>{jobsReads++; return jobs.map(j=>mode==='job'||(mode==='publish-invalid'&&j.name==='publish')?{...j,conclusion:'failure'}:j);},
+      runArtifacts:async()=>{artifactReads++; return artifacts.map(a=>({...a,...(mode==='name'?{name:a.name+'x'}:{}),...(mode==='digest'?{digest:'sha256:'+'f'.repeat(64)}:{}),...(mode==='size'?{size_in_bytes:a.size_in_bytes-1}:{}),...(mode==='interval'?{created_at:'2026-10-17T00:00:00Z'}:{})}));},
     }});
-    globalThis.fetch=async url=>new Response(bytes[Number(url.split('/').at(-2))-1]);
+    globalThis.fetch=async url=>{zipReads++; return new Response(bytes[Number(url.split('/').at(-2))-1]);};
     process.env.GH_TOKEN='synthetic';
     const {materializePublication,materializeRelease}=await import('./release/supply-producers.mjs');
     const root=await mkdtemp(join(tmpdir(),'production-artifact-'));
@@ -408,6 +408,16 @@ test("production publication and capsule use canonical bounded transport and nat
         ['supply.capsule.download','start'],['supply.capsule.download','complete'],
         ['supply.capsule.extract','start'],['supply.capsule.extract','complete'],
       ]);
+      mode='publish-invalid';
+      jobsReads=0; artifactReads=0; zipReads=0; diagnostics.length=0;
+      await assert.rejects(
+        materializePublication(source,authority,join(root,'invalid-publication')),
+        {message:'CI publish must succeed in the exact main workflow attempt: conclusion_not_success'},
+      );
+      assert.equal(jobsReads,1);
+      assert.equal(artifactReads,0);
+      assert.equal(zipReads,0);
+      assert.deepEqual(diagnostics,[]);
       for(const [change,error] of [['run',/run identity/],['job',/CI/],['name',/artifact/],['digest',/transport digest/],['size',/transport exceeds/],['interval',/untrusted/]]){
         diagnostics.length=0;
         mode=change;

@@ -73,18 +73,31 @@ export function requireCIEvidence(
   return names.map((name) => {
     const matches = jobs?.filter((job) => job.name === name) ?? [];
     const job = matches[0];
+    const refusal = `CI ${name} must succeed in the exact main workflow attempt`;
+    requireThat(matches.length > 0, `${refusal}: job_missing`);
+    requireThat(matches.length === 1, `${refusal}: job_ambiguous`);
     requireThat(
-      matches.length === 1 &&
-        job.head_sha === source.commit &&
-        job.run_id === authority?.runId &&
-        job.run_attempt === authority?.attempt &&
-        job.status === "completed" &&
-        job.conclusion === "success" &&
-        Number.isSafeInteger(job.id) &&
-        job.id > 0 &&
-        job.html_url ===
-          `https://github.com/${repository}/actions/runs/${authority.runId}/job/${job.id}`,
-      `CI ${name} must succeed in the exact main workflow attempt`,
+      job.head_sha === source.commit,
+      `${refusal}: head_sha_mismatch`,
+    );
+    requireThat(job.run_id === authority?.runId, `${refusal}: run_id_mismatch`);
+    requireThat(
+      job.run_attempt === authority?.attempt,
+      `${refusal}: run_attempt_mismatch`,
+    );
+    requireThat(job.status === "completed", `${refusal}: status_not_completed`);
+    requireThat(
+      job.conclusion === "success",
+      `${refusal}: conclusion_not_success`,
+    );
+    requireThat(
+      Number.isSafeInteger(job.id) && job.id > 0,
+      `${refusal}: job_id_invalid`,
+    );
+    requireThat(
+      job.html_url ===
+        `https://github.com/${repository}/actions/runs/${authority.runId}/job/${job.id}`,
+      `${refusal}: job_url_mismatch`,
     );
     return job;
   });
