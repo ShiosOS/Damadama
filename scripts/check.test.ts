@@ -178,6 +178,7 @@ test("common check executes Provider and monitor before Docker and both real rec
     "bun",
     "test",
     "scripts/doctor.test.ts",
+    "scripts/command-capture.test.ts",
     "scripts/doctor-process-tree.test.ts",
     "scripts/developer.test.ts",
     "scripts/check.test.ts",

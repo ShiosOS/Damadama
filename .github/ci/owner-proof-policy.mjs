@@ -200,7 +200,7 @@ function developer(workflows) {
         ...setup(),
         { run: "bun install --frozen-lockfile" },
         {
-          run: "bun test scripts/doctor.test.ts scripts/doctor-process-tree.test.ts scripts/developer.test.ts",
+          run: "bun test scripts/doctor.test.ts scripts/command-capture.test.ts scripts/doctor-process-tree.test.ts scripts/developer.test.ts",
         },
         {
           id: "docker-probe",

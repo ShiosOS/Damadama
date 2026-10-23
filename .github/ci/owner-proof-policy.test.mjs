@@ -265,7 +265,7 @@ for (const [label, mutate] of [
       const cold = steps.findIndex(
         (s) =>
           s.run ===
-          "bun test scripts/doctor.test.ts scripts/doctor-process-tree.test.ts scripts/developer.test.ts",
+          "bun test scripts/doctor.test.ts scripts/command-capture.test.ts scripts/doctor-process-tree.test.ts scripts/developer.test.ts",
       );
       [steps[cold], steps[cold + 1]] = [steps[cold + 1], steps[cold]];
     },
