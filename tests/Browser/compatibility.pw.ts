@@ -2,6 +2,11 @@ import { access } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { z } from "zod";
+import {
+  beginFontEvidence,
+  finishFontEvidence,
+  recordSaveMarker,
+} from "./font-evidence";
 import { habitSchema, type Habit } from "../../web/src/habits.schema";
 import {
   baselineDir,
@@ -51,7 +56,8 @@ function recordDiagnostic(event: string, details: object = {}): void {
   });
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page }, testInfo) => {
+  await beginFontEvidence(page, testInfo);
   recordDiagnostic("test-start");
   page.on("request", (request) => {
     if (request.method() === "POST" && request.url().endsWith("/api/habits"))
@@ -109,6 +115,10 @@ test.beforeEach(async ({ page }) => {
         true,
       );
   });
+});
+
+test.afterEach(({ page }, testInfo) => {
+  finishFontEvidence(page, testInfo);
 });
 
 async function start(page: Page, account: string): Promise<void> {
@@ -231,15 +241,25 @@ async function saveAndReload(
       response.request().method() === "POST" &&
       response.url().endsWith("/api/habits"),
   );
+  recordDiagnostic("create-waiter-armed");
+  recordSaveMarker(page, "create-waiter-armed");
   await fillAndSave(page);
+  recordDiagnostic("create-response-await-start");
+  recordSaveMarker(page, "create-response-await-start");
   const createdResponse = await created;
+  recordDiagnostic("create-response-await-complete");
+  recordSaveMarker(page, "create-response-await-complete");
   expect(createdResponse.status()).toBe(201);
   const createdHabit = habitSchema.parse(await createdResponse.json());
+  recordDiagnostic("create-json-complete");
+  recordSaveMarker(page, "create-json-complete");
   expectHabit(createdHabit);
   await expect(
     page.getByRole("dialog", { name: "Create a habit" }),
   ).toHaveCount(0);
   await expectSaved(page);
+  recordDiagnostic("saved-assertions-complete");
+  recordSaveMarker(page, "saved-assertions-complete");
   if (afterSave) await afterSave();
   const reloaded = page.waitForResponse(
     (response) =>

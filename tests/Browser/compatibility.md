@@ -11,3 +11,75 @@ Run `bun run browser:compatibility:verify` after reviewed baselines are committe
 Both commands require Ubuntu 24.04 and exit before browser work on other platforms. Use the GitHub workflow's `ubuntu-24.04` runner for canonical capture and verification. The runner reads and validates Ubuntu identity and version from `/etc/os-release`. The manifest records that observed distribution and version, the kernel release, actual browser and Playwright versions, platform, runner image labels when available, configured viewport, measured CSS layout viewport, screen, device scale, loaded Nunito Variable font, locale, timezone, and fixed clock. Both measured layout widths must equal the checkpoint width, including 390 pixels on mobile. The image SHA-256 hashes bind the reviewed PNGs to the manifest. Capture from another OS cannot become the Linux baseline. The runner's `ImageVersion` may advance independently of the Ubuntu release, so the receipt records it without treating a monthly runner-image update as an automatic pixel change.
 
 The dedicated workflow checks out the exact pull request head and runs independent capture and strict verification jobs when the suite, application, fixture, backend, or build inputs change. Before reviewed baselines are added, capture can succeed while verification correctly fails with a missing-baseline message. Schedules and manual dispatch become active after this workflow reaches the default branch. The workflow uploads only candidate PNGs, the measured manifest, sanitized receipt, and named screenshot comparison PNGs. It excludes fixture tokens, request data, traces, videos, full HTML reports, and arbitrary `.audit` output.
+
+# Font evidence in failed child logs
+
+The compatibility scenario records the actual Nunito predicate and bounded face
+counts in the same evaluation. The predicate still searches every face. More than
+32 matching faces makes the diagnostic sample unavailable without changing the
+guard. Entry without readiness fulfillment records a pending guard, not a false
+predicate. Node receive order and browser performance time are separate clocks.
+
+`font-evidence.ts` owns only its font request, response, completion, failure,
+navigation, and close listeners. It detaches those exact listeners on close or
+after each case. The existing native form and POST observers remain separate.
+Waiter, response-await, JSON, and saved-assertion markers identify save boundaries.
+Neither these markers nor a later font refusal reconstructs issue #117's original
+first incorrect state.
+
+The fixed `bundled-nunito-not-loaded` category comes from the original refusal
+branch before the unchanged Error. It does not classify arbitrary exceptions.
+Passing and skipped cases discard the buffered journal. A guard refusal emits an
+immediate frame; a failed case emits a final disposal frame. A missing final frame,
+pending observation, overflow, or unavailable sample stays partial. Missing frames
+stay absent. Invalid, conflicting, foreign, or unsupported frames are refused.
+
+`compatibility-diagnostic-admission.json` is reviewed source input. Admission
+compares working bytes with its digests and committed Git blobs. It also binds
+the built HTML, CSS, sorted build inventory, and all five emitted fonts to the
+locked installed Nunito bytes. BrowserHost's runtime `fixture.json` is explicitly
+excluded without reading it. A changed source requires explicit manifest review,
+a commit, and recalibration. There is no command that automatically blesses the
+current source. The consumer rechecks admission after the child finishes.
+
+Only exact admitted GET font URLs from the owned main frame enter the journal.
+Foreign font URLs refuse evidence without retaining the URL. New frames exclude
+user values, arbitrary errors, headers, HTML, local paths, and executable identity.
+They reference the existing form stream without claiming ownership of it.
+
+The list reporter and the runner's existing failed-child stdout carry frames
+prefixed with `compatibility-evidence-v1`. The consumer enforces 16 KiB per frame
+and 64 KiB per invocation. Original child status and failure output survive.
+Existing raw Playwright errors are not newly sanitized. Job logs retain these
+frames; image ZIPs do not. Workflow upload lists are unchanged.
+
+Run the portable contract checks with:
+
+```sh
+bun test tests/Browser/font-evidence.test.ts tests/Browser/font-evidence-files.test.ts
+```
+
+They also run in `bun run check` before Docker. To calibrate supported committed
+sources, first build the compatibility fixture, then run the dedicated matrix:
+
+```sh
+bun x --no-install vite build --config tests/Browser/compatibility.vite.config.ts
+bun tests/Browser/font-calibration-run.ts
+```
+
+The matrix uses Node 24.21.0 and Bun 1.4.3 with a 120-second outer limit.
+Worker Node versions are distinct from the Bun supervisor's compatibility value.
+Each Playwright case retains its
+30-second timeout, one worker, and zero retries. It uses owned loopback servers,
+the real guard and screenshot path, installed fonts, list reporter, and strict
+consumer. Deliberate child failures retain exit 1. Outer timeout is incomplete
+proof. Raw logs and receipts stay under `.audit/browser-font-implementation`.
+The `.calibration.ts` suffix excludes the matrix from canonical discovery.
+Only the exclusive calibration worker changes directory, and it restores its
+previous directory. Fixed candidate paths therefore stay inside private fixtures.
+
+Ubuntu environment strings supplied by the Windows toy are fixture inputs.
+The matrix does not establish canonical Ubuntu acceptance, a hosted failure's
+cause, or closure of issues #117 and #127. Listener and server disposal checks
+do not prove whole-machine resource absence. Existing job provenance remains the
+runtime record; the scenario does not discover or hash browser executables.

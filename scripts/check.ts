@@ -28,6 +28,12 @@ const beforeBackend: Command[] = [
   ],
   ["node", "--test", "tests/Provider/*.test.mjs"],
   ["node", "--test", "ops/monitoring/monitor.test.mjs"],
+  [
+    "bun",
+    "test",
+    "tests/Browser/font-evidence.test.ts",
+    "tests/Browser/font-evidence-files.test.ts",
+  ],
   ["bun", "--no-env-file", "test", "scripts/doctor-docker.test.ts"],
   ["bun", "run", "doctor", "backend"],
   ["docker", "info", "--format", "{{.ServerVersion}}"],
