@@ -21,13 +21,13 @@ KEYRING = "/usr/share/keyrings/ubuntu-archive-keyring.gpg"
 FORMAT = '{"http_status":"%{http_code}","remote_ip":"%{remote_ip}","connect_seconds":%{time_connect},"first_byte_seconds":%{time_starttransfer},"total_seconds":%{time_total},"curl_download_bytes":%{size_download}}'
 receipt = {
     "schema": 1,
-    "experiment": "same-worker-signed-libflite1-A-B-B-A",
+    "experiment": "same-worker-signed-libflite1-apt-vs-curl",
     "verdict": "inconclusive_preflight",
     "application_fix_proved": False,
     "affected_worker_reproduction": False,
     "attempts": [],
     "metadata": {},
-    "limits": {"download_seconds": 20, "download_retries": 0, "package_attempts": 4},
+    "limits": {"download_seconds": 20, "download_retries": 0, "package_attempts": 14},
 }
 started = time.monotonic()
 
@@ -80,13 +80,13 @@ def stanzas(text):
     return result
 
 
-def download(url, target, maximum):
+def download(url, target, maximum, user_agent=None):
     code, output, expired = bounded([
         "curl", "-q", "--silent", "--fail", "--globoff",
         "--proto", "=http,https", "--connect-timeout", "5", "--max-time", "20",
         "--retry", "0", "--max-redirs", "0", "--max-filesize", str(maximum),
         "--output", str(target), "--write-out", FORMAT, "--url", url,
-    ], 23)
+    ] + (["--user-agent", user_agent] if user_agent else []), 23)
     result = {"url": url, "curl_exit": code, "supervisor_timeout": expired}
     try:
         metrics = json.loads(output)
@@ -167,7 +167,18 @@ try:
     fallback = next((endpoint for endpoint in endpoints if endpoint in FALLBACK), None)
     require(azure is not None and fallback is not None, "configured_endpoint_pair_missing")
     receipt["source_configuration"] = {"path": str(SOURCES), "stanzas": public_sources, "mirror_entries": mirror_entries, "configured_source_order": list(dict.fromkeys(endpoints)), "A": azure, "B": fallback}
-    receipt["transport_scope"] = "curl uses environment proxy configuration; APT-only proxy and bandwidth settings are observed but not replayed; remote_ip may identify a proxy"
+    receipt["transport_scope"] = "same signed package uses root APT helper and curl; direct URL and mirror wrapper are separate arms; single User-Agent arms are diagnostic only; no install or application verification"
+    receipt["load"] = {"load_average": os.getloadavg(), "cores": os.cpu_count()}
+    code, apt_version, expired = bounded(["apt-get", "--version"], 2)
+    version_match = re.match(rb"apt ([0-9.]+)", apt_version)
+    require(code == 0 and not expired and version_match is not None, "apt_version_missing")
+    apt_user_agent = "Debian APT-HTTP/1.3 (" + version_match[1].decode() + ")"
+    receipt["apt_user_agent_probe"] = apt_user_agent
+    receipt["root_apt_transport_settings"] = {}
+    for key in ("Acquire::http::Dl-Limit", "Acquire::https::Dl-Limit", "Acquire::http::Pipeline-Depth", "Acquire::Retries"):
+        code, raw, expired = bounded(["sudo", "-n", "apt-config", "shell", "PROBE", key], 2)
+        match = re.fullmatch(rb"PROBE='([0-9]{1,9})'\n?", raw)
+        receipt["root_apt_transport_settings"][key] = {"exit": code, "configured": bool(raw.strip()), "integer": int(match[1]) if match else None}
     with tempfile.TemporaryDirectory(prefix="apt-payload-probe-") as work:
         work = Path(work)
         release = work / "InRelease"
@@ -227,25 +238,33 @@ try:
         require(re.fullmatch(r"[A-Za-z0-9.+~:-]{1,100}", version), "package_version_rejected")
         require(version == "2.2-6build3", "signed_version_differs_from_observed_stall")
         receipt["package"] = {"name": "libflite1", "architecture": "amd64", "suite": "noble", "component": "universe", "version": version, "filename": filename, "size": size, "sha256": digest}
-        for number, label in enumerate(("A", "B", "B", "A"), 1):
-            target = work / f"attempt-{number}.partial"
-            endpoint = azure if label == "A" else fallback
-            attempt = download(endpoint + filename, target, size)
-            attempt.update({"order": number, "endpoint": label, "complete": False, "sha256": None})
+        work.chmod(0o777)
+        schedule = [arm for _ in range(5) for arm in ("apt_direct", "curl_direct")]
+        schedule += ["curl_apt_user_agent", "apt_mirror", "apt_curl_user_agent", "apt_mirror"]
+        for number, arm in enumerate(schedule, 1):
+            target = work / f"attempt-{number}.deb"
+            url = azure + filename
+            if arm.startswith("curl"):
+                attempt = download(url, target, size, apt_user_agent if arm == "curl_apt_user_agent" else None)
+            else:
+                if arm == "apt_mirror":
+                    url = "mirror+file:/etc/apt/apt-mirrors.txt/" + filename
+                options = ["-o", "Acquire::http::User-Agent=curl/8.5.0"] if arm == "apt_curl_user_agent" else []
+                before = time.monotonic()
+                code, _, expired = bounded(["sudo", "-n", "timeout", "--signal=TERM", "--kill-after=2s", "15s", "/usr/lib/apt/apt-helper"] + options + ["download-file", url, str(target), "SHA256:" + digest], 20)
+                attempt = {"url": url, "exit": code, "supervisor_timeout": expired, "total_seconds": time.monotonic() - before, "file_bytes": target.stat().st_size if target.exists() else 0, "transport_complete": code == 0 and not expired}
+            attempt.update({"order": number, "arm": arm, "complete": False, "sha256": None})
             if attempt["transport_complete"] and attempt["file_bytes"] == size:
                 attempt["sha256"] = hashlib.sha256(target.read_bytes()).hexdigest()
                 attempt["complete"] = attempt["sha256"] == digest
             attempt["state"] = "complete_verified" if attempt["complete"] else "partial_or_rejected"
             receipt["attempts"].append(attempt)
             target.unlink(missing_ok=True)
-        a = [attempt for attempt in receipt["attempts"] if attempt["endpoint"] == "A"]
-        b = [attempt for attempt in receipt["attempts"] if attempt["endpoint"] == "B"]
-        if all(attempt["complete"] for attempt in receipt["attempts"]):
-            receipt["verdict"] = "inconclusive_all_transfers_complete_no_stall_reproduced"
-        elif all(attempt["complete"] for attempt in b) and all(attempt["curl_exit"] == 28 and not attempt["complete"] for attempt in a):
-            receipt["verdict"] = "candidate_azure_path_timeout_with_verified_fallback"
-        else:
-            receipt["verdict"] = "inconclusive_mixed_or_shared_transport_failure"
+        direct = [a for a in receipt["attempts"] if a["arm"] == "apt_direct"]
+        curl = [a for a in receipt["attempts"] if a["arm"] == "curl_direct"]
+        receipt["verdict"] = "inconclusive_all_clients_complete" if all(a["complete"] for a in receipt["attempts"]) else "inconclusive_client_transfer_failures"
+        if all(a["exit"] == 124 and not a["complete"] for a in direct) and all(a["complete"] for a in curl):
+            receipt["verdict"] = "apt_direct_bounded_timeout_curl_verified_on_same_worker"
 except (OSError, ValueError, subprocess.SubprocessError, lzma.LZMAError) as error:
     label = str(error)
     receipt["failure"] = label if re.fullmatch(r"[a-z_]{1,100}", label) else "preflight_or_supervisor_failure"
@@ -254,4 +273,4 @@ finally:
     Path("apt-payload-probe.json").write_text(json.dumps(receipt, indent=2, allow_nan=False) + "\n")
     print(json.dumps({"verdict": receipt["verdict"], "application_fix_proved": False}))
 
-raise SystemExit(0 if receipt["verdict"] == "candidate_azure_path_timeout_with_verified_fallback" else 2)
+raise SystemExit(0 if len(receipt["attempts"]) == 14 else 2)
