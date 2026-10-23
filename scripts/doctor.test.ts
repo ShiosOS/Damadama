@@ -1,6 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test";
-import * as childProcess from "node:child_process";
-import { once } from "node:events";
+import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -327,10 +325,17 @@ describe("real operating-system effects", () => {
     const directory = await mkdtemp(join(tmpdir(), "damadama-doctor-"));
     try {
       await mkdir(join(directory, "scripts"));
-      await copyFile(
-        new URL("./doctor.ts", import.meta.url),
-        join(directory, "scripts", "doctor.ts"),
-      );
+      for (const file of [
+        "doctor.ts",
+        "command-capture.ts",
+        "capture-helper.ts",
+        "capture-windows.ts",
+      ]) {
+        await copyFile(
+          new URL(`./${file}`, import.meta.url),
+          join(directory, "scripts", file),
+        );
+      }
       await writeFile(
         join(directory, "package.json"),
         '{"packageManager":"bun@1.4.3"}',
@@ -453,8 +458,6 @@ describe("real operating-system effects", () => {
     async (limit) => {
       const directory = await mkdtemp(join(tmpdir(), "damadama-doctor-child-"));
       const marker = join(directory, "pid.txt");
-      const observation = spyOn(childProcess, "spawn");
-      let child: childProcess.ChildProcess | undefined;
       try {
         let output = "";
         let expected: Capture = { kind: "timeout" };
@@ -471,22 +474,13 @@ describe("real operating-system effects", () => {
           ],
           { timeoutMs: 1000, maxBytes: 128 },
         );
-        const observed = observation.mock.results[0]?.value;
-        if (!(observed instanceof childProcess.ChildProcess)) {
-          throw new Error("Expected a real spawned child process.");
-        }
-        child = observed;
-        expect(observation).toHaveBeenCalledTimes(1);
         expect(result).toEqual(expected);
         expect(JSON.stringify(result)).not.toContain(secret);
-        expect(readFileSync(marker, "utf8")).toBe(String(child.pid));
-        expect(child.signalCode).toBe("SIGKILL");
+        const targetPid = Number(readFileSync(marker, "utf8"));
+        expect(Number.isInteger(targetPid) && targetPid > 0).toBe(true);
+        expect(() => process.kill(targetPid, 0)).toThrow();
         await rm(directory, { recursive: true, force: true });
       } finally {
-        observation.mockRestore();
-        if (child?.exitCode === null && child.signalCode === null) {
-          await once(child, "close");
-        }
         await rm(directory, { recursive: true, force: true });
       }
     },

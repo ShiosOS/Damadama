@@ -174,6 +174,17 @@ async function exercise(
 test("common check executes Provider and monitor before Docker and both real receiver consumers immediately after one backend producer", async () => {
   const { commands, receipts, error } = await exercise("valid");
   expect(error).toBeUndefined();
+  expect(commands).toContainEqual([
+    "bun",
+    "test",
+    "scripts/doctor.test.ts",
+    "scripts/command-capture.test.ts",
+    "scripts/doctor-process-tree.test.ts",
+    "scripts/developer.test.ts",
+    "scripts/check.test.ts",
+    "scripts/acceptance-results.test.ts",
+    "scripts/acceptance-browser.test.ts",
+  ]);
   for (const required of [provider, monitor, dockerProbe]) {
     expect(
       receipts.filter((command) => command === JSON.stringify(required)),

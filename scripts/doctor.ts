@@ -1,10 +1,12 @@
-import { spawn } from "node:child_process";
+import {
+  captureCommand,
+  CaptureRetirementError,
+  type Capture,
+  type Command,
+} from "./command-capture";
+export { captureCommand, CaptureRetirementError } from "./command-capture";
 import { createServer } from "node:net";
 
-type Command = [string, ...string[]];
-type Capture =
-  | { kind: "ok"; output: string }
-  | { kind: "missing" | "failed" | "timeout" | "output-limit" };
 type Check =
   | { id: string; kind: "pass"; message: string }
   | { id: string; kind: "fail"; message: string; remedy: string };
@@ -17,56 +19,6 @@ const targets = {
   backend: { config: false },
   browser: { config: false },
 } satisfies Record<Target, { config: boolean }>;
-
-export function captureCommand(
-  command: Command,
-  { timeoutMs = 10_000, maxBytes = 4096 } = {},
-): Promise<Capture> {
-  return new Promise((resolve) => {
-    const child = spawn(command[0], command.slice(1), {
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    });
-    let output = "";
-    let bytes = 0;
-    let stopped: Capture | undefined;
-    const stop = (result: Capture): void => {
-      stopped = result;
-      clearTimeout(timer);
-      child.kill("SIGKILL");
-      child.stdout.destroy();
-      child.stderr.destroy();
-    };
-    const timer = setTimeout(() => {
-      stop({ kind: "timeout" });
-    }, timeoutMs);
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    const collect = (data: string, retain: boolean): void => {
-      bytes += Buffer.byteLength(data);
-      if (bytes > maxBytes) {
-        if (!stopped) stop({ kind: "output-limit" });
-        return;
-      }
-      if (retain) output += data;
-    };
-    child.stdout.on("data", (data: string) => collect(data, true));
-    child.stderr.on("data", (data: string) => collect(data, false));
-    child.on("error", (error: NodeJS.ErrnoException) => {
-      if (error.code === "ENOENT") {
-        stopped ??= { kind: "missing" };
-        return;
-      }
-      stopped ??= { kind: "failed" };
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      if (stopped) return resolve(stopped);
-      if (code !== 0) return resolve({ kind: "failed" });
-      resolve({ kind: "ok", output: output.trim() });
-    });
-  });
-}
 
 function fail(id: string, message: string, remedy: string): Check {
   return { id, kind: "fail", message, remedy };
@@ -306,8 +258,25 @@ export async function doctor({
     };
   }
   const bunVersion = runtimes.bun;
+  const retirementFailures: Check[] = [];
+  async function observe(command: Command): Promise<Capture> {
+    try {
+      return await capture(command);
+    } catch (error) {
+      if (!(error instanceof CaptureRetirementError)) throw error;
+      if (retirementFailures.length === 0)
+        retirementFailures.push(
+          fail(
+            "process.cleanup",
+            "Owned command retirement could not be verified.",
+            "Inspect the failed prerequisite's processes before removing its working directory, then retry.",
+          ),
+        );
+      return error.reason;
+    }
+  }
   const checks = await Promise.all([
-    capture(["bun", "--version"]).then((result) =>
+    observe(["bun", "--version"]).then((result) =>
       runtimeCheck(
         "runtime.bun",
         result,
@@ -316,7 +285,7 @@ export async function doctor({
         "Select the packageManager version of Bun in this project's PATH.",
       ),
     ),
-    capture(["dotnet", "--version"]).then((result) =>
+    observe(["dotnet", "--version"]).then((result) =>
       runtimeCheck(
         "runtime.dotnet",
         result,
@@ -325,7 +294,7 @@ export async function doctor({
         "Install a compatible .NET SDK and run dotnet --version from the repository root.",
       ),
     ),
-    capture(["docker", "version", "--format", "{{.Server.Os}}"]).then(
+    observe(["docker", "version", "--format", "{{.Server.Os}}"]).then(
       (result) =>
         runtimeCheck(
           "docker.linux",
@@ -339,12 +308,13 @@ export async function doctor({
   checks.push(
     runtimeCheck(
       "runtime.node",
-      await capture(["node", "--version"]),
+      await observe(["node", "--version"]),
       (value) => /^v24\.\d+\.\d+$/.test(value),
       "Node.js 24 required",
       "Select Node.js 24 in this project's process PATH; keep other projects' runtimes unchanged.",
     ),
   );
+  checks.push(...retirementFailures);
   if (policy.config) checks.push(...configurationChecks(environment));
   for (const port of targetPorts(target, environment)) {
     if ("kind" in port) {

@@ -115,7 +115,13 @@ The [Docker probe regression](../scripts/doctor-docker.test.ts) runs with `bun -
 It builds a finite native .NET plugin and uses the installed Docker CLI against an isolated loopback Engine.
 It requires the CLI and selected .NET SDK, but no running daemon.
 Windows CI runs the original doctor and developer test files before this regression compiles or invokes the client.
-The controlled Windows-server response proves refusal policy, not a real Windows engine. `captureCommand` still owns only its direct child.
+The controlled Windows-server response proves refusal policy, not a real Windows engine.
+Doctor retires ordinary descendants in a Windows x64 Job Object or an isolated Linux process group before returning a capture.
+The same-Bun helper establishes membership before launching the command, without npm packages, PowerShell, a compiler, or cgroup setup.
+Linux descendants that change groups or sessions and work launched through external services are outside this boundary.
+Doctor reports `process.cleanup` and exits unsuccessfully if it cannot verify retirement within its separate two-second cleanup budget.
+Do not remove an uncertain capture's working directory until its processes are inspected.
+The original hosted Windows directory holder remains unidentified.
 The contributor formatter and full check also format this fixture's C# folder, which is outside the application solution.
 
 `test:backend` checks Bun, Node 24, the selected .NET SDK, and Linux Docker.
