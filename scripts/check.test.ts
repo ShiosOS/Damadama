@@ -16,6 +16,13 @@ const receiver = [
 ];
 const provider = ["node", "--test", "tests/Provider/*.test.mjs"];
 const monitor = ["node", "--test", "ops/monitoring/monitor.test.mjs"];
+const fonts = [
+  "bun",
+  "test",
+  "tests/Browser/font-evidence.test.ts",
+  "tests/Browser/font-evidence-files.test.ts",
+  "tests/Browser/font-evidence-lifecycle.test.ts",
+];
 const dockerProbe = [
   "bun",
   "--no-env-file",
@@ -174,6 +181,12 @@ async function exercise(
 test("common check executes Provider and monitor before Docker and both real receiver consumers immediately after one backend producer", async () => {
   const { commands, receipts, error } = await exercise("valid");
   expect(error).toBeUndefined();
+  expect(commands).toContainEqual(fonts);
+  expect(
+    commands.findIndex(
+      (command) => JSON.stringify(command) === JSON.stringify(fonts),
+    ),
+  ).toBeLessThan(commands.findIndex((command) => command[0] === "docker"));
   expect(commands).toContainEqual([
     "bun",
     "test",

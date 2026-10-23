@@ -10,6 +10,13 @@ import {
   type TestInfo,
 } from "@playwright/test";
 import { z } from "zod";
+import {
+  enterFontGuard,
+  fontReady,
+  recordFontDecision,
+  recordFontRefusal,
+} from "./font-evidence";
+import type { SampleInput } from "./font-evidence-schema";
 
 export const clockInstant = "2026-01-05T00:30:00.000Z";
 export const candidateDir = ".audit/browser-quality/candidates";
@@ -174,17 +181,55 @@ async function actualEnvironment(
   page: Page,
   browser: Browser,
   checkpoint: Checkpoint,
+  testInfo: TestInfo,
 ): Promise<Environment> {
+  const observation = enterFontGuard(testInfo, checkpoint.id);
   await page.evaluate(() => document.fonts.ready);
-  const fontLoaded = await page.evaluate(() =>
-    [...document.fonts].some(
-      (face) =>
-        face.family.replaceAll('"', "") === "Nunito Variable" &&
-        face.status === "loaded",
-    ),
+  fontReady(testInfo, observation);
+  const decision = await page.evaluate(
+    (): { fontLoaded: boolean; sample: SampleInput } => {
+      const faces = [...document.fonts];
+      const fontLoaded = faces.some(
+        (face) =>
+          face.family.replaceAll('"', "") === "Nunito Variable" &&
+          face.status === "loaded",
+      );
+      try {
+        const counts = { unloaded: 0, loading: 0, loaded: 0, error: 0 };
+        let matching = 0;
+        for (const face of faces) {
+          if (face.family.replaceAll('"', "") !== "Nunito Variable") continue;
+          if (++matching > 32)
+            return {
+              fontLoaded,
+              sample: { kind: "unavailable", reason: "face-bound-exceeded" },
+            };
+          counts[face.status]++;
+        }
+        return {
+          fontLoaded,
+          sample: {
+            kind: "available",
+            sampledAt: "guard-decision",
+            clock: "browser-performance",
+            browserMs: performance.now(),
+            setStatus: document.fonts.status,
+            counts,
+          },
+        };
+      } catch {
+        return {
+          fontLoaded,
+          sample: { kind: "unavailable", reason: "read-failed" },
+        };
+      }
+    },
   );
-  if (!fontLoaded)
+  recordFontDecision(testInfo, observation, decision);
+  if (!decision.fontLoaded) {
+    recordFontRefusal(testInfo, observation);
     throw new Error("Bundled Nunito Variable FontFace did not load.");
+  }
   const viewport = page.viewportSize();
   const actual = await page.evaluate(() => ({
     layoutViewport: {
@@ -243,7 +288,12 @@ export async function captureOrCompare(
 ): Promise<void> {
   if (testInfo.config.updateSnapshots !== "none")
     throw new Error("Compatibility tests require updateSnapshots=none.");
-  const environment = await actualEnvironment(page, browser, checkpoint);
+  const environment = await actualEnvironment(
+    page,
+    browser,
+    checkpoint,
+    testInfo,
+  );
   if (process.env["COMPAT_MODE"] === "capture") {
     await mkdir(candidateDir, { recursive: true });
     const image = await target.screenshot(screenshotOptions);

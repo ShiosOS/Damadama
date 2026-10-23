@@ -3,6 +3,10 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import { randomBytes } from "node:crypto";
+import { prepareAdmission } from "./font-evidence-admission";
+import { runCompatibilityChild } from "./font-evidence-consumer";
+import { phaseSchema } from "./font-evidence-schema";
 import {
   candidateDir,
   candidateManifest,
@@ -47,8 +51,15 @@ const cli = [
 const receiptDir = ".audit/browser-quality/receipts";
 const runResults: { phase: string; outputDir: string; exitCode: number }[] = [];
 let generationSHA: string | null = null;
+const admission = await prepareAdmission();
+console.info(`compatibility-evidence-admission ${JSON.stringify(admission)}`);
+const runId = randomBytes(32).toString("hex");
 
-function run(phase: string, projects: string[], control?: string): void {
+async function run(
+  phase: string,
+  projects: string[],
+  control?: string,
+): Promise<void> {
   const outputDir = `.audit/browser-quality/test-results/${mode}-${runResults.length + 1}`;
   const args = [
     ...cli,
@@ -56,9 +67,18 @@ function run(phase: string, projects: string[], control?: string): void {
     outputDir,
     ...projects.map((project) => `--project=${project}`),
   ];
-  const result = spawnSync("node", args, {
+  const result = await runCompatibilityChild({
+    args,
     cwd: root,
-    encoding: "utf8",
+    context: {
+      run: runId,
+      admission,
+      phase: phaseSchema.parse({
+        mode,
+        invocation: runResults.length + 1,
+        control: control ?? "none",
+      }),
+    },
     env: {
       ...process.env,
       COMPAT_MODE: mode,
@@ -67,12 +87,12 @@ function run(phase: string, projects: string[], control?: string): void {
       COMPAT_OS_DISTRIBUTION: osDistribution,
       COMPAT_OS_VERSION: osVersion,
     },
-    maxBuffer: 8 * 1024 * 1024,
   });
-  const exitCode = result.status ?? 1;
+  const exitCode = result.exitCode;
   runResults.push({ phase, outputDir, exitCode });
   if (exitCode !== 0) {
-    const output = `${result.stdout}\n${result.stderr}`;
+    const output = result.output;
+    console.info(result.evidence);
     throw new Error(`${phase} failed (exit ${exitCode}).\n${output}`);
   }
   console.info(`${phase}: passed`);
@@ -80,7 +100,7 @@ function run(phase: string, projects: string[], control?: string): void {
 
 try {
   if (mode === "capture") {
-    run("candidate capture", ["chromium-desktop", "chromium-mobile"]);
+    await run("candidate capture", ["chromium-desktop", "chromium-mobile"]);
     const manifest = await candidateManifest(currentCheckoutSHA);
     generationSHA = manifest.generationSHA;
     await writeFile(
@@ -94,18 +114,18 @@ try {
     const manifest = await loadManifest();
     generationSHA = manifest.generationSHA;
     await validateBaselines(manifest);
-    run("Firefox and WebKit smoke", ["firefox-smoke", "webkit-smoke"]);
+    await run("Firefox and WebKit smoke", ["firefox-smoke", "webkit-smoke"]);
     for (let repetition = 1; repetition <= 3; repetition++)
-      run(`fresh visual comparison ${repetition}`, [
+      await run(`fresh visual comparison ${repetition}`, [
         "chromium-desktop",
         "chromium-mobile",
       ]);
-    run(
+    await run(
       "changed-row pixel rejection and same-page restoration",
       ["chromium-desktop"],
       "mutation",
     );
-    run("missing-baseline rejection", ["chromium-desktop"], "missing");
+    await run("missing-baseline rejection", ["chromium-desktop"], "missing");
     console.info(`Comparison receipt: ${receiptDir}/verify.json`);
   }
 } finally {

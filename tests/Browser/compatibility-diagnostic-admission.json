@@ -1,0 +1,219 @@
+{
+  "version": 1,
+  "reviewedBuild": "5fa7c5bb9f39f5fb3ac17ec0e51fd955b872b2cb8f7f149bf83b0c43273786f2",
+  "sources": [
+    {
+      "path": "tests/Browser/compatibility.pw.ts",
+      "sha256": "6d52d5b9d1d98592b943baec1f785f7cd59bcd11ab6b9bbf8a7c8c718d934061"
+    },
+    {
+      "path": "tests/Browser/visual-support.ts",
+      "sha256": "d99acda3f452b1897f00e02dc3f102d349f0ca32cd7372783acd6b61b6e07b86"
+    },
+    {
+      "path": "tests/Browser/font-evidence-schema.ts",
+      "sha256": "1a0862669240d6b8bfc0518fb68299fca460551e78b5b7a12ef0b7d8ae9fc388"
+    },
+    {
+      "path": "tests/Browser/font-evidence-admission.ts",
+      "sha256": "1ea1db73f6f3ba7713a432ba5ee6fc38c0b0cfedf29f9908554d0b3a955afee9"
+    },
+    {
+      "path": "tests/Browser/font-evidence.ts",
+      "sha256": "08b528ebdf07e423785e2d473b2aa8b7d6e852aa49da0c88f2aae5f92095d68a"
+    },
+    {
+      "path": "tests/Browser/font-evidence-consumer.ts",
+      "sha256": "145f56b6bf7a985121fdfcd2dea46a54f2648e6e5fee0b6a1a02b7e63fee2d8d"
+    },
+    {
+      "path": "tests/Browser/font-evidence.test.ts",
+      "sha256": "ac6e91264fbf55a3d89f6ec232c3fff4457183b214935f1f59fcd63085ef8940"
+    },
+    {
+      "path": "tests/Browser/font-evidence-files.test.ts",
+      "sha256": "ae92a5b791adcf59fee6ca058540b2d964089e7fa4f8db11b6cfa22eef625a4b"
+    },
+    {
+      "path": "tests/Browser/font-evidence-lifecycle.test.ts",
+      "sha256": "365429086a8afb03d14e4dbfadbd6816266af070c7b57b04ad2c12ffd8291023"
+    },
+    {
+      "path": "tests/Browser/compatibility-font.calibration.ts",
+      "sha256": "5e4bf4497f9d31d5319fcb53d7d63af4b23d59fee5530cbb7eba8f17aa0e5538"
+    },
+    {
+      "path": "tests/Browser/font-calibration-server.ts",
+      "sha256": "86118474bfadeef6e8f86e7260f26623ba3fd9c514941f6776e3b6e8671d0d7b"
+    },
+    {
+      "path": "tests/Browser/font-calibration-run.ts",
+      "sha256": "21a3a06124eb0dfd062c0775d2f01ce6ffe2b29775a72d0205a57e71d065f7bb"
+    },
+    {
+      "path": "tests/Browser/font-calibration.config.ts",
+      "sha256": "1d578ecac14e902381ed40c2177ff901fe7659ebdbc6f5bd175766700e523d68"
+    },
+    {
+      "path": "tests/Browser/compatibility-run.ts",
+      "sha256": "aff76124f2889d743e9858d03efbf860c1146fa3213aa285f6a5e54106911db5"
+    },
+    {
+      "path": "tests/Browser/compatibility.config.ts",
+      "sha256": "1a96f76b90834ca6013617a30e26b77b58d2045128c6683c966ebe2f5dfe34ab"
+    },
+    {
+      "path": "tests/Browser/playwright.config.ts",
+      "sha256": "017c0760e96cf8f410770a908e9a4e16bbd84a8c76f4c7ece1c06d4f3a8eab77"
+    },
+    {
+      "path": "tests/Browser/compatibility.vite.config.ts",
+      "sha256": "b910be3c9908fea73757c0f5aa48156513026f64156fde347616ab4489797ae8"
+    },
+    {
+      "path": "tests/Browser/vite.config.ts",
+      "sha256": "3ec053bf86b33452c6e9422565ab034ee9afd6d2106c035a48ae47b478e4f3ab"
+    },
+    {
+      "path": "tests/Browser/compatibility.html",
+      "sha256": "c2563d3c4e5a5c9292b8092492932aad8c8230c1ae73b788f649f36459ee3cff"
+    },
+    {
+      "path": "tests/Browser/main.ts",
+      "sha256": "0574f51b66e15f9875c82e53f752e9bea721edbc3e9e21e82bbf4368fa6a64df"
+    },
+    {
+      "path": "tests/Browser/FixtureApp.vue",
+      "sha256": "5f09137ce36b97b15f7a28b75a812a2e13177566187fc07ebf4a32396a9ae982"
+    },
+    {
+      "path": "web/src/App.vue",
+      "sha256": "030ca52b8313df4ff14b31936bcd8f3d560bc03ddd11b6b0752579cb9231dec1"
+    },
+    {
+      "path": "web/src/CheckeredD.vue",
+      "sha256": "fdb00a7750a356a8c668e754213791d2c06c1ce154f6b699016b7d36d3e65795"
+    },
+    {
+      "path": "web/src/EntryControls.types.ts",
+      "sha256": "fd0e9e67cf38b18e954294cb5dfbf03a29e69dc7c97a5ef3ae0ad9fe42c8a56b"
+    },
+    {
+      "path": "web/src/EntryControls.vue",
+      "sha256": "bb0a8408ffe2733e13c663dc9fd575c71b783ecd98d72cb4d8653ec7740926ac"
+    },
+    {
+      "path": "web/src/HabitDetails.vue",
+      "sha256": "855ef11f1dd04e5f13af2554ebe4317d3f1aa0eba8d5690ef8c26d767e0b6afb"
+    },
+    {
+      "path": "web/src/HabitEditor.vue",
+      "sha256": "ff0633c50af36f0a0d2fea9a13ae6583e84c9e1be0a8fb3a2aa3522dbcf507f4"
+    },
+    {
+      "path": "web/src/HabitLevels.vue",
+      "sha256": "b3088c5c1c65e5b5787f390b3d81b055296e7f5c0f836810ae07f69e795f75ff"
+    },
+    {
+      "path": "web/src/HabitsPage.vue",
+      "sha256": "e222620e20313c74f83a91cff7bfc3b252be9a3873b165041d4265884337e8dc"
+    },
+    {
+      "path": "web/src/SignedInApp.vue",
+      "sha256": "8fd5352b4e9f5f0dde89d35cde02881e7f735c5df067cdaecad97d78a2d39283"
+    },
+    {
+      "path": "web/src/TodayView.types.ts",
+      "sha256": "d07f287ce69a1af8d2c7fb7c73cbb80671f59bc3f0929e2250029152be8ec296"
+    },
+    {
+      "path": "web/src/TodayView.vue",
+      "sha256": "adac52902d4057cc424c33b83255c560ddbc43c72b3273e9081cd78088c9876c"
+    },
+    {
+      "path": "web/src/YearHeatmap.vue",
+      "sha256": "b56e69953eed5fd4374867fd21a9efbcced314964f6e5da1f432031345436ece"
+    },
+    {
+      "path": "web/src/entries.schema.ts",
+      "sha256": "a4eb579116409f1d94c3fd998a17eaddec2dd9b0c862930004d222cf5a74ffb1"
+    },
+    {
+      "path": "web/src/habit-day.schema.ts",
+      "sha256": "1aa0270aa619ee908b2918663e75da20034b5ce6faf995b8c6d90c2de2a4bbdf"
+    },
+    {
+      "path": "web/src/habits.schema.ts",
+      "sha256": "448566d01306bf2476e818a82a5ef9f90782796b253640daf93a5aff004edf30"
+    },
+    {
+      "path": "web/src/habits.ts",
+      "sha256": "ba1c9419eb13a15dff28b786c73b154a42ff96b2df89aa7bbb39c3fd48c2f484"
+    },
+    {
+      "path": "web/src/heatmap.schema.ts",
+      "sha256": "e615db764bf442414eebbc437d70e84d2becd43f9729651acaf6bc89446e611f"
+    },
+    {
+      "path": "web/src/main.ts",
+      "sha256": "2eeeecff30a4c7bf78306d17cf0512fc1fcaf097512cee677baf5a90a6a8e50a"
+    },
+    {
+      "path": "web/src/style.css",
+      "sha256": "0092b9ac75ab91f79e909fdcf983628be55e7b5c72bd687396ff6f2161b761d6"
+    },
+    {
+      "path": "web/src/ui-icons.ts",
+      "sha256": "e4843c145b6d0a9e4e5062f8a935f22ddbf3a8f4afdf0657f00c0fb357e86b13"
+    },
+    {
+      "path": "web/src/ui.d.ts",
+      "sha256": "ccba4bd1e5d40fbfc5b9e8eb7c5b2cbfee438045a69f8ae84dcf3e2058e226bc"
+    },
+    {
+      "path": "web/src/vue.d.ts",
+      "sha256": "8e6de57b1a2040cc309edb8f38d77f530ac8afc3a693848c0ddc2ff38ba265bf"
+    },
+    {
+      "path": "package.json",
+      "sha256": "1b28dd7dcc68ce42232b7cb7cee8ce15911d79a923a62d971974ce78020c4740"
+    },
+    {
+      "path": "web/package.json",
+      "sha256": "1e8ed3ff2993cc7f07399cb1bad00d9da52356478c1f8bce56dc31da10718ffc"
+    },
+    {
+      "path": "bun.lock",
+      "sha256": "787ef8d82cda355422c9e7724b9458a10e6bbee37464cba5df6f4ad668fc689a"
+    },
+    {
+      "path": "tests/BrowserHost/Program.cs",
+      "sha256": "118488a863508c9189db022800e0a19a07b55ec1b1bc9c6b8f939c5bd07434fd"
+    }
+  ],
+  "installed": [
+    {
+      "subset": "cyrillic-ext",
+      "sha256": "88985ca614d50fbe06bf527b0d67703d01cab729d744e41c1b5b6bf67c3a08e5"
+    },
+    {
+      "subset": "cyrillic",
+      "sha256": "63b14e3ef0966785438b8947380dfbcad178cbd3c6a5ed2172672ca0d8b839ac"
+    },
+    {
+      "subset": "vietnamese",
+      "sha256": "61e5958cf3c731423456b31739aa454317ea3bdcb205dd87090e94f632c3642b"
+    },
+    {
+      "subset": "latin-ext",
+      "sha256": "2c8d792869818ecb253a46bc3c63c7013df7aac2f69291c3c85e5cdc94160960"
+    },
+    {
+      "subset": "latin",
+      "sha256": "ba344451eab25b217a165363b1982048a5e5830a0daf36577973955a04cac793"
+    }
+  ],
+  "installedCss": "11182559b7333152dba628b61a4664b0b8419018011988b102cf49df9ab532f0",
+  "installedPlaywright": "6b1c8bb530059f2555530e8dcc1b3803565237e17598683b3766c0fa313b3fd6",
+  "installedNunitoPackage": "ddc9bae717695751a40323f13fec3cf38b57ec0f2b715cf75c8fd3719ef00a01"
+}
