@@ -11,6 +11,8 @@ export const selectedFiles = Object.freeze([
   "tests/Browser/habits.spec.ts",
   "tests/Browser/today.spec.ts",
   "tests/Browser/entries.spec.ts",
+  "tests/Browser/history.spec.ts",
+  "tests/Browser/heatmap.spec.ts",
   "tests/Browser/accessibility.spec.ts",
   ".agents/skills/verify/observations.spec.mjs",
 ]);
