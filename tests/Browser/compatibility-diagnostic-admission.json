@@ -184,7 +184,7 @@
     },
     {
       "path": "bun.lock",
-      "sha256": "787ef8d82cda355422c9e7724b9458a10e6bbee37464cba5df6f4ad668fc689a"
+      "sha256": "0a66a69e61cc084db158c8ea762c60c89461720408c7be585e669c6034335e56"
     },
     {
       "path": "tests/BrowserHost/Program.cs",
