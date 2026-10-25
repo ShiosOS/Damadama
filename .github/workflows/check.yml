@@ -40,7 +40,7 @@ jobs:
       - if: steps.application.outputs.state == 'setup'
         run: echo "Nondeployable setup. No application has existed since the approved controls baseline." >> "$GITHUB_STEP_SUMMARY"
       - if: steps.application.outputs.state == 'application'
-        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           dotnet-version: 10.0.112
           cache: true
