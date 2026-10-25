@@ -1,5 +1,5 @@
 FROM node:24-bookworm-slim@sha256:51b1100cc2a83d370c6a60952e3f2989c8a43159d0e38586e090f3b3326efefd AS node
-FROM oven/bun:1.4.3@sha256:ec06c3b6cea04192ae6770c434f668ca41d343ad19fa6472216c7b48be39c598 AS web
+FROM oven/bun:1.4.4@sha256:1d22548f177f4ff38e0c15baa3c2c46c6c2060ba2d1bc573bb4720b407548f1d AS web
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 ENV PATH=/usr/local/bin:/usr/bin:/bin
 WORKDIR /src
@@ -9,7 +9,7 @@ RUN bun install --frozen-lockfile --ignore-scripts
 COPY web web
 RUN bun run --cwd web build
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.13@sha256:d5633778c754e89a386882eddf8dbee6942447a8a4b8267c19cf1e1158d0b0ac AS publish
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.14@sha256:d247d17dd429d96580eeb96cfce220c1089d860dbbf9f94d599ca64cf3604fe4 AS publish
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.113/dotnet-sdk-10.0.113-linux-x64.tar.gz -o /tmp/sdk.tar.gz \
     && echo "1f2746d3684ef782c4308e056e709e9361802e082e401aff3760868125009a8aee2803ff3eeb87587dc60c766e5dc4f9bfd6051c660a85602cc892c31f72256d  /tmp/sdk.tar.gz" | sha512sum -c - \
@@ -23,7 +23,7 @@ RUN dotnet restore server/Damadama.csproj --locked-mode \
     && dotnet tool restore \
     && dotnet ef migrations script --idempotent --project server --output /out/migrations.sql
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.13@sha256:d5633778c754e89a386882eddf8dbee6942447a8a4b8267c19cf1e1158d0b0ac
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.14@sha256:d247d17dd429d96580eeb96cfce220c1089d860dbbf9f94d599ca64cf3604fe4
 WORKDIR /app
 COPY --from=publish /out .
 COPY .damadama-release.json wwwroot/release.json
